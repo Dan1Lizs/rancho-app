@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.3";
+const VERSION_APP = "6.4";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -23,7 +23,7 @@ const K = {
   vacunas: "granja2:vacunas", enfermedades: "granja2:enfermedades",
   necropsias: "granja2:necropsias", planVac: "granja2:planVacunas",
   mpInv: "granja2:mpInventario", mpConfig: "granja2:mpConfig", mpPedidos: "granja2:mpPedidos",
-  recetas: "granja2:recetas", mpCat: "granja2:mpCatalogo", nucleo: "granja2:nucleoInv", cxp: "granja2:cxp", kardex: "granja2:kardex", admins: "granja2:cfgAdmins",
+  recetas: "granja2:recetas", mpCat: "granja2:mpCatalogo", nucleo: "granja2:nucleoInv", cxp: "granja2:cxp", kardex: "granja2:kardex", admins: "granja2:cfgAdmins", favoritos: "granja2:favoritos",
   insumos: "granja2:insumos", insumosMovs: "granja2:insumosMovs",
   plantaCfg: "granja2:plantaCfg", bodegaCfg: "granja2:bodegaCfg",
   costos: "granja2:costos",
@@ -225,7 +225,7 @@ const capturaVacia = () => ({
   fums: [{ producto: "", dosis: "", hora: "" }],
   meds: [{ producto: "", dosis: "", enfermedad: "", retiro: "" }],
   vits: [{ producto: "", dosis: "" }],
-  alimento6am: "", alimento1pm: "", aguaL: "", trabajos: {},
+  alimento6am: "", alimento1pm: "", aguaL: "", obsAlimento: "", trabajos: {},
   chequeo: { cascara: "", consumoObs: "", aguaObs: "", cresta: "", heces: "", respiratorio: "", secrecion: "", comederos: "", ph: "", cloro: "", temp: "", humedad: "", luz: "", obs: "" },
 });
 
@@ -279,12 +279,13 @@ function Campo({ etiqueta, mitad, tercio, ...props }) {
   );
 }
 
-function Seccion({ titulo, sub, children, num }) {
+function Seccion({ titulo, sub, children, num, accion }) {
   return (
     <div style={{ background: C.superficie, border: `1px solid ${C.borde}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, display: "flex", alignItems: "center", gap: 8 }}>
         {num && <span style={{ background: C.verde, color: "#fff", borderRadius: 8, fontSize: 12.5, padding: "2px 8px" }}>{num}</span>}
-        {titulo}
+        <span style={{ flex: 1 }}>{titulo}</span>
+        {accion}
       </div>
       {sub ? <div style={{ fontSize: 12.5, color: C.textoSuave, marginTop: 2, marginBottom: 10 }}>{sub}</div> : <div style={{ marginBottom: 10 }} />}
       {children}
@@ -338,6 +339,7 @@ export default function App() {
   const [esAdmin, setEsAdmin] = useState(true);
   const [cfgAdmins, setCfgAdmins] = useState([]);
   const [nuevoAdmin, setNuevoAdmin] = useState("");
+  const [favoritos, setFavoritos] = useState([]);
   const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) });
 
   // Planta
@@ -376,6 +378,7 @@ export default function App() {
         meds: meds.length ? meds : base.meds,
         vits: vits.length ? vits : base.vits,
         alimento6am: reg.alimento6am ? String(reg.alimento6am) : "",
+        obsAlimento: reg.obsAlimento || "",
         alimento1pm: reg.alimento1pm ? String(reg.alimento1pm) : "",
         aguaL: reg.aguaL ? String(reg.aguaL) : "",
         trabajos: reg.trabajos || {},
@@ -477,13 +480,13 @@ export default function App() {
       setCargandoFondo(true);
 
       // FASE 2: el resto en segundo plano (en paralelo)
-      const [ps0, ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0] = await Promise.all([
+      const [ps0, ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0] = await Promise.all([
         leer(K.pesajes, null), leer(K.meds, []), leer(K.fums, []), leer(K.movs, []), leer(K.planta, []),
         leer(K.plantaCfg, null), leer(K.bodegaCfg, null), leer(K.facturas, []), leer(K.vacunas, []),
         leer(K.enfermedades, []), leer(K.necropsias, []), leer(K.planVac, null), leer(K.bitacora, []),
         leer(K.costos, SEED_COSTOS), leer(K.mpInv, null), leer(K.mpConfig, null), leer(K.mpPedidos, []),
         leer(K.recetas, null), leer(K.mpCat, null), leer(K.insumos, null), leer(K.insumosMovs, []),
-        leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []),
+        leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []),
       ]);
       const ps = ps0 ?? (siembras.push(escribir(K.pesajes, SEED_PESAJES)), SEED_PESAJES);
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
@@ -515,6 +518,7 @@ export default function App() {
       if (cxp0) setCxp({ facturas: [], pagos: [], notas: [], ...cxp0 });
       setKardex(kdx0 || []);
       setCfgAdmins(adm0 || []);
+      setFavoritos(fav0 || []);
       {
         const emailSesion = (typeof window !== "undefined" && window.__usuarioEmail || "").toLowerCase();
         if ((adm0 || []).length > 0 && emailSesion) setEsAdmin(adm0.map(x => x.toLowerCase()).includes(emailSesion));
@@ -570,6 +574,26 @@ export default function App() {
     return () => document.removeEventListener("input", normalizar, true);
   }, []);
 
+  // Navegación de captura: Enter → siguiente casilla · flechas ↑/↓ → anterior/siguiente (en campos de texto)
+  useEffect(() => {
+    const alTeclear = (e) => {
+      const el = e.target;
+      if (!el || el.tagName !== "INPUT" || el.type === "file" || el.type === "checkbox") return;
+      const esTexto = el.type === "text" && !el.getAttribute("list");
+      const avanzar = e.key === "Enter" || (esTexto && e.key === "ArrowDown");
+      const retroceder = esTexto && e.key === "ArrowUp";
+      if (!avanzar && !retroceder) return;
+      const focusables = Array.from(document.querySelectorAll('input:not([type="file"]):not([type="checkbox"]):not([disabled]), select:not([disabled])'))
+        .filter(x => x.offsetParent !== null);
+      const i = focusables.indexOf(el);
+      if (i === -1) return;
+      const destino = focusables[i + (avanzar ? 1 : -1)];
+      if (destino) { e.preventDefault(); destino.focus(); if (destino.select) destino.select(); }
+    };
+    document.addEventListener("keydown", alTeclear, true);
+    return () => document.removeEventListener("keydown", alTeclear, true);
+  }, []);
+
   // ── Totales captura ──
   const totalesGalpon = (c) => {
     if (!c) return { cartones: 0, huevos: 0, pesoKg: 0 };
@@ -579,8 +603,9 @@ export default function App() {
   };
 
   // ── Guardar control diario ──
-  const guardarDia = async () => {
+  const guardarDia = async (soloLoteId = null) => {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
+    const soloLote = soloLoteId ? lotes.find(x => x.id === soloLoteId) : null;
     setGuardando(true);
     const fecha = (fechaCaptura || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
     // Validación: números de tiquete únicos (contra el historial y dentro del mismo guardado)
@@ -599,16 +624,18 @@ export default function App() {
     const nuevos = [];
     const reemplazados = [];
     // Edición sin duplicar: lo del día se reemplaza por lo que trae el formulario
-    let nMeds = medicaciones.filter(m2 => m2.fecha !== fecha);
-    let nFums = fumigaciones.filter(f2 => f2.fecha !== fecha);
-    const movsAutoPrevios = insumosMovs.filter(m2 => m2.auto && m2.fecha === fecha && m2.tipo === "salida");
+    let nMeds = medicaciones.filter(m2 => m2.fecha !== fecha || (soloLote && m2.galpon !== soloLote.galpon));
+    let nFums = fumigaciones.filter(f2 => f2.fecha !== fecha || (soloLote && f2.galpon !== soloLote.galpon));
+    const esDelGalpon = (m2) => !soloLote || String(m2.detalle || "").endsWith(`G${soloLote.galpon}`);
+    const movsAutoPrevios = insumosMovs.filter(m2 => m2.auto && m2.fecha === fecha && m2.tipo === "salida" && esDelGalpon(m2));
     let insumosBase = insumos.map(x => ({ ...x }));
     movsAutoPrevios.forEach(m2 => {
       const it = insumosBase.find(x => x.id === m2.itemId);
       if (it) it.saldo = +(Number(it.saldo) + Number(m2.cantidad)).toFixed(2);
     });
-    const insumosMovsBase = insumosMovs.filter(m2 => !(m2.auto && m2.fecha === fecha && m2.tipo === "salida"));
+    const insumosMovsBase = insumosMovs.filter(m2 => !(m2.auto && m2.fecha === fecha && m2.tipo === "salida" && esDelGalpon(m2)));
     const nuevosLotes = lotes.map(l => {
+      if (soloLoteId && l.id !== soloLoteId) return l;
       const c = capturas[l.id];
       const t = totalesGalpon(c);
       const alimTotal = Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0);
@@ -628,7 +655,7 @@ export default function App() {
       nuevos.push({
         fecha, lote: l.id, cartones: +t.cartones.toFixed(2), quebrados: Number(c.quebrados || 0),
         pesoKg: +t.pesoKg.toFixed(1), muertas: Number(c.muertas || 0), dx: c.dx || "",
-        alimentoKg: alimTotal, alimento6am: Number(c.alimento6am || 0), alimento1pm: Number(c.alimento1pm || 0),
+        alimentoKg: alimTotal, alimento6am: Number(c.alimento6am || 0), alimento1pm: Number(c.alimento1pm || 0), obsAlimento: c.obsAlimento || "",
         alimentoEsperadoKg: l.racionGAve && l.aves ? +((l.racionGAve * l.aves) / 1000).toFixed(1) : 0,
         aguaL: Number(c.aguaL || 0),
         chequeo: c.chequeo && Object.values(c.chequeo).some(v => v !== "") ? { ...c.chequeo } : null,
@@ -668,6 +695,7 @@ export default function App() {
       }
     };
     lotes.forEach(l => {
+      if (soloLoteId && l.id !== soloLoteId) return;
       const c = capturas[l.id]; if (!c) return;
       c.meds.forEach(m2 => m2.producto && descontarInsumo(m2.producto, m2.dosis, `Medicación G${l.galpon}`));
       c.vits.forEach(v2 => v2.producto && descontarInsumo(v2.producto, v2.dosis, `Vitamina G${l.galpon}`));
@@ -700,7 +728,7 @@ export default function App() {
   };
 
   // ── Bodega ──
-  const activos = lotes.filter(l => l.estado !== "cerrado");
+  const activos = lotes.filter(l => l.estado !== "cerrado").sort((a, b) => Number(a.galpon) - Number(b.galpon));
   const regsHoy = registros.filter(r => r.fecha === hoyStr());
   const fechaB = (fechaBodega || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
   const regsFechaB = registros.filter(r => r.fecha === fechaB);
@@ -1460,6 +1488,23 @@ export default function App() {
     const nuevo = [...movs, ...actual].slice(0, 4000);
     if (await escribir(K.kardex, nuevo)) { setKardex(nuevo); return true; }
     return false;
+  };
+  const BotonGuardaMini = () => (
+    <button onClick={() => guardarDia(loteActivo?.id)} disabled={guardando} title={`Guardar este punto (guarda el Gallinero ${loteActivo?.galpon || ""})`}
+      style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+      💾 Guardar
+    </button>
+  );
+  const dosisSugerida = (nombre, tipoFav) => {
+    const ins = insumos.find(x => x.nombre === nombre);
+    if (ins?.dosis) return ins.dosis;
+    return favoritos.find(f2 => f2.tipo === tipoFav && f2.nombre === nombre)?.dosis || "";
+  };
+  const esConocido = (nombre, tipoFav) => !nombre || insumos.some(x => x.nombre === nombre) || favoritos.some(f2 => f2.tipo === tipoFav && f2.nombre === nombre);
+  const guardarFavorito = async (tipoFav, nombre, dosis) => {
+    const nuevo = [...favoritos, { id: Date.now(), tipo: tipoFav, nombre: nombre.trim(), dosis: (dosis || "").trim() }];
+    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar(`⭐ "${nombre.trim()}" guardado como favorito — ya aparece en el menú`); }
+    else avisar("⚠ No se pudo guardar el favorito");
   };
   const kardexSaldo = (codigo) => kardex.reduce((a, m) => a + (m.mp === codigo ? (m.tipo === "salida" ? -1 : 1) * Number(m.kg || 0) : 0), 0);
 
@@ -2278,7 +2323,7 @@ export default function App() {
               Gallinero {loteActivo.galpon} · {loteActivo.raza} · nacidas {loteActivo.nac.split("-").reverse().join("/")} · <b>{semanasDe(loteActivo.nac).toFixed(1)} semanas</b> · {loteActivo.aves.toLocaleString()} aves
             </div>}
 
-            <Seccion num="1" titulo="Producción por tiquete" sub="Número de tiquete, cartones y peso (kg)">
+            <Seccion accion={<BotonGuardaMini />} num="1" titulo="Producción por tiquete" sub="Número de tiquete, cartones y peso (kg)">
               {cap.tiquetes.map((t, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                   <input type="text" inputMode="numeric" placeholder={`Tiquete #`} value={t.num}
@@ -2301,11 +2346,11 @@ export default function App() {
               </div>
             </Seccion>
 
-            <Seccion num="2" titulo="Huevo quebrado">
+            <Seccion accion={<BotonGuardaMini />} num="2" titulo="Huevo quebrado">
               <Campo etiqueta="Cantidad de huevos quebrados" type="text" inputMode="numeric" placeholder="ej. 45" value={cap.quebrados} onChange={e => setCap({ quebrados: e.target.value })} />
             </Seccion>
 
-            <Seccion num="3" titulo="Gallinas muertas" sub="El saldo se calcula solo: saldo inicial − muertas = saldo final">
+            <Seccion accion={<BotonGuardaMini />} num="3" titulo="Gallinas muertas" sub="El saldo se calcula solo: saldo inicial − muertas = saldo final">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta="Cantidad de muertas" type="text" inputMode="numeric" placeholder="ej. 1" value={cap.muertas} onChange={e => setCap({ muertas: e.target.value })} />
                 <Campo mitad etiqueta="Diagnóstico de muerte" type="text" placeholder="ej. prolapso" value={cap.dx} onChange={e => setCap({ dx: e.target.value })} />
@@ -2317,14 +2362,14 @@ export default function App() {
               </div>
             </Seccion>
 
-            <Seccion num="4" titulo="Fumigación diaria" sub="Elige el producto del inventario de Insumos — la dosis sugerida es editable">
-              <datalist id="ins-desinf">{insumos.filter(x => ["Desinfección", "Protección Biológica", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}</datalist>
-              <datalist id="ins-meds">{insumos.filter(x => ["Medicinas", "Vacunas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}</datalist>
-              <datalist id="ins-vits">{insumos.filter(x => ["Vitaminas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}</datalist>
+            <Seccion accion={<BotonGuardaMini />} num="4" titulo="Fumigación diaria" sub="Elige el producto del inventario de Insumos — la dosis sugerida es editable">
+              <datalist id="ins-desinf">{insumos.filter(x => ["Desinfección", "Protección Biológica", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "fum").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
+              <datalist id="ins-meds">{insumos.filter(x => ["Medicinas", "Vacunas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "med").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
+              <datalist id="ins-vits">{insumos.filter(x => ["Vitaminas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "vit").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
               {cap.fums.map((f, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input type="text" list="ins-desinf" placeholder="Producto" value={f.producto}
-                    onChange={e => { const fs = [...cap.fums]; const ins = insumos.find(x => x.nombre === e.target.value); fs[i] = { ...f, producto: e.target.value, dosis: f.dosis || ins?.dosis || "" }; setCap({ fums: fs }); }}
+                    onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, producto: e.target.value, dosis: f.dosis || dosisSugerida(e.target.value, "fum") }; setCap({ fums: fs }); }}
                     style={{ ...inputStyle, flex: 1.2 }} />
                   <input type="text" placeholder="Dosis" value={f.dosis}
                     onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, dosis: e.target.value }; setCap({ fums: fs }); }}
@@ -2332,6 +2377,7 @@ export default function App() {
                   <input type="time" value={f.hora}
                     onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, hora: e.target.value }; setCap({ fums: fs }); }}
                     style={{ ...inputStyle, flex: 0.9 }} />
+                  {!esConocido(f.producto, "fum") && <button onClick={() => guardarFavorito("fum", f.producto, f.dosis)} title="Guardar como favorito del menú" style={{ padding: "0 9px", fontSize: 14, background: C.yemaSuave, color: "#9A6605", border: "none", borderRadius: 10, cursor: "pointer" }}>⭐</button>}
                   <button onClick={() => setCap({ fums: cap.fums.length > 1 ? cap.fums.filter((_, j) => j !== i) : [{ producto: "", dosis: "", hora: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -2341,11 +2387,11 @@ export default function App() {
               </button>
             </Seccion>
 
-            <Seccion num="5" titulo="Medicamentos" sub="Incluye la enfermedad a tratar y los días de retiro del huevo (si aplica)">
+            <Seccion accion={<BotonGuardaMini />} num="5" titulo="Medicamentos" sub="Incluye la enfermedad a tratar y los días de retiro del huevo (si aplica)">
               {cap.meds.map((m, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input type="text" list="ins-meds" placeholder="Medicamento" value={m.producto}
-                    onChange={e => { const ms = [...cap.meds]; const ins = insumos.find(x => x.nombre === e.target.value); ms[i] = { ...m, producto: e.target.value, dosis: m.dosis || ins?.dosis || "" }; setCap({ meds: ms }); }}
+                    onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, producto: e.target.value, dosis: m.dosis || dosisSugerida(e.target.value, "med") }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 1.1 }} />
                   <input type="text" placeholder="Dosis" value={m.dosis}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, dosis: e.target.value }; setCap({ meds: ms }); }}
@@ -2356,6 +2402,7 @@ export default function App() {
                   <input type="text" inputMode="numeric" placeholder="Retiro (días)" title="Días de retiro del huevo" value={m.retiro}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, retiro: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 0.7 }} />
+                  {!esConocido(m.producto, "med") && <button onClick={() => guardarFavorito("med", m.producto, m.dosis)} title="Guardar como favorito del menú" style={{ padding: "0 9px", fontSize: 14, background: C.yemaSuave, color: "#9A6605", border: "none", borderRadius: 10, cursor: "pointer" }}>⭐</button>}
                   <button onClick={() => setCap({ meds: cap.meds.length > 1 ? cap.meds.filter((_, j) => j !== i) : [{ producto: "", dosis: "", enfermedad: "", retiro: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -2365,15 +2412,16 @@ export default function App() {
               </button>
             </Seccion>
 
-            <Seccion num="6" titulo="Vitaminas" sub="Pueden ser varias">
+            <Seccion accion={<BotonGuardaMini />} num="6" titulo="Vitaminas" sub="Pueden ser varias">
               {cap.vits.map((v, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input type="text" list="ins-vits" placeholder="Vitamina / suplemento" value={v.producto}
-                    onChange={e => { const vs = [...cap.vits]; const ins = insumos.find(x => x.nombre === e.target.value); vs[i] = { ...v, producto: e.target.value, dosis: v.dosis || ins?.dosis || "" }; setCap({ vits: vs }); }}
+                    onChange={e => { const vs = [...cap.vits]; vs[i] = { ...v, producto: e.target.value, dosis: v.dosis || dosisSugerida(e.target.value, "vit") }; setCap({ vits: vs }); }}
                     style={{ ...inputStyle, flex: 1.3 }} />
                   <input type="text" placeholder="Dosis" value={v.dosis}
                     onChange={e => { const vs = [...cap.vits]; vs[i] = { ...v, dosis: e.target.value }; setCap({ vits: vs }); }}
                     style={{ ...inputStyle, flex: 1 }} />
+                  {!esConocido(v.producto, "vit") && <button onClick={() => guardarFavorito("vit", v.producto, v.dosis)} title="Guardar como favorito del menú" style={{ padding: "0 9px", fontSize: 14, background: C.yemaSuave, color: "#9A6605", border: "none", borderRadius: 10, cursor: "pointer" }}>⭐</button>}
                   <button onClick={() => setCap({ vits: cap.vits.length > 1 ? cap.vits.filter((_, j) => j !== i) : [{ producto: "", dosis: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -2383,7 +2431,7 @@ export default function App() {
               </button>
             </Seccion>
 
-            <Seccion num="7" titulo="Consumo de alimento" sub={`Fórmula: ${loteActivo?.formula || ""}${loteActivo?.racionGAve ? ` · ración definida: ${loteActivo.racionGAve} g/ave/día (40% a las 6 am, 60% a la 1 pm)` : ""}`}>
+            <Seccion accion={<BotonGuardaMini />} num="7" titulo="Consumo de alimento" sub={`Fórmula: ${loteActivo?.formula || ""}${loteActivo?.racionGAve ? ` · ración definida: ${loteActivo.racionGAve} g/ave/día (40% a las 6 am, 60% a la 1 pm)` : ""}`}>
               {(() => {
                 const espDia = loteActivo?.racionGAve && loteActivo?.aves ? (loteActivo.racionGAve * loteActivo.aves) / 1000 : 0;
                 const esp6 = espDia * 0.4, esp1 = espDia * 0.6;
@@ -2392,10 +2440,19 @@ export default function App() {
                 const gAveReal = loteActivo?.aves && real > 0 ? (real * 1000) / loteActivo.aves : 0;
                 return (
                   <>
+                    <label style={{ display: "block", marginBottom: 12 }}>
+                      <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>⚡ Consumo total del día (kg) — al salir de la casilla reparte solo: 40% a las 6 am, 60% a la 1 pm (editables)</span>
+                      <input type="text" inputMode="decimal" placeholder="ej. 240 → llena 96 y 144" style={inputStyle}
+                        onBlur={e => {
+                          const tot = parseFloat(String(e.target.value).replace(",", "."));
+                          if (!isNaN(tot) && tot > 0) { setCap({ alimento6am: String(+(tot * 0.4).toFixed(1)), alimento1pm: String(+(tot * 0.6).toFixed(1)) }); e.target.value = ""; }
+                        }} />
+                    </label>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                       <Campo mitad etiqueta={`Toma 6:00 am — servido real (kg)${esp6 ? ` · esperado ${esp6.toFixed(1)}` : ""}`} type="text" inputMode="decimal" placeholder={esp6 ? esp6.toFixed(1) : "kg"} value={cap.alimento6am} onChange={e => setCap({ alimento6am: e.target.value })} />
                       <Campo mitad etiqueta={`Toma 1:00 pm — servido real (kg)${esp1 ? ` · esperado ${esp1.toFixed(1)}` : ""}`} type="text" inputMode="decimal" placeholder={esp1 ? esp1.toFixed(1) : "kg"} value={cap.alimento1pm} onChange={e => setCap({ alimento1pm: e.target.value })} />
                     </div>
+                    <Campo etiqueta="Observaciones del consumo" type="text" placeholder="ej. dejaron alimento en comederos, cambio de fórmula, calor fuerte…" value={cap.obsAlimento} onChange={e => setCap({ obsAlimento: e.target.value })} />
                     <div style={{ fontSize: 13.5, display: "grid", gap: 5, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
                       {espDia > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Esperado del día</span><b>{espDia.toFixed(1)} kg · {loteActivo.racionGAve} g/ave</b></div>}
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span>Servido real</span><b>{real.toFixed(1)} kg{gAveReal ? ` · ${gAveReal.toFixed(0)} g/ave` : ""}</b></div>
@@ -2411,7 +2468,7 @@ export default function App() {
               })()}
             </Seccion>
 
-            <Seccion num="8" titulo="Trabajos diarios" sub="Marca lo realizado en este gallinero">
+            <Seccion accion={<BotonGuardaMini />} num="8" titulo="Trabajos diarios" sub="Marca lo realizado en este gallinero">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "2px 16px" }}>
                 {TRABAJOS.map((tr, i) => (
                   <label key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 0", cursor: "pointer" }}>
@@ -2422,7 +2479,7 @@ export default function App() {
               </div>
             </Seccion>
 
-            <Seccion num="9" titulo="Chequeo sanitario y ambiente" sub="Observación diaria del galpón — 2 minutos que detectan problemas antes que los números">
+            <Seccion accion={<BotonGuardaMini />} num="9" titulo="Chequeo sanitario y ambiente" sub="Observación diaria del galpón — 2 minutos que detectan problemas antes que los números">
               {(() => {
                 const ch = cap.chequeo || {};
                 const setCh = (campo, v) => setCap({ chequeo: { ...ch, [campo]: v } });
@@ -2466,7 +2523,10 @@ export default function App() {
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
             </Seccion>
 
-            <button onClick={guardarDia} disabled={guardando} style={btnStyle}>{guardando ? "Guardando…" : "Guardar control diario completo"}</button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => guardarDia(loteActivo?.id)} disabled={guardando} style={{ ...btnStyle, flex: 1, background: C.verdeSuave, color: C.verde }}>{guardando ? "Guardando…" : `💾 Guardar solo Gallinero ${loteActivo?.galpon || ""}`}</button>
+              <button onClick={() => guardarDia()} disabled={guardando} style={{ ...btnStyle, flex: 1.4 }}>{guardando ? "Guardando…" : "Guardar control diario completo"}</button>
+            </div>
             <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>
               Guarda los 4 gallineros de una vez. El huevo pasa a Bodega y el consumo descuenta de Planta.
             </div>
