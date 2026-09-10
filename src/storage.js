@@ -43,6 +43,7 @@ const TABLA = {
   "granja2:insumosMovs": "insumos_movs",
   "granja2:kardex": "kardex",
   "granja2:mpCatalogo": "mp_catalogo",
+  "granja2:favoritos": "favoritos",
 };
 
 // "Por Pagar" es especial: es un objeto {facturas, pagos, notas} donde cada
@@ -158,8 +159,18 @@ export async function leer(key, porDefecto) {
     if (tabla) {
       const arr = await leerColeccion(tabla);
       if (arr === null) return porDefecto; // error de conexión / tabla inexistente
+      if (arr.length === 0 && !(await yaSembrada(tabla))) {
+        // Rescate: si esta colección vivía antes como un solo bloque (p.ej. una
+        // lista nueva que se agregó a la app antes de tener su tabla propia),
+        // la recuperamos de ahí una sola vez en vez de mostrarla vacía.
+        const { data: legado } = await supabase.from("config").select("data").eq("key", key).maybeSingle();
+        if (Array.isArray(legado?.data) && legado.data.length) {
+          const ok = await escribirColeccion(key, tabla, legado.data);
+          if (ok) return legado.data;
+        }
+        return porDefecto; // nunca se ha creado nada aquí todavía
+      }
       ultimaVersion.set(key, arr);
-      if (arr.length === 0 && !(await yaSembrada(tabla))) return porDefecto; // nunca se ha creado nada aquí todavía
       return arr;
     }
 
