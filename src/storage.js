@@ -44,6 +44,7 @@ const TABLA = {
   "granja2:kardex": "kardex",
   "granja2:mpCatalogo": "mp_catalogo",
   "granja2:favoritos": "favoritos",
+  "granja2:mpInvHistorial": "mp_inv_historial",
 };
 
 // "Por Pagar" es especial: es un objeto {facturas, pagos, notas} donde cada

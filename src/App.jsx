@@ -23,7 +23,7 @@ const K = {
   vacunas: "granja2:vacunas", enfermedades: "granja2:enfermedades",
   necropsias: "granja2:necropsias", planVac: "granja2:planVacunas",
   mpInv: "granja2:mpInventario", mpConfig: "granja2:mpConfig", mpPedidos: "granja2:mpPedidos",
-  recetas: "granja2:recetas", mpCat: "granja2:mpCatalogo", nucleo: "granja2:nucleoInv", cxp: "granja2:cxp", kardex: "granja2:kardex", admins: "granja2:cfgAdmins", favoritos: "granja2:favoritos",
+  recetas: "granja2:recetas", mpCat: "granja2:mpCatalogo", nucleo: "granja2:nucleoInv", cxp: "granja2:cxp", kardex: "granja2:kardex", admins: "granja2:cfgAdmins", favoritos: "granja2:favoritos", mpInvHist: "granja2:mpInvHistorial",
   insumos: "granja2:insumos", insumosMovs: "granja2:insumosMovs",
   plantaCfg: "granja2:plantaCfg", bodegaCfg: "granja2:bodegaCfg",
   costos: "granja2:costos",
@@ -344,6 +344,8 @@ export default function App() {
   const [cfgAdmins, setCfgAdmins] = useState([]);
   const [nuevoAdmin, setNuevoAdmin] = useState("");
   const [favoritos, setFavoritos] = useState([]);
+  const [mpInvHist, setMpInvHist] = useState([]);
+  const [gestionFav, setGestionFav] = useState(null); // tipo: "fum" | "med" | "vit" — para borrar favoritos
   const [modalFav, setModalFav] = useState(null); // {tipo, idx, nombre, dosis, retiro}
   const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) });
 
@@ -397,6 +399,7 @@ export default function App() {
   const [fotosVista, setFotosVista] = useState({});
   const [printDoc, setPrintDoc] = useState(null);
   const [mpInv, setMpInv] = useState({});
+  const [mpInvUltimo, setMpInvUltimo] = useState({}); // último conteo GUARDADO — se usa para calcular el pedido, aunque el formulario de arriba ya esté vacío
   const [mpFechaConteo, setMpFechaConteo] = useState("");
   const [mpResponsable, setMpResponsable] = useState("");
   const [mpConfig, setMpConfig] = useState({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {} });
@@ -470,8 +473,11 @@ export default function App() {
   };
 
   // ── Carga inicial ──
-  const cargarTodo = async (primera) => {
-    setCargando(true);
+  // silencioso=true: se usa para refrescos en vivo por cambios de OTRAS personas.
+  // En ese caso NO debe tapar la pantalla (cargando) ni bloquear el botón Guardar
+  // (cargandoFondo) — solo debe traer los datos nuevos calladamente.
+  const cargarTodo = async (primera, silencioso = false) => {
+    if (!silencioso) setCargando(true);
     try {
       // FASE 1: solo lo esencial para pintar la pantalla (2 lecturas)
       const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
@@ -482,17 +488,16 @@ export default function App() {
       setLotes(ls); setRegistros(ordenarPorFecha(rs));
       if (primera) setCapturas(Object.fromEntries(ls.map(l => [l.id, capturaVacia()])));
       setErrorCarga(false);
-      setCargando(false);           // ← la app ya se ve y se puede navegar
-      setCargandoFondo(true);
+      if (!silencioso) { setCargando(false); setCargandoFondo(true); }           // ← la app ya se ve y se puede navegar
 
       // FASE 2: el resto en segundo plano (en paralelo)
-      const [ps0, ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0] = await Promise.all([
+      const [ps0, ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0] = await Promise.all([
         leer(K.pesajes, null), leer(K.meds, []), leer(K.fums, []), leer(K.movs, []), leer(K.planta, []),
         leer(K.plantaCfg, null), leer(K.bodegaCfg, null), leer(K.facturas, []), leer(K.vacunas, []),
         leer(K.enfermedades, []), leer(K.necropsias, []), leer(K.planVac, null), leer(K.bitacora, []),
         leer(K.costos, SEED_COSTOS), leer(K.mpInv, null), leer(K.mpConfig, null), leer(K.mpPedidos, []),
         leer(K.recetas, null), leer(K.mpCat, null), leer(K.insumos, null), leer(K.insumosMovs, []),
-        leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []),
+        leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []), leer(K.mpInvHist, []),
       ]);
       const ps = ps0 ?? (siembras.push(escribir(K.pesajes, SEED_PESAJES)), SEED_PESAJES);
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
@@ -514,7 +519,7 @@ export default function App() {
           setRepartos(bcfg.repartidores.map(n2 => ({ nombre: n2, salida: "", devBueno: "", devMalo: "" })));
         }
       }
-      if (mi) { setMpInv(mi.items || {}); setMpFechaConteo(mi.fecha || ""); setMpResponsable(mi.responsable || ""); }
+      if (mi) { setMpInvUltimo(mi.items || {}); setMpFechaConteo(mi.fecha || ""); setMpResponsable(mi.responsable || ""); }
       if (mc) setMpConfig({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {}, ...mc });
       setMpPedidos(ordenarPorFecha(pedidos)); setRecetas(rc); setMpCat(mcat); setInsumos(ins); setInsumosMovs(ordenarPorFecha(insMovs));
       setPesajes(ordenarPorFecha(ps)); setMedicaciones(ordenarPorFecha(ms)); setFumigaciones(ordenarPorFecha(fs));
@@ -525,6 +530,7 @@ export default function App() {
       setKardex(ordenarPorFecha(kdx0 || []));
       setCfgAdmins(adm0 || []);
       setFavoritos(fav0 || []);
+      setMpInvHist(ordenarPorFecha(mih0 || []));
       {
         const emailSesion = (typeof window !== "undefined" && window.__usuarioEmail || "").toLowerCase();
         if ((adm0 || []).length > 0 && emailSesion) setEsAdmin(adm0.map(x => x.toLowerCase()).includes(emailSesion));
@@ -535,26 +541,26 @@ export default function App() {
         if (movHoy.repartos) setRepartos(movHoy.repartos);
         setObsInv(movHoy.obs || "");
       }
-      setCargandoFondo(false);
-    } catch { setErrorCarga(true); setCargando(false); setCargandoFondo(false); }
+      setCargandoFondo(false); // no-op si silencioso (ya estaba en false)
+    } catch { if (!silencioso) { setErrorCarga(true); setCargando(false); setCargandoFondo(false); } }
   };
   useEffect(() => { cargarTodo(true); }, []);
 
   // ── Actualización en vivo: si otra persona guarda algo en cualquier tabla
-  // de la granja, esta pantalla se refresca sola (en segundo plano, sin
-  // interrumpir lo que se esté escribiendo) — así nadie necesita acordarse
-  // de tocar el botón ⟳ para ver los cambios de los demás.
+  // de la granja, esta pantalla se refresca sola EN SILENCIO (sin tapar la
+  // pantalla ni bloquear tu propio botón Guardar) — así nadie necesita
+  // acordarse de tocar ⟳ para ver los cambios de los demás.
   useEffect(() => {
     const tablasEnVivo = [
       "lotes", "registros", "pesajes", "medicaciones", "fumigaciones", "bodega_movs",
       "planta_movs", "facturas", "bitacora", "vacunas", "enfermedades", "necropsias",
-      "plan_vacunas", "mp_pedidos", "insumos", "insumos_movs", "kardex", "mp_catalogo",
+      "plan_vacunas", "mp_pedidos", "insumos", "insumos_movs", "kardex", "mp_catalogo", "favoritos", "mp_inv_historial",
       "cxp_facturas", "cxp_pagos", "cxp_notas", "config",
     ];
     let temporizador = null;
     const pedirRefresco = () => {
       clearTimeout(temporizador);
-      temporizador = setTimeout(() => cargarTodo(false), 1200);
+      temporizador = setTimeout(() => cargarTodo(false, true), 1500);
     };
     const canal = supabase.channel("granja-en-vivo");
     tablasEnVivo.forEach((t) => {
@@ -1184,7 +1190,7 @@ export default function App() {
       kgDia += kgF * pct;
     });
     const proyKg = kgDia * Number(mpConfig.cobertura || 11);
-    const inv = mpInv[mp.c] || {};
+    const inv = mpInvUltimo[mp.c] || {};
     const invKg = Number(inv.sacos || 0) * mp.pres + Number(inv.kg || 0);
     const faltaKg = Math.max(0, proyKg - invKg);
     let pedido = Math.ceil(faltaKg / mp.pres - 1e-9);
@@ -1197,10 +1203,20 @@ export default function App() {
   });
 
   const guardarInventarioMP = async () => {
+    const items = Object.fromEntries(Object.entries(mpInv).filter(([, v]) => (v?.sacos ?? "") !== "" || (v?.kg ?? "") !== ""));
+    if (!Object.keys(items).length) { avisar("⚠ Digita al menos un dato del conteo"); return; }
     setGuardando(true);
-    const doc = { fecha: hoyStr(), responsable: mpResponsable, items: mpInv };
-    if (await escribir(K.mpInv, doc)) { setMpFechaConteo(hoyStr()); avisar("✓ Inventario guardado — listo para generar el pedido"); }
-    else avisar("⚠ No se pudo guardar el inventario");
+    const fecha = hoyStr();
+    const doc = { fecha, responsable: mpResponsable, items };
+    const registroHist = { id: Date.now(), fecha, responsable: mpResponsable, items };
+    const nuevoHist = [registroHist, ...mpInvHist];
+    const ok1 = await escribir(K.mpInv, doc);
+    const ok2 = await escribir(K.mpInvHist, nuevoHist);
+    if (ok1 && ok2) {
+      setMpFechaConteo(fecha); setMpInvHist(ordenarPorFecha(nuevoHist)); setMpInvUltimo(items);
+      setMpInv({}); // ← el apartado queda limpio, listo para el próximo conteo
+      avisar(`✓ Conteo del ${fecha.slice(0, 5)} guardado en el historial — listo para generar el pedido`);
+    } else avisar("⚠ No se pudo guardar el inventario");
     setGuardando(false);
   };
 
@@ -1542,6 +1558,11 @@ export default function App() {
     const nuevo = [...favoritos.filter(f2 => !(f2.tipo === tipoFav && f2.nombre === nombre.trim())), { id: Date.now(), tipo: tipoFav, nombre: nombre.trim(), dosis: (dosis || "").trim(), retiro: (retiro || "").trim() }];
     if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar(`⭐ "${nombre.trim()}" agregado al menú`); return true; }
     avisar("⚠ No se pudo guardar"); return false;
+  };
+  const borrarFavorito = async (id) => {
+    const nuevo = favoritos.filter(f2 => f2.id !== id);
+    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar("✓ Quitado del menú"); }
+    else avisar("⚠ No se pudo guardar");
   };
   const retiroSugerido = (nombre) => favoritos.find(f2 => f2.tipo === "med" && f2.nombre === nombre)?.retiro || "";
   const kardexSaldo = (codigo) => kardex.reduce((a, m) => a + (m.mp === codigo ? (m.tipo === "salida" ? -1 : 1) * Number(m.kg || 0) : 0), 0);
@@ -2310,6 +2331,27 @@ export default function App() {
         </div>
       )}
 
+      {gestionFav && (
+        <div onClick={() => setGestionFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde, marginBottom: 4 }}>
+              🗑 Quitar del menú de {gestionFav === "fum" ? "fumigación" : gestionFav === "med" ? "medicamentos" : "vitaminas"}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Esto solo quita la opción del menú desplegable — no borra ningún registro ya guardado.</div>
+            {favoritos.filter(f2 => f2.tipo === gestionFav).length === 0 && (
+              <div style={{ fontSize: 13, color: C.textoSuave, padding: "10px 0" }}>Todavía no hay productos agregados a este menú.</div>
+            )}
+            {favoritos.filter(f2 => f2.tipo === gestionFav).map(f2 => (
+              <div key={f2.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "9px 0", borderBottom: `1px solid ${C.borde}` }}>
+                <span style={{ fontSize: 13.5 }}><b>{f2.nombre}</b>{f2.dosis ? <span style={{ color: C.textoSuave }}> · {f2.dosis}</span> : null}</span>
+                <span onClick={() => borrarFavorito(f2.id)} style={{ cursor: "pointer", color: C.alerta, fontSize: 18, padding: "0 6px", fontWeight: 700 }} title="Quitar del menú">×</span>
+              </div>
+            ))}
+            <button onClick={() => setGestionFav(null)} style={{ ...btnStyle, marginTop: 16, background: "#F1F1EA", color: C.texto }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
       <header style={{ background: C.verde, padding: "16px 16px 0", color: "#fff", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ maxWidth: 880, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2442,6 +2484,7 @@ export default function App() {
                     onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, hora: e.target.value }; setCap({ fums: fs }); }}
                     style={{ ...inputStyle, flex: 0.9 }} />
                   {<button onClick={() => setModalFav({ tipo: "fum", idx: i, nombre: f.producto || "", dosis: f.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
+                  {<button onClick={() => setGestionFav("fum")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
                   <button onClick={() => setCap({ fums: cap.fums.length > 1 ? cap.fums.filter((_, j) => j !== i) : [{ producto: "", dosis: "", hora: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -2467,6 +2510,7 @@ export default function App() {
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, retiro: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 0.7 }} />
                   {<button onClick={() => setModalFav({ tipo: "med", idx: i, nombre: m.producto || "", dosis: m.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
+                  {<button onClick={() => setGestionFav("med")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
                   <button onClick={() => setCap({ meds: cap.meds.length > 1 ? cap.meds.filter((_, j) => j !== i) : [{ producto: "", dosis: "", enfermedad: "", retiro: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -2486,6 +2530,7 @@ export default function App() {
                     onChange={e => { const vs = [...cap.vits]; vs[i] = { ...v, dosis: e.target.value }; setCap({ vits: vs }); }}
                     style={{ ...inputStyle, flex: 1 }} />
                   {<button onClick={() => setModalFav({ tipo: "vit", idx: i, nombre: v.producto || "", dosis: v.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
+                  {<button onClick={() => setGestionFav("vit")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
                   <button onClick={() => setCap({ vits: cap.vits.length > 1 ? cap.vits.filter((_, j) => j !== i) : [{ producto: "", dosis: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -3077,7 +3122,7 @@ export default function App() {
                             const ent = kardex.filter(m2 => m2.mp === c2 && m2.tipo !== "salida").reduce((a, m2) => a + Number(m2.kg || 0), 0);
                             const sal = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "salida").reduce((a, m2) => a + Number(m2.kg || 0), 0);
                             const teorico = ent - sal;
-                            const invF = mpInv[c2];
+                            const invF = mpInvUltimo[c2];
                             const fisico = invF && (invF.sacos || invF.kg) ? Number(invF.sacos || 0) * (mp.pres || 1) + Number(invF.kg || 0) : null;
                             const dif = fisico != null ? fisico - teorico : null;
                             return (
@@ -3167,6 +3212,25 @@ export default function App() {
                 );
               })}
               <button onClick={guardarInventarioMP} disabled={guardando} style={{ ...btnStyle, marginTop: 8 }}>Guardar inventario del conteo</button>
+              {mpInvHist.length > 0 && (
+                <details style={{ marginTop: 14 }}>
+                  <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>📋 Historial de conteos ({mpInvHist.length})</summary>
+                  {mpInvHist.map(h => (
+                    <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 2px", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
+                      <span><b>{String(h.fecha).slice(0, 5)}</b> · {h.responsable || "sin responsable"} · {Object.keys(h.items || {}).length} materias primas contadas</span>
+                      <span style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => { setMpInv(h.items || {}); setMpResponsable(h.responsable || ""); avisar(`✓ Conteo del ${String(h.fecha).slice(0, 5)} cargado en el formulario — puedes editarlo y guardar de nuevo`); }}
+                          style={{ fontSize: 11.5, padding: "4px 10px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Ver / reusar</button>
+                        <span onClick={async () => {
+                          if (!pideConfirm(`borrarConteo-${h.id}`, "⚠ Toca otra vez para borrar este conteo del historial")) return;
+                          const nuevo = mpInvHist.filter(x => x.id !== h.id);
+                          if (await escribir(K.mpInvHist, nuevo)) { setMpInvHist(nuevo); avisar("✓ Conteo borrado del historial"); }
+                        }} style={{ cursor: "pointer", color: C.alerta, fontSize: 15, padding: "0 4px" }} title="Borrar este conteo">×</span>
+                      </span>
+                    </div>
+                  ))}
+                </details>
+              )}
             </Seccion>
 
             <Seccion titulo="3 · Pedido calculado" sub={`Consumo × ${mpConfig.cobertura} días − inventario, redondeado a presentación completa (mín. ${mpConfig.minKg1} kg en granel)`}>
