@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
 import { leer, escribir } from "./storage";
+import { migrarDesdeV1 } from "./migracion";
+import { supabase } from "./supabase";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -13,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "5.3";
+const VERSION_APP = "6.0";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -530,6 +532,30 @@ export default function App() {
     } catch { setErrorCarga(true); setCargando(false); setCargandoFondo(false); }
   };
   useEffect(() => { cargarTodo(true); }, []);
+
+  // ── Actualización en vivo: si otra persona guarda algo en cualquier tabla
+  // de la granja, esta pantalla se refresca sola (en segundo plano, sin
+  // interrumpir lo que se esté escribiendo) — así nadie necesita acordarse
+  // de tocar el botón ⟳ para ver los cambios de los demás.
+  useEffect(() => {
+    const tablasEnVivo = [
+      "lotes", "registros", "pesajes", "medicaciones", "fumigaciones", "bodega_movs",
+      "planta_movs", "facturas", "bitacora", "vacunas", "enfermedades", "necropsias",
+      "plan_vacunas", "mp_pedidos", "insumos", "insumos_movs", "kardex", "mp_catalogo",
+      "cxp_facturas", "cxp_pagos", "cxp_notas", "config",
+    ];
+    let temporizador = null;
+    const pedirRefresco = () => {
+      clearTimeout(temporizador);
+      temporizador = setTimeout(() => cargarTodo(false), 1200);
+    };
+    const canal = supabase.channel("granja-en-vivo");
+    tablasEnVivo.forEach((t) => {
+      canal.on("postgres_changes", { event: "*", schema: "public", table: t }, pedirRefresco);
+    });
+    canal.subscribe();
+    return () => { clearTimeout(temporizador); supabase.removeChannel(canal); };
+  }, []);
 
   const avisar = (m) => { setGuardado(m); setTimeout(() => setGuardado(""), 3000); };
 
@@ -3958,14 +3984,11 @@ export default function App() {
                         }
                         // Verificación: releer una clave testigo de la nube y comparar
                         avisar("⏳ 3/3 Verificando en la nube…");
-                        const normal = (x) => Array.isArray(x) ? x.map(normal)
-                          : (x && typeof x === "object") ? Object.fromEntries(Object.keys(x).sort().map(k2 => [k2, normal(x[k2])]))
-                          : x;
                         let verificado = true;
                         if (entradas.length) {
                           const [kT, vT] = entradas[0];
                           const enNube = await leer(kT, null);
-                          verificado = JSON.stringify(normal(enNube)) === JSON.stringify(normal(vT));
+                          verificado = JSON.stringify(enNube) === JSON.stringify(vT);
                         }
                         if (mal.length || !verificado) {
                           avisar(`⚠ Importación INCOMPLETA: ${ok}/${entradas.length} guardados${mal.length ? ` — fallaron: ${mal.slice(0, 4).join(", ")}` : ""}${!verificado ? " — la verificación en la nube no coincide" : ""}. NO recargues: intenta de nuevo o avisa a Claude.`);
@@ -3977,6 +4000,33 @@ export default function App() {
                       setGuardando(false);
                     }} />
                 </label>
+                {esAdmin && (
+                  <div style={{ marginTop: 14, padding: 12, background: C.yemaSuave, borderRadius: 12, border: `1.5px solid ${C.yema}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🔧 Migración a base de datos v6</div>
+                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>
+                      Se hace UNA sola vez, después de correr <b>supabase_v2.sql</b> en Supabase. Copia todo lo que hoy vive en la tabla vieja hacia las tablas nuevas, sin borrar nada de la vieja. Es seguro tocarlo más de una vez: si una tabla nueva ya tiene datos, se salta.
+                    </div>
+                    <button onClick={async () => {
+                      if (confirmar !== "migrarv6") { setConfirmar("migrarv6"); avisar("⚠ Esto copiará tus datos a las tablas nuevas — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "migrarv6" ? null : c2), 15000); return; }
+                      setConfirmar(null); setGuardando(true);
+                      try {
+                        const resumen = await migrarDesdeV1((msg) => avisar(`⏳ ${msg}`));
+                        const partes = [];
+                        if (resumen.migradas.length) partes.push(`✓ Copiadas: ${resumen.migradas.join(", ")}`);
+                        if (resumen.saltadas.length) partes.push(`— Ya existían (sin tocar): ${resumen.saltadas.join(", ")}`);
+                        if (resumen.errores.length) partes.push(`⚠ Con error: ${resumen.errores.join(" | ")}`);
+                        alert(partes.join("\n\n") || "No había nada que migrar.");
+                        if (!resumen.errores.length) { avisar("✓ Migración completa — recargando…"); setTimeout(() => { try { location.reload(); } catch {} }, 1600); }
+                        else avisar("⚠ La migración terminó con errores — revisa el detalle arriba");
+                      } catch (e) {
+                        alert(`⚠ No se pudo migrar: ${e.message}`);
+                      }
+                      setGuardando(false);
+                    }} disabled={guardando} style={{ ...btnStyle, background: C.yema, color: "#fff" }}>
+                      🔧 Migrar datos a la base de datos v6
+                    </button>
+                  </div>
+                )}
                 {esAdmin && (
                   <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>👑 Administradores</div>
