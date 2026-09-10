@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.7";
+const VERSION_APP = "6.8";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -340,6 +340,7 @@ export default function App() {
   const [cfgAdmins, setCfgAdmins] = useState([]);
   const [nuevoAdmin, setNuevoAdmin] = useState("");
   const [favoritos, setFavoritos] = useState([]);
+  const [modalFav, setModalFav] = useState(null); // {tipo, idx, nombre, dosis, retiro}
   const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) });
 
   // Planta
@@ -1515,11 +1516,12 @@ export default function App() {
     return favoritos.find(f2 => f2.tipo === tipoFav && f2.nombre === nombre)?.dosis || "";
   };
   const esConocido = (nombre, tipoFav) => !nombre || insumos.some(x => x.nombre === nombre) || favoritos.some(f2 => f2.tipo === tipoFav && f2.nombre === nombre);
-  const guardarFavorito = async (tipoFav, nombre, dosis) => {
-    const nuevo = [...favoritos, { id: Date.now(), tipo: tipoFav, nombre: nombre.trim(), dosis: (dosis || "").trim() }];
-    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar(`⭐ "${nombre.trim()}" guardado como favorito — ya aparece en el menú`); }
-    else avisar("⚠ No se pudo guardar el favorito");
+  const guardarFavorito = async (tipoFav, nombre, dosis, retiro) => {
+    const nuevo = [...favoritos.filter(f2 => !(f2.tipo === tipoFav && f2.nombre === nombre.trim())), { id: Date.now(), tipo: tipoFav, nombre: nombre.trim(), dosis: (dosis || "").trim(), retiro: (retiro || "").trim() }];
+    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar(`⭐ "${nombre.trim()}" agregado al menú`); return true; }
+    avisar("⚠ No se pudo guardar"); return false;
   };
+  const retiroSugerido = (nombre) => favoritos.find(f2 => f2.tipo === "med" && f2.nombre === nombre)?.retiro || "";
   const kardexSaldo = (codigo) => kardex.reduce((a, m) => a + (m.mp === codigo ? (m.tipo === "salida" ? -1 : 1) * Number(m.kg || 0) : 0), 0);
 
   // Transaccional: SIEMPRE lee el valor real del storage antes de escribir (imposible pisar datos),
@@ -2259,6 +2261,32 @@ export default function App() {
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
       <style>{fuentes}</style>
+      {modalFav && (
+        <div onClick={() => setModalFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde, marginBottom: 4 }}>
+              ➕ Nuevo producto de {modalFav.tipo === "fum" ? "fumigación" : modalFav.tipo === "med" ? "medicamento" : "vitamina"}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Queda guardado en el menú para todo el equipo, con su dosis para autorrellenar.</div>
+            <Campo etiqueta="Nombre del producto" type="text" placeholder="ej. Virkon S" value={modalFav.nombre} onChange={e => setModalFav({ ...modalFav, nombre: e.target.value })} />
+            <Campo etiqueta="Dosis sugerida (editable al usarla)" type="text" placeholder="ej. 25 g por bomba de 18 L" value={modalFav.dosis} onChange={e => setModalFav({ ...modalFav, dosis: e.target.value })} />
+            {modalFav.tipo === "med" && <Campo etiqueta="Días de retiro del huevo (si aplica)" type="text" inputMode="numeric" placeholder="ej. 5" value={modalFav.retiro} onChange={e => setModalFav({ ...modalFav, retiro: e.target.value })} />}
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <button onClick={async () => {
+                if (!modalFav.nombre.trim()) { avisar("⚠ Escribe el nombre del producto"); return; }
+                if (await guardarFavorito(modalFav.tipo, modalFav.nombre, modalFav.dosis, modalFav.retiro)) {
+                  const i2 = modalFav.idx;
+                  if (modalFav.tipo === "fum" && cap?.fums?.[i2] != null) { const fs = [...cap.fums]; fs[i2] = { ...fs[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis }; setCap({ fums: fs }); }
+                  if (modalFav.tipo === "med" && cap?.meds?.[i2] != null) { const ms = [...cap.meds]; ms[i2] = { ...ms[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis, retiro: modalFav.retiro }; setCap({ meds: ms }); }
+                  if (modalFav.tipo === "vit" && cap?.vits?.[i2] != null) { const vs = [...cap.vits]; vs[i2] = { ...vs[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis }; setCap({ vits: vs }); }
+                  setModalFav(null);
+                }
+              }} style={{ ...btnStyle, flex: 1, marginTop: 0 }}>✓ Agregar al menú</button>
+              <button onClick={() => setModalFav(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <header style={{ background: C.verde, padding: "16px 16px 0", color: "#fff", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ maxWidth: 880, margin: "0 auto" }}>
@@ -2391,7 +2419,7 @@ export default function App() {
                   <input type="time" value={f.hora}
                     onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, hora: e.target.value }; setCap({ fums: fs }); }}
                     style={{ ...inputStyle, flex: 0.9 }} />
-                  {!esConocido(f.producto, "fum") && <button onClick={() => guardarFavorito("fum", f.producto, f.dosis)} title="Guardar como favorito del menú" style={{ padding: "0 9px", fontSize: 14, background: C.yemaSuave, color: "#9A6605", border: "none", borderRadius: 10, cursor: "pointer" }}>⭐</button>}
+                  {<button onClick={() => setModalFav({ tipo: "fum", idx: i, nombre: f.producto || "", dosis: f.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
                   <button onClick={() => setCap({ fums: cap.fums.length > 1 ? cap.fums.filter((_, j) => j !== i) : [{ producto: "", dosis: "", hora: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -2405,7 +2433,7 @@ export default function App() {
               {cap.meds.map((m, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input type="text" list="ins-meds" placeholder="Medicamento" value={m.producto}
-                    onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, producto: e.target.value, dosis: m.dosis || dosisSugerida(e.target.value, "med") }; setCap({ meds: ms }); }}
+                    onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, producto: e.target.value, dosis: m.dosis || dosisSugerida(e.target.value, "med"), retiro: m.retiro || retiroSugerido(e.target.value) }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 1.1 }} />
                   <input type="text" placeholder="Dosis" value={m.dosis}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, dosis: e.target.value }; setCap({ meds: ms }); }}
@@ -2416,7 +2444,7 @@ export default function App() {
                   <input type="text" inputMode="numeric" placeholder="Retiro (días)" title="Días de retiro del huevo" value={m.retiro}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, retiro: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 0.7 }} />
-                  {!esConocido(m.producto, "med") && <button onClick={() => guardarFavorito("med", m.producto, m.dosis)} title="Guardar como favorito del menú" style={{ padding: "0 9px", fontSize: 14, background: C.yemaSuave, color: "#9A6605", border: "none", borderRadius: 10, cursor: "pointer" }}>⭐</button>}
+                  {<button onClick={() => setModalFav({ tipo: "med", idx: i, nombre: m.producto || "", dosis: m.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
                   <button onClick={() => setCap({ meds: cap.meds.length > 1 ? cap.meds.filter((_, j) => j !== i) : [{ producto: "", dosis: "", enfermedad: "", retiro: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
@@ -2435,7 +2463,7 @@ export default function App() {
                   <input type="text" placeholder="Dosis" value={v.dosis}
                     onChange={e => { const vs = [...cap.vits]; vs[i] = { ...v, dosis: e.target.value }; setCap({ vits: vs }); }}
                     style={{ ...inputStyle, flex: 1 }} />
-                  {!esConocido(v.producto, "vit") && <button onClick={() => guardarFavorito("vit", v.producto, v.dosis)} title="Guardar como favorito del menú" style={{ padding: "0 9px", fontSize: 14, background: C.yemaSuave, color: "#9A6605", border: "none", borderRadius: 10, cursor: "pointer" }}>⭐</button>}
+                  {<button onClick={() => setModalFav({ tipo: "vit", idx: i, nombre: v.producto || "", dosis: v.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
                   <button onClick={() => setCap({ vits: cap.vits.length > 1 ? cap.vits.filter((_, j) => j !== i) : [{ producto: "", dosis: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
                 </div>
               ))}
