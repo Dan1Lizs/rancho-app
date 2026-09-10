@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.0";
+const VERSION_APP = "6.1";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -338,17 +338,14 @@ export default function App() {
   const [esAdmin, setEsAdmin] = useState(true);
   const [cfgAdmins, setCfgAdmins] = useState([]);
   const [nuevoAdmin, setNuevoAdmin] = useState("");
-  const [leyendoPdf, setLeyendoPdf] = useState(false);
-  const [facturaExtraida, setFacturaExtraida] = useState(null);
-  const [leyendoDia, setLeyendoDia] = useState(false);
-  const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "" });
+  const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) });
 
   // Planta
-  const [fBache, setFBache] = useState({ formula: "Impulsor", baches: "", kg: "", numBache: "" });
+  const [fBache, setFBache] = useState({ formula: "Impulsor", baches: "", kg: "", numBache: "", fecha: new Date().toISOString().slice(0, 10) });
   const [plantaCfg, setPlantaCfg] = useState({ inicialAves: SEED_PLANTA.saldoKg, inicialGanado: 0 });
   const [bodegaCfg, setBodegaCfg] = useState({ inicialCart: 128 });
   const [aperturaIns, setAperturaIns] = useState({});
-  const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "" });
+  const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", fecha: new Date().toISOString().slice(0, 10) });
   const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", saldoReal: "" });
   const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "" });
 
@@ -558,6 +555,20 @@ export default function App() {
   }, []);
 
   const avisar = (m) => { setGuardado(m); setTimeout(() => setGuardado(""), 3000); };
+
+  // iPhone: el teclado decimal solo trae "," — la convertimos a "." en el instante en que se teclea,
+  // antes de que React lea el valor, para que TODOS los campos numéricos acepten decimales
+  useEffect(() => {
+    const setterNativo = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    const normalizar = (e) => {
+      const el = e.target;
+      if (el?.tagName === "INPUT" && el.getAttribute("inputmode") === "decimal" && el.value.includes(",")) {
+        setterNativo.call(el, el.value.replace(/,/g, "."));
+      }
+    };
+    document.addEventListener("input", normalizar, true);
+    return () => document.removeEventListener("input", normalizar, true);
+  }, []);
 
   // ── Totales captura ──
   const totalesGalpon = (c) => {
@@ -781,7 +792,8 @@ export default function App() {
     if (!fBache.kg && !fBache.baches) return;
     setGuardando(true);
     const nBaches = Number(fBache.baches || 0);
-    const nuevo = [{ fecha: hoyStr(), tipo: "bache", categoria: usoFormula(fBache.formula), formula: fBache.formula, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), por: completadoPor }, ...plantaMovs];
+    const fechaBache = (fBache.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+    const nuevo = [{ fecha: fechaBache, tipo: "bache", categoria: usoFormula(fBache.formula), formula: fBache.formula, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) {
       // Descuento automático de porciones de núcleo (si la fórmula tiene micros)
       if (nBaches > 0) {
@@ -789,7 +801,7 @@ export default function App() {
         if (f2) {
           const salidas = Object.entries(f2.items)
             .filter(([c2, kg]) => basculaDe(c2) !== 4 && Number(kg) > 0)
-            .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: hoyStr(), mp: c2, tipo: "salida", kg: +(Number(kg) * nBaches).toFixed(2), ref: `Bache ${fBache.formula} ×${nBaches}` }));
+            .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaBache, mp: c2, tipo: "salida", kg: +(Number(kg) * nBaches).toFixed(2), ref: `Bache ${fBache.formula} ×${nBaches}${fBache.numBache ? ` #${fBache.numBache}` : ""}` }));
           await registrarKardex(salidas);
         }
       }
@@ -798,7 +810,7 @@ export default function App() {
         const inv = { ...invReal, [fBache.formula]: +((invReal[fBache.formula] || 0) - nBaches).toFixed(2) };
         await escribir(K.nucleo, inv); setNucleoInv(inv);
       }
-      setPlantaMovs(nuevo); setFBache({ ...fBache, baches: "", kg: "", numBache: "" });
+      setPlantaMovs(nuevo); setFBache({ ...fBache, baches: "", kg: "", numBache: "", fecha: new Date().toISOString().slice(0, 10) });
       avisar(`✓ Bache registrado — concentrado ${usoFormula(fBache.formula)}`);
     } else avisar("⚠ No se pudo guardar");
     setGuardando(false);
@@ -808,17 +820,20 @@ export default function App() {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — espera unos segundos"); return; }
     const n = Number(fNucleo.porciones || 0);
     if (!n) return;
+    const fechaNuc = (fNucleo.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
     const invReal = await leer(K.nucleo, {});
     const inv = { ...invReal, [fNucleo.formula]: +((invReal[fNucleo.formula] || 0) + n).toFixed(2) };
     if (await escribir(K.nucleo, inv)) {
+      const movNuc = [{ id: Date.now(), fecha: fechaNuc, tipo: "nucleo", categoria: usoFormula(fNucleo.formula), formula: fNucleo.formula, porciones: n, numNucleo: (fNucleo.numNucleo || "").trim(), por: completadoPor }, ...plantaMovs];
+      if (await escribir(K.planta, movNuc)) setPlantaMovs(movNuc);
       const f2 = recetas.formulas[fNucleo.formula];
       if (f2) {
         const salidas = Object.entries(f2.items)
           .filter(([c2, kg]) => basculaDe(c2) === 4 && Number(kg) > 0)
-          .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: hoyStr(), mp: c2, tipo: "salida", kg: +(Number(kg) * n).toFixed(3), ref: `Núcleo ${fNucleo.formula} ×${n}` }));
+          .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaNuc, mp: c2, tipo: "salida", kg: +(Number(kg) * n).toFixed(3), ref: `Núcleo ${fNucleo.formula} ×${n}${fNucleo.numNucleo ? ` #${fNucleo.numNucleo}` : ""}` }));
         await registrarKardex(salidas);
       }
-      setNucleoInv(inv); setFNucleo({ ...fNucleo, porciones: "" }); avisar(`✓ Núcleo producido: ${n} porción(es) de ${fNucleo.formula} — kardex actualizado`);
+      setNucleoInv(inv); setFNucleo({ ...fNucleo, porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) }); avisar(`✓ Núcleo producido: ${n} porción(es) de ${fNucleo.formula} — kardex actualizado`);
     }
     else avisar("⚠ No se pudo guardar");
   };
@@ -826,8 +841,8 @@ export default function App() {
   const guardarServidoGanado = async () => {
     if (!fServGan.kg) return;
     setGuardando(true);
-    const nuevo = [{ fecha: hoyStr(), tipo: "servido", categoria: "Ganado", kg: Number(fServGan.kg), formula: fServGan.formula || "", detalle: fServGan.detalle || "", por: completadoPor }, ...plantaMovs];
-    if (await escribir(K.planta, nuevo)) { setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "" }); avisar("✓ Servido a ganado registrado"); }
+    const nuevo = [{ fecha: (fServGan.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/"), tipo: "servido", categoria: "Ganado", kg: Number(fServGan.kg), formula: fServGan.formula || "", detalle: fServGan.detalle || "", por: completadoPor }, ...plantaMovs];
+    if (await escribir(K.planta, nuevo)) { setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "", fecha: new Date().toISOString().slice(0, 10) }); avisar("✓ Servido a ganado registrado"); }
     else avisar("⚠ No se pudo guardar");
     setGuardando(false);
   };
@@ -2184,66 +2199,6 @@ export default function App() {
                 📅 Estás capturando para el {fechaCaptura.split("-").reverse().join("/")} — si esa fecha ya tiene datos, se reemplazarán (edición).
               </div>
             )}
-            <label style={{ display: "block", marginBottom: 12 }}>
-              <span style={{ display: "block", textAlign: "center", padding: "10px 14px", fontSize: 13, fontWeight: 600, background: C.yemaSuave, color: "#9A6605", borderRadius: 10, cursor: "pointer", opacity: leyendoDia ? 0.6 : 1 }}>
-                {leyendoDia ? "🤖 Leyendo el registro del día…" : "📄 Llenar este día desde foto o PDF del formato (IA)"}
-              </span>
-              <input type="file" accept="application/pdf,image/*" disabled={leyendoDia} style={{ display: "none" }}
-                onChange={async e => {
-                  const file = e.target.files?.[0]; e.target.value = "";
-                  if (!file) return;
-                  setLeyendoDia(true); avisar("🤖 Analizando el registro — unos segundos…");
-                  try {
-                    const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
-                    const esPdf = file.type === "application/pdf";
-                    const bloque = esPdf
-                      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
-                      : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: b64 } };
-                    const listaIns = insumos.map(i2 => i2.nombre).join("; ");
-                    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        model: "claude-sonnet-4-6", max_tokens: 1000,
-                        messages: [{ role: "user", content: [bloque,
-                          { type: "text", text: `Este es el registro diario de una granja de gallinas ponedoras (formato Rancho El Soñado). Extrae los datos y responde SOLO con JSON válido, sin backticks, omitiendo campos vacíos o cero, con esta forma: {"fecha":"YYYY-MM-DD","gallineros":[{"g":1,"tiq":[{"num":"","cart":0,"kg":0}],"queb":0,"muertas":0,"dx":"","a6":0,"a1":0,"agua":0,"fums":[{"p":"","d":"","h":""}],"meds":[{"p":"","d":"","enf":"","ret":0}],"vits":[{"p":"","d":""}]}],"nota":""}. Claves: g=número de gallinero (1-4); tiq=tiquetes de huevo (num=número, cart=cartones, kg=peso); queb=huevos quebrados; a6/a1=kg de alimento 6am/1pm; agua=litros; fums=fumigaciones, meds=medicamentos (ret=días retiro), vits=vitaminas (p=producto, d=dosis, h=hora). Si un producto coincide con alguno de estos insumos usa el nombre exacto: [${listaIns}]. nota=observaciones/bitácora del día.` },
-                        ] }],
-                      }),
-                    });
-                    const data = await resp.json();
-                    const texto = (data.content || []).filter(x => x.type === "text").map(x => x.text).join("");
-                    const j = JSON.parse(texto.replace(/```json|```/g, "").trim());
-                    const iso = j.fecha && /^\d{4}-\d{2}-\d{2}$/.test(j.fecha) ? j.fecha : fechaCaptura;
-                    // Cargar lo ya guardado de esa fecha y COMPLETAR encima con lo leído
-                    cambiarFechaCaptura(iso);
-                    setCapturas(prev => {
-                      const nuevas = { ...prev };
-                      (j.gallineros || []).forEach(g2 => {
-                        const l2 = activos.find(x => String(x.galpon) === String(g2.g));
-                        if (!l2) return;
-                        const base = nuevas[l2.id] || capturaVacia();
-                        const tiq = (g2.tiq || []).map(t => ({ num: String(t.num ?? ""), cartones: String(t.cart ?? ""), peso: String(t.kg ?? "") }));
-                        nuevas[l2.id] = {
-                          ...base,
-                          tiquetes: tiq.length ? tiq : base.tiquetes,
-                          quebrados: g2.queb != null ? String(g2.queb) : base.quebrados,
-                          muertas: g2.muertas != null ? String(g2.muertas) : base.muertas,
-                          dx: g2.dx || base.dx,
-                          alimento6am: g2.a6 != null ? String(g2.a6) : base.alimento6am,
-                          alimento1pm: g2.a1 != null ? String(g2.a1) : base.alimento1pm,
-                          aguaL: g2.agua != null ? String(g2.agua) : base.aguaL,
-                          fums: (g2.fums || []).length ? g2.fums.map(x => ({ producto: x.p || "", dosis: x.d || "", hora: x.h || "" })) : base.fums,
-                          meds: (g2.meds || []).length ? g2.meds.map(x => ({ producto: x.p || "", dosis: x.d || "", enfermedad: x.enf || "", retiro: x.ret ? String(x.ret) : "" })) : base.meds,
-                          vits: (g2.vits || []).length ? g2.vits.map(x => ({ producto: x.p || "", dosis: x.d || "" })) : base.vits,
-                        };
-                      });
-                      return nuevas;
-                    });
-                    if (j.nota) setNotaDia(j.nota);
-                    avisar(`✓ Registro del ${iso.split("-").reverse().join("/")} cargado en el formulario — REVISA contra el papel y toca Guardar`);
-                  } catch { avisar("⚠ No se pudo leer el documento — verifica la foto/PDF o digita manualmente"); }
-                  setLeyendoDia(false);
-                }} />
-            </label>
 
             <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
               {activos.map(l => {
@@ -2270,10 +2225,10 @@ export default function App() {
                   <input type="text" inputMode="numeric" placeholder={`Tiquete #`} value={t.num}
                     onChange={e => { const ts = [...cap.tiquetes]; ts[i] = { ...t, num: e.target.value }; setCap({ tiquetes: ts }); }}
                     style={{ ...inputStyle, flex: 0.8 }} />
-                  <input type="number" inputMode="decimal" placeholder="Cartones" value={t.cartones}
+                  <input type="text" inputMode="decimal" placeholder="Cartones" value={t.cartones}
                     onChange={e => { const ts = [...cap.tiquetes]; ts[i] = { ...t, cartones: e.target.value }; setCap({ tiquetes: ts }); }}
                     style={{ ...inputStyle, flex: 1 }} />
-                  <input type="number" inputMode="decimal" placeholder="Peso kg" value={t.peso}
+                  <input type="text" inputMode="decimal" placeholder="Peso kg" value={t.peso}
                     onChange={e => { const ts = [...cap.tiquetes]; ts[i] = { ...t, peso: e.target.value }; setCap({ tiquetes: ts }); }}
                     style={{ ...inputStyle, flex: 1 }} />
                 </div>
@@ -2288,12 +2243,12 @@ export default function App() {
             </Seccion>
 
             <Seccion num="2" titulo="Huevo quebrado">
-              <Campo etiqueta="Cantidad de huevos quebrados" type="number" inputMode="numeric" placeholder="ej. 45" value={cap.quebrados} onChange={e => setCap({ quebrados: e.target.value })} />
+              <Campo etiqueta="Cantidad de huevos quebrados" type="text" inputMode="numeric" placeholder="ej. 45" value={cap.quebrados} onChange={e => setCap({ quebrados: e.target.value })} />
             </Seccion>
 
             <Seccion num="3" titulo="Gallinas muertas" sub="El saldo se calcula solo: saldo inicial − muertas = saldo final">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Campo mitad etiqueta="Cantidad de muertas" type="number" inputMode="numeric" placeholder="ej. 1" value={cap.muertas} onChange={e => setCap({ muertas: e.target.value })} />
+                <Campo mitad etiqueta="Cantidad de muertas" type="text" inputMode="numeric" placeholder="ej. 1" value={cap.muertas} onChange={e => setCap({ muertas: e.target.value })} />
                 <Campo mitad etiqueta="Diagnóstico de muerte" type="text" placeholder="ej. prolapso" value={cap.dx} onChange={e => setCap({ dx: e.target.value })} />
               </div>
               <div style={{ fontSize: 14, display: "grid", gap: 6, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
@@ -2339,7 +2294,7 @@ export default function App() {
                   <input type="text" placeholder="Enfermedad / diagnóstico" value={m.enfermedad}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, enfermedad: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 1.2 }} />
-                  <input type="number" inputMode="numeric" placeholder="Retiro (días)" title="Días de retiro del huevo" value={m.retiro}
+                  <input type="text" inputMode="numeric" placeholder="Retiro (días)" title="Días de retiro del huevo" value={m.retiro}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, retiro: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 0.7 }} />
                   <button onClick={() => setCap({ meds: cap.meds.length > 1 ? cap.meds.filter((_, j) => j !== i) : [{ producto: "", dosis: "", enfermedad: "", retiro: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
@@ -2379,8 +2334,8 @@ export default function App() {
                 return (
                   <>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <Campo mitad etiqueta={`Toma 6:00 am — servido real (kg)${esp6 ? ` · esperado ${esp6.toFixed(1)}` : ""}`} type="number" inputMode="decimal" placeholder={esp6 ? esp6.toFixed(1) : "kg"} value={cap.alimento6am} onChange={e => setCap({ alimento6am: e.target.value })} />
-                      <Campo mitad etiqueta={`Toma 1:00 pm — servido real (kg)${esp1 ? ` · esperado ${esp1.toFixed(1)}` : ""}`} type="number" inputMode="decimal" placeholder={esp1 ? esp1.toFixed(1) : "kg"} value={cap.alimento1pm} onChange={e => setCap({ alimento1pm: e.target.value })} />
+                      <Campo mitad etiqueta={`Toma 6:00 am — servido real (kg)${esp6 ? ` · esperado ${esp6.toFixed(1)}` : ""}`} type="text" inputMode="decimal" placeholder={esp6 ? esp6.toFixed(1) : "kg"} value={cap.alimento6am} onChange={e => setCap({ alimento6am: e.target.value })} />
+                      <Campo mitad etiqueta={`Toma 1:00 pm — servido real (kg)${esp1 ? ` · esperado ${esp1.toFixed(1)}` : ""}`} type="text" inputMode="decimal" placeholder={esp1 ? esp1.toFixed(1) : "kg"} value={cap.alimento1pm} onChange={e => setCap({ alimento1pm: e.target.value })} />
                     </div>
                     <div style={{ fontSize: 13.5, display: "grid", gap: 5, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
                       {espDia > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Esperado del día</span><b>{espDia.toFixed(1)} kg · {loteActivo.racionGAve} g/ave</b></div>}
@@ -2390,7 +2345,7 @@ export default function App() {
                       </div>}
                     </div>
                     <div style={{ marginTop: 12 }}>
-                      <Campo etiqueta="Consumo de agua del día (litros) — indicador temprano de salud" type="number" inputMode="decimal" placeholder="ej. 480" value={cap.aguaL} onChange={e => setCap({ aguaL: e.target.value })} />
+                      <Campo etiqueta="Consumo de agua del día (litros) — indicador temprano de salud" type="text" inputMode="decimal" placeholder="ej. 480" value={cap.aguaL} onChange={e => setCap({ aguaL: e.target.value })} />
                     </div>
                   </>
                 );
@@ -2434,11 +2389,11 @@ export default function App() {
                       <Sel campo="comederos" etiqueta="Uniformidad de comederos" ops={["Buena", "Mala"]} />
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <Campo tercio etiqueta="pH del agua" type="number" inputMode="decimal" placeholder="ej. 6.5" value={ch.ph || ""} onChange={e => setCh("ph", e.target.value)} />
+                      <Campo tercio etiqueta="pH del agua" type="text" inputMode="decimal" placeholder="ej. 6.5" value={ch.ph || ""} onChange={e => setCh("ph", e.target.value)} />
                       <Campo tercio etiqueta="Cloro (ppm)" type="text" placeholder="ej. 0.08" value={ch.cloro || ""} onChange={e => setCh("cloro", e.target.value)} />
-                      <Campo tercio etiqueta="Temperatura °C" type="number" inputMode="decimal" placeholder="27–29" value={ch.temp || ""} onChange={e => setCh("temp", e.target.value)} />
-                      <Campo tercio etiqueta="Humedad %" type="number" inputMode="numeric" placeholder="50–70" value={ch.humedad || ""} onChange={e => setCh("humedad", e.target.value)} />
-                      <Campo tercio etiqueta="Horas de luz" type="number" inputMode="decimal" placeholder="16" value={ch.luz || ""} onChange={e => setCh("luz", e.target.value)} />
+                      <Campo tercio etiqueta="Temperatura °C" type="text" inputMode="decimal" placeholder="27–29" value={ch.temp || ""} onChange={e => setCh("temp", e.target.value)} />
+                      <Campo tercio etiqueta="Humedad %" type="text" inputMode="numeric" placeholder="50–70" value={ch.humedad || ""} onChange={e => setCh("humedad", e.target.value)} />
+                      <Campo tercio etiqueta="Horas de luz" type="text" inputMode="decimal" placeholder="16" value={ch.luz || ""} onChange={e => setCh("luz", e.target.value)} />
                     </div>
                     <Campo etiqueta="Observaciones del chequeo" type="text" placeholder="ej. tolvas llenas al fondo, poca actividad" value={ch.obs || ""} onChange={e => setCh("obs", e.target.value)} />
                     <button onClick={() => setPrintDoc({ tipo: "medidas", lote: galponActivo })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir boleta de medidas de producción</button>
@@ -2655,9 +2610,9 @@ export default function App() {
                       }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <input type="number" inputMode="decimal" placeholder="Salida" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
-                      <input type="number" inputMode="decimal" placeholder="Dev. bueno" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
-                      <input type="number" inputMode="decimal" placeholder="Dev. malo" value={r.devMalo} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devMalo: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Salida" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Dev. bueno" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Dev. malo" value={r.devMalo} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devMalo: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
                     </div>
                   </div>
                 );
@@ -2668,10 +2623,10 @@ export default function App() {
 
             <Seccion num="3" titulo="Otros movimientos del día" sub="Solo si aplica — en cartones">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Campo mitad etiqueta="Huevo comprado (+)" type="number" inputMode="decimal" placeholder="0" value={movBodega.comprado} onChange={e => setMovBodega({ ...movBodega, comprado: e.target.value })} />
-                <Campo mitad etiqueta="Vendido en granja (−)" type="number" inputMode="decimal" placeholder="0" value={movBodega.vendGranja} onChange={e => setMovBodega({ ...movBodega, vendGranja: e.target.value })} />
-                <Campo mitad etiqueta="Destruido/quebrado en bodega (−)" type="number" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => setMovBodega({ ...movBodega, destruido: e.target.value })} />
-                <Campo mitad etiqueta="Regalado / salida gratis (−)" type="number" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => setMovBodega({ ...movBodega, regalado: e.target.value })} />
+                <Campo mitad etiqueta="Huevo comprado (+)" type="text" inputMode="decimal" placeholder="0" value={movBodega.comprado} onChange={e => setMovBodega({ ...movBodega, comprado: e.target.value })} />
+                <Campo mitad etiqueta="Vendido en granja (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.vendGranja} onChange={e => setMovBodega({ ...movBodega, vendGranja: e.target.value })} />
+                <Campo mitad etiqueta="Destruido/quebrado en bodega (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => setMovBodega({ ...movBodega, destruido: e.target.value })} />
+                <Campo mitad etiqueta="Regalado / salida gratis (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => setMovBodega({ ...movBodega, regalado: e.target.value })} />
               </div>
             </Seccion>
 
@@ -2685,7 +2640,7 @@ export default function App() {
                 {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (−)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}
                 {Number(movBodega.regalado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Regalado (−)</span><b>{Number(movBodega.regalado).toFixed(1)}</b></div>}
               </div>
-              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${saldoCalculado.toFixed(1)})`} type="number" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
+              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${saldoCalculado.toFixed(1)})`} type="text" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
               {hayAjuste && <div style={{ fontSize: 12.5, color: difAjuste === 0 ? C.verde : "#9A6605", marginTop: -6, marginBottom: 10 }}>
                 {difAjuste === 0 ? "✓ El conteo coincide con lo calculado" : `El saldo se fijará en ${Number(ajusteBodega)} cartones — diferencia de ${difAjuste > 0 ? "+" : ""}${difAjuste} vs lo calculado (quedará registrada)`}
               </div>}
@@ -2699,7 +2654,7 @@ export default function App() {
 
             <Seccion titulo="Apertura de bodega — saldo inicial" sub="El punto de arranque oficial: desde esta fecha corren los balances; lo anterior queda como histórico sin afectar">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Campo mitad etiqueta="Cartones iniciales" type="number" inputMode="decimal" placeholder="ej. 1470" value={bodegaCfg.inicialCart}
+                <Campo mitad etiqueta="Cartones iniciales" type="text" inputMode="decimal" placeholder="ej. 1470" value={bodegaCfg.inicialCart}
                   onChange={e => guardarCfgBodega({ ...bodegaCfg, inicialCart: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de apertura</span>
@@ -2739,9 +2694,13 @@ export default function App() {
                 {Object.keys(recetas.formulas).map(f => <option key={f} value={f}>{f} — {usoFormula(f)}</option>)}
               </select>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Campo mitad etiqueta={`Cantidad de baches (mixer ${recetas.bacheKg} kg)`} type="number" inputMode="numeric" placeholder="ej. 2" value={fBache.baches} onChange={e => setFBache({ ...fBache, baches: e.target.value, kg: e.target.value ? String(Number(e.target.value) * recetas.bacheKg) : fBache.kg })} />
-                <Campo mitad etiqueta="Kilogramos totales" type="number" inputMode="decimal" placeholder="ej. 1380" value={fBache.kg} onChange={e => setFBache({ ...fBache, kg: e.target.value })} />
+                <Campo mitad etiqueta={`Cantidad de baches (mixer ${recetas.bacheKg} kg)`} type="text" inputMode="numeric" placeholder="ej. 2" value={fBache.baches} onChange={e => setFBache({ ...fBache, baches: e.target.value, kg: e.target.value ? String(Number(e.target.value) * recetas.bacheKg) : fBache.kg })} />
+                <Campo mitad etiqueta="Kilogramos totales" type="text" inputMode="decimal" placeholder="ej. 1380" value={fBache.kg} onChange={e => setFBache({ ...fBache, kg: e.target.value })} />
                 <Campo mitad etiqueta="No. de bache (control de planta)" type="text" placeholder="ej. B-0245" value={fBache.numBache} onChange={e => setFBache({ ...fBache, numBache: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del bache</span>
+                  <input type="date" value={fBache.fecha} onChange={e => setFBache({ ...fBache, fecha: e.target.value })} style={inputStyle} />
+                </label>
               </div>
               <button onClick={guardarBache} disabled={guardando} style={btnStyle}>Registrar producción</button>
               <button onClick={() => setPrintDoc({ tipo: "bache", formula: fBache.formula, kg: fBache.kg || recetas.bacheKg })}
@@ -2766,7 +2725,12 @@ export default function App() {
                 <select value={fNucleo.formula} onChange={e => setFNucleo({ ...fNucleo, formula: e.target.value })} style={{ ...inputStyle, flex: "1 1 40%", marginBottom: 12 }}>
                   {Object.keys(recetas.formulas).filter(n2 => kgNucleoDe(n2) > 0).map(n2 => <option key={n2}>{n2}</option>)}
                 </select>
-                <Campo mitad etiqueta="Porciones producidas (1 = un bache de concentrado)" type="number" inputMode="numeric" placeholder="ej. 10" value={fNucleo.porciones} onChange={e => setFNucleo({ ...fNucleo, porciones: e.target.value })} />
+                <Campo mitad etiqueta="Porciones producidas (1 = un bache de concentrado)" type="text" inputMode="numeric" placeholder="ej. 10" value={fNucleo.porciones} onChange={e => setFNucleo({ ...fNucleo, porciones: e.target.value })} />
+                <Campo mitad etiqueta="No. de producción de núcleo" type="text" placeholder="ej. N-012" value={fNucleo.numNucleo} onChange={e => setFNucleo({ ...fNucleo, numNucleo: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de producción</span>
+                  <input type="date" value={fNucleo.fecha} onChange={e => setFNucleo({ ...fNucleo, fecha: e.target.value })} style={inputStyle} />
+                </label>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={producirNucleo} style={{ ...btnStyle, flex: 1 }}>Registrar núcleo producido</button>
@@ -2778,12 +2742,16 @@ export default function App() {
             </Seccion>
 
             <Seccion titulo="B. Servido a ganado" sub="El consumo del ganado se digita aquí (el de aves sale solo del Control diario)">
+              <label style={{ display: "block", marginBottom: 12, maxWidth: 220 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del servido</span>
+                <input type="date" value={fServGan.fecha} onChange={e => setFServGan({ ...fServGan, fecha: e.target.value })} style={inputStyle} />
+              </label>
               <select value={fServGan.formula} onChange={e => setFServGan({ ...fServGan, formula: e.target.value })} style={selectStyle}>
                 <option value="">Tipo de concentrado (opcional)</option>
                 {Object.keys(recetas.formulas).filter(f => usoFormula(f) === "Ganado").map(f => <option key={f} value={f}>{f}</option>)}
               </select>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Campo mitad etiqueta="Kg servidos hoy" type="number" inputMode="decimal" placeholder="ej. 189" value={fServGan.kg} onChange={e => setFServGan({ ...fServGan, kg: e.target.value })} />
+                <Campo mitad etiqueta="Kg servidos hoy" type="text" inputMode="decimal" placeholder="ej. 189" value={fServGan.kg} onChange={e => setFServGan({ ...fServGan, kg: e.target.value })} />
                 <Campo mitad etiqueta="Detalle / corral" type="text" placeholder="ej. Potreros + toros" value={fServGan.detalle} onChange={e => setFServGan({ ...fServGan, detalle: e.target.value })} />
               </div>
               <button onClick={guardarServidoGanado} disabled={guardando} style={btnStyle}>Registrar servido a ganado</button>
@@ -2797,7 +2765,7 @@ export default function App() {
                     <option>Aves</option><option>Ganado</option>
                   </select>
                 </label>
-                <Campo mitad etiqueta={`Saldo real contado (app: ${(fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(0)} kg)`} type="number" inputMode="decimal" placeholder="kg" value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
+                <Campo mitad etiqueta={`Saldo real contado (app: ${(fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(0)} kg)`} type="text" inputMode="decimal" placeholder="kg" value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
               </div>
               <button onClick={guardarAjustePlanta} style={btnStyle}>Registrar ajuste</button>
             </Seccion>
@@ -2806,7 +2774,7 @@ export default function App() {
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo tercio etiqueta="Proveedor" type="text" placeholder="ej. AVIN" value={fFactura.proveedor} onChange={e => setFFactura({ ...fFactura, proveedor: e.target.value })} />
                 <Campo tercio etiqueta="Producto" type="text" placeholder="ej. Maíz 2 ton" value={fFactura.producto} onChange={e => setFFactura({ ...fFactura, producto: e.target.value })} />
-                <Campo tercio etiqueta="Monto ₡" type="number" inputMode="decimal" placeholder="0" value={fFactura.monto} onChange={e => setFFactura({ ...fFactura, monto: e.target.value })} />
+                <Campo tercio etiqueta="Monto ₡" type="text" inputMode="decimal" placeholder="0" value={fFactura.monto} onChange={e => setFFactura({ ...fFactura, monto: e.target.value })} />
               </div>
               <button onClick={guardarFactura} style={btnStyle}>Registrar factura</button>
               <div style={{ marginTop: 12 }}>
@@ -2823,8 +2791,8 @@ export default function App() {
               <Seccion titulo="Historial de movimientos">
                 {movsPlanta.slice(0, 10).map((m, i) => (
                   <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}` : m.tipo === "servido" ? `Servido${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.detalle ? ` (${m.detalle})` : ""}`}</span>
-                    <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}{m.kg} kg</b>
+                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.detalle ? ` (${m.detalle})` : ""}`}</span>
+                    <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" ? `${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
                   </div>
                 ))}
               </Seccion>
@@ -2832,8 +2800,8 @@ export default function App() {
 
             <Seccion titulo="Apertura de planta — inventario inicial" sub="Desde la fecha de apertura corren los balances; baches y consumos anteriores quedan como histórico sin afectar">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Campo tercio etiqueta="Inicial AVES (kg)" type="number" inputMode="decimal" value={plantaCfg.inicialAves} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialAves: e.target.value })} />
-                <Campo tercio etiqueta="Inicial GANADO (kg)" type="number" inputMode="decimal" value={plantaCfg.inicialGanado} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialGanado: e.target.value })} />
+                <Campo tercio etiqueta="Inicial AVES (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialAves} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialAves: e.target.value })} />
+                <Campo tercio etiqueta="Inicial GANADO (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialGanado} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialGanado: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 130 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de apertura</span>
                   <input type="date" value={plantaCfg.inicialFecha || ""} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialFecha: e.target.value })} style={inputStyle} />
@@ -2924,17 +2892,17 @@ export default function App() {
                     style={{ ...inputStyle, flex: "0 1 110px", padding: "8px 8px", fontSize: 13 }}>
                     {formulasGanado.map(f => <option key={f}>{f}</option>)}
                   </select>
-                  <input type="number" inputMode="numeric" title="Animales" placeholder="# anim" value={g.animales}
+                  <input type="text" inputMode="numeric" title="Animales" placeholder="# anim" value={g.animales}
                     onChange={e => { const gs = [...mpConfig.ganado]; gs[i] = { ...g, animales: e.target.value }; guardarConfigMP({ ...mpConfig, ganado: gs }); }}
                     style={{ ...inputStyle, flex: "0 1 84px", padding: "8px 10px", fontSize: 14 }} />
-                  <input type="number" inputMode="decimal" title="kg por animal" placeholder="kg/anim" value={g.kgAnimal}
+                  <input type="text" inputMode="decimal" title="kg por animal" placeholder="kg/anim" value={g.kgAnimal}
                     onChange={e => { const gs = [...mpConfig.ganado]; gs[i] = { ...g, kgAnimal: e.target.value }; guardarConfigMP({ ...mpConfig, ganado: gs }); }}
                     style={{ ...inputStyle, flex: "0 1 84px", padding: "8px 10px", fontSize: 14 }} />
                   <b style={{ fontSize: 13, color: C.verde, flex: "0 0 62px", textAlign: "right" }}>{(Number(g.animales || 0) * Number(g.kgAnimal || 0)).toFixed(0)} kg</b>
                 </div>
               ))}
               <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "flex-end" }}>
-                <Campo mitad etiqueta="Días de cobertura" type="number" inputMode="numeric" value={mpConfig.cobertura}
+                <Campo mitad etiqueta="Días de cobertura" type="text" inputMode="numeric" value={mpConfig.cobertura}
                   onChange={e => guardarConfigMP({ ...mpConfig, cobertura: e.target.value })} />
               </div>
             </Seccion>
@@ -2946,10 +2914,10 @@ export default function App() {
                 return (
                   <div key={mp.c} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                     <span style={{ flex: "1 1 140px", fontSize: 12, lineHeight: 1.3 }}><b>{mp.n}</b><br /><span style={{ color: C.textoSuave, fontSize: 10.5 }}>{mp.c} · {mp.pres === 1 ? "por kg" : `saco ${mp.pres} kg`} · {mp.prov}</span></span>
-                    {mp.pres !== 1 && <input type="number" inputMode="numeric" placeholder="Sacos" value={inv.sacos ?? ""}
+                    {mp.pres !== 1 && <input type="text" inputMode="numeric" placeholder="Sacos" value={inv.sacos ?? ""}
                       onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, sacos: e.target.value } })}
                       style={{ ...inputStyle, flex: "0 1 80px", padding: "8px 9px", fontSize: 14 }} />}
-                    <input type="number" inputMode="decimal" placeholder={mp.pres === 1 ? "Kg" : "Saldo kg"} value={inv.kg ?? ""}
+                    <input type="text" inputMode="decimal" placeholder={mp.pres === 1 ? "Kg" : "Saldo kg"} value={inv.kg ?? ""}
                       onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, kg: e.target.value } })}
                       style={{ ...inputStyle, flex: "0 1 92px", padding: "8px 9px", fontSize: 14 }} />
                   </div>
@@ -3045,7 +3013,7 @@ export default function App() {
                     return (
                       <div key={mpc} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
                         <span style={{ flex: "1 1 140px", fontSize: 12.5, lineHeight: 1.3 }}><b>{mp?.n || mpc}</b><br /><span style={{ fontSize: 10.5, color: C.textoSuave }}>{pct.toFixed(2)}% de la mezcla</span></span>
-                        <input type="number" inputMode="decimal" step="0.01" value={kg}
+                        <input type="text" inputMode="decimal" step="0.01" value={kg}
                           onChange={e => setKgIngrediente(recActiva, mpc, e.target.value)}
                           style={{ ...inputStyle, flex: "0 1 100px", padding: "8px 10px", fontSize: 14 }} />
                         <span style={{ fontSize: 12, color: C.textoSuave, flex: "0 0 18px" }}>kg</span>
@@ -3063,7 +3031,7 @@ export default function App() {
                     <select value={fIng.mp} onChange={e => setFIng({ ...fIng, mp: e.target.value })} style={{ ...inputStyle, flex: 1.4 }}>
                       {mpCat.filter(m => f.items[m.c] === undefined).map(m => <option key={m.c} value={m.c}>{m.n} ({m.prov})</option>)}
                     </select>
-                    <input type="number" inputMode="decimal" placeholder="kg" value={fIng.kg} onChange={e => setFIng({ ...fIng, kg: e.target.value })} style={{ ...inputStyle, flex: 0.5 }} />
+                    <input type="text" inputMode="decimal" placeholder="kg" value={fIng.kg} onChange={e => setFIng({ ...fIng, kg: e.target.value })} style={{ ...inputStyle, flex: 0.5 }} />
                     <button onClick={agregarIngrediente} style={{ padding: "10px 14px", fontSize: 13.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+</button>
                   </div>
 
@@ -3083,7 +3051,7 @@ export default function App() {
                 </div>
                 <button onClick={crearFormula} style={btnStyle}>Crear fórmula</button>
                 <div style={{ marginTop: 12 }}>
-                  <Campo mitad etiqueta="Capacidad del mixer (kg por bache)" type="number" inputMode="numeric" value={recetas.bacheKg}
+                  <Campo mitad etiqueta="Capacidad del mixer (kg por bache)" type="text" inputMode="numeric" value={recetas.bacheKg}
                     onChange={e => persistirRecetas({ ...recetas, bacheKg: Number(e.target.value || BACHE_KG_DEFAULT) })} />
                 </div>
               </Seccion>
@@ -3096,7 +3064,7 @@ export default function App() {
                       <span style={{ flex: "0 0 46px", fontSize: 10.5, color: C.textoSuave }}>{mp.c}</span>
                       <input type="text" value={mp.n} onChange={e => actualizarMP(mp.c, "n", e.target.value)}
                         style={{ ...inputStyle, flex: "2 1 130px", padding: "8px 9px", fontSize: 13 }} />
-                      <input type="number" inputMode="decimal" title="Presentación kg/unidad" value={mp.pres} onChange={e => actualizarMP(mp.c, "pres", e.target.value)}
+                      <input type="text" inputMode="decimal" title="Presentación kg/unidad" value={mp.pres} onChange={e => actualizarMP(mp.c, "pres", e.target.value)}
                         style={{ ...inputStyle, flex: "0 1 64px", padding: "8px 8px", fontSize: 13 }} />
                       <input list="provs" type="text" value={mp.prov} onChange={e => actualizarMP(mp.c, "prov", e.target.value)}
                         style={{ ...inputStyle, flex: "1 1 90px", padding: "8px 9px", fontSize: 13 }} />
@@ -3111,7 +3079,7 @@ export default function App() {
                 <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Agregar materia prima nueva</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Campo tercio etiqueta="Nombre" type="text" placeholder="ej. AFRECHO DE TRIGO" value={fNuevaMP.n} onChange={e => setFNuevaMP({ ...fNuevaMP, n: e.target.value })} />
-                  <Campo tercio etiqueta="Presentación (kg/unidad)" type="number" inputMode="decimal" placeholder="ej. 46 (o 1)" value={fNuevaMP.pres} onChange={e => setFNuevaMP({ ...fNuevaMP, pres: e.target.value })} />
+                  <Campo tercio etiqueta="Presentación (kg/unidad)" type="text" inputMode="decimal" placeholder="ej. 46 (o 1)" value={fNuevaMP.pres} onChange={e => setFNuevaMP({ ...fNuevaMP, pres: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 96 }}>
                     <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Proveedor</span>
                     <input list="provs" type="text" placeholder="ej. AVIN" value={fNuevaMP.prov} onChange={e => setFNuevaMP({ ...fNuevaMP, prov: e.target.value })} style={inputStyle} />
@@ -3144,7 +3112,7 @@ export default function App() {
                       {items.map(it => (
                         <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                           <span style={{ flex: 1, fontSize: 13 }}>{it.nombre} <span style={{ fontSize: 11, color: C.textoSuave }}>(actual: {it.saldo} {it.unidad})</span></span>
-                          <input type="number" inputMode="decimal" placeholder={`${it.unidad}`} value={aperturaIns[it.id] ?? ""}
+                          <input type="text" inputMode="decimal" placeholder={`${it.unidad}`} value={aperturaIns[it.id] ?? ""}
                             onChange={e => setAperturaIns({ ...aperturaIns, [it.id]: e.target.value })}
                             style={{ ...inputStyle, flex: "0 1 96px", padding: "8px 9px", fontSize: 14 }} />
                         </div>
@@ -3206,7 +3174,7 @@ export default function App() {
                     <option key={i2.id} value={i2.id}>{cat}: {i2.nombre} (saldo {i2.saldo} {i2.unidad})</option>))}
                 </select>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Campo mitad etiqueta={fMovIns.tipo === "ajuste" ? "Saldo real contado" : "Cantidad"} type="number" inputMode="decimal" placeholder="0" value={fMovIns.cantidad} onChange={e => setFMovIns({ ...fMovIns, cantidad: e.target.value })} />
+                  <Campo mitad etiqueta={fMovIns.tipo === "ajuste" ? "Saldo real contado" : "Cantidad"} type="text" inputMode="decimal" placeholder="0" value={fMovIns.cantidad} onChange={e => setFMovIns({ ...fMovIns, cantidad: e.target.value })} />
                   <Campo mitad etiqueta={fMovIns.tipo === "entrada" ? "Factura / proveedor" : "Motivo / detalle"} type="text" placeholder="opcional" value={fMovIns.detalle} onChange={e => setFMovIns({ ...fMovIns, detalle: e.target.value })} />
                 </div>
                 <button onClick={() => registrarMovInsumo(fMovIns.tipo, fMovIns.itemId, fMovIns.cantidad, fMovIns.detalle)} disabled={guardando} style={btnStyle}>Registrar movimiento</button>
@@ -3243,7 +3211,7 @@ export default function App() {
                       <option>ml</option><option>g</option><option>L</option><option>kg</option><option>frascos</option><option>sobres</option><option>dosis</option><option>unidades</option>
                     </select>
                   </label>
-                  <Campo mitad etiqueta="Saldo inicial" type="number" inputMode="decimal" placeholder="0" value={fNuevoIns.saldo} onChange={e => setFNuevoIns({ ...fNuevoIns, saldo: e.target.value })} />
+                  <Campo mitad etiqueta="Saldo inicial" type="text" inputMode="decimal" placeholder="0" value={fNuevoIns.saldo} onChange={e => setFNuevoIns({ ...fNuevoIns, saldo: e.target.value })} />
                   <Campo tercio etiqueta="Presentación" type="text" placeholder="ej. galón 3.785 L" value={fNuevoIns.presentacion} onChange={e => setFNuevoIns({ ...fNuevoIns, presentacion: e.target.value })} />
                   <Campo tercio etiqueta="Dosis a utilizar" type="text" placeholder="ej. 1 ml/L agua" value={fNuevoIns.dosis} onChange={e => setFNuevoIns({ ...fNuevoIns, dosis: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 96 }}>
@@ -3436,7 +3404,7 @@ export default function App() {
                 return (
                   <>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-                      <Campo mitad etiqueta="Precio de venta ₡ por cartón" type="number" inputMode="decimal" placeholder="ej. 1800" value={costos._precioVenta ?? ""}
+                      <Campo mitad etiqueta="Precio de venta ₡ por cartón" type="text" inputMode="decimal" placeholder="ej. 1800" value={costos._precioVenta ?? ""}
                         onChange={e => setCostos({ ...costos, _precioVenta: e.target.value })} onBlur={() => guardarCostos(costos)} />
                     </div>
                     {iofc != null ? (
@@ -3457,7 +3425,7 @@ export default function App() {
                 {Object.keys(recetas.formulas).map(f => (
                   <label key={f} style={{ flex: "1 1 30%", minWidth: 130 }}>
                     <span style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{f} <span style={{ color: C.textoSuave, fontWeight: 400 }}>({recetas.formulas[f].uso})</span></span>
-                    <input type="number" inputMode="decimal" placeholder="₡/kg" value={costos[f] ?? ""}
+                    <input type="text" inputMode="decimal" placeholder="₡/kg" value={costos[f] ?? ""}
                       onChange={e => setCostos({ ...costos, [f]: e.target.value })}
                       onBlur={() => guardarCostos(costos)}
                       style={inputStyle} />
@@ -3486,104 +3454,7 @@ export default function App() {
                 <KPI etiqueta="Vence en 7 días" valor={colones(cxpProx7)} unidad="" />
               </div>
 
-              <Seccion titulo="📄 Leer factura desde PDF (con IA)" sub="Sube el PDF del proveedor: la app extrae los datos, tú revisas y confirmas — CxP y kardex en un solo paso">
-                {!facturaExtraida && (
-                  <label style={{ display: "block" }}>
-                    <span style={{ ...btnStyle, display: "block", textAlign: "center", cursor: "pointer", opacity: leyendoPdf ? 0.6 : 1 }}>{leyendoPdf ? "🤖 Leyendo la factura…" : "📄 Subir PDF de factura"}</span>
-                    <input type="file" accept="application/pdf" disabled={leyendoPdf} style={{ display: "none" }}
-                      onChange={async e => {
-                        const file = e.target.files?.[0]; e.target.value = "";
-                        if (!file) return;
-                        setLeyendoPdf(true); avisar("🤖 Analizando el PDF — unos segundos…");
-                        try {
-                          const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
-                          const listaMP = mpCat.map(m => `${m.c}=${m.n}`).join("; ");
-                          const listaIns = insumos.map(i2 => i2.nombre).join("; ");
-                          const resp = await fetch("https://api.anthropic.com/v1/messages", {
-                            method: "POST", headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              model: "claude-sonnet-4-6", max_tokens: 1000,
-                              messages: [{ role: "user", content: [
-                                { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
-                                { type: "text", text: `Extrae los datos de esta factura de proveedor. Responde SOLO con JSON válido, sin backticks ni texto adicional, con esta forma exacta: {"proveedor":"","numero":"","emision":"YYYY-MM-DD","vence":"YYYY-MM-DD","monto":0,"detalle":"resumen corto","lineas":[{"descripcion":"","cantidad":0,"unidad":"","kg":0,"codigoMP":"","insumo":""}]}. Reglas: monto = total final con impuestos. Si no hay fecha de vencimiento usa la de emisión. En cada línea: kg = peso total en kilogramos (si la unidad es quintal o saco de 46 kg, multiplica; si no aplica peso, 0). codigoMP: el código si la línea corresponde a una de estas materias primas [${listaMP}], si no, "". insumo: el nombre exacto si corresponde a uno de estos insumos [${listaIns}], si no, "".` },
-                              ] }],
-                            }),
-                          });
-                          const data = await resp.json();
-                          const texto = (data.content || []).filter(x => x.type === "text").map(x => x.text).join("");
-                          const j = JSON.parse(texto.replace(/```json|```/g, "").trim());
-                          setFacturaExtraida({
-                            proveedor: j.proveedor || "", numero: String(j.numero || ""), emision: j.emision || new Date().toISOString().slice(0, 10),
-                            vence: j.vence || j.emision || new Date().toISOString().slice(0, 10), monto: String(j.monto || ""), categoria: "Materia prima", detalle: j.detalle || "",
-                            lineas: (j.lineas || []).map(l2 => ({ ...l2, kg: Number(l2.kg || 0), codigoMP: l2.codigoMP || "", insumo: l2.insumo || "" })),
-                          });
-                          avisar("✓ Factura leída — revisa y confirma");
-                        } catch { avisar("⚠ No se pudo leer el PDF — verifica el archivo o regístrala manualmente"); }
-                        setLeyendoPdf(false);
-                      }} />
-                  </label>
-                )}
-                {facturaExtraida && (
-                  <>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9A6605", background: C.yemaSuave, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>🤖 Datos extraídos por IA — revísalos contra el papel antes de confirmar</div>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <Campo mitad etiqueta="Proveedor" type="text" value={facturaExtraida.proveedor} onChange={e => setFacturaExtraida({ ...facturaExtraida, proveedor: e.target.value })} />
-                      <Campo mitad etiqueta="No. factura" type="text" value={facturaExtraida.numero} onChange={e => setFacturaExtraida({ ...facturaExtraida, numero: e.target.value })} />
-                      <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 120 }}>
-                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Emisión</span>
-                        <input type="date" value={facturaExtraida.emision} onChange={e => setFacturaExtraida({ ...facturaExtraida, emision: e.target.value })} style={inputStyle} />
-                      </label>
-                      <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 120 }}>
-                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Vence</span>
-                        <input type="date" value={facturaExtraida.vence} onChange={e => setFacturaExtraida({ ...facturaExtraida, vence: e.target.value })} style={inputStyle} />
-                      </label>
-                      <Campo tercio etiqueta="Monto total ₡" type="number" inputMode="decimal" value={facturaExtraida.monto} onChange={e => setFacturaExtraida({ ...facturaExtraida, monto: e.target.value })} />
-                    </div>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, margin: "4px 0 6px" }}>Líneas → destino en inventario</div>
-                    {facturaExtraida.lineas.map((l2, i2) => (
-                      <div key={i2} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", padding: "7px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12.5 }}>
-                        <span style={{ flex: "1 1 160px" }}>{l2.descripcion} <span style={{ color: C.textoSuave }}>({l2.cantidad} {l2.unidad})</span></span>
-                        <input type="number" inputMode="decimal" value={l2.kg || ""} placeholder="kg" title="Kilogramos"
-                          onChange={e => { const ls = [...facturaExtraida.lineas]; ls[i2] = { ...l2, kg: e.target.value }; setFacturaExtraida({ ...facturaExtraida, lineas: ls }); }}
-                          style={{ ...inputStyle, width: 80, marginBottom: 0, padding: "7px 8px" }} />
-                        <select value={l2.codigoMP ? `mp:${l2.codigoMP}` : l2.insumo ? `in:${l2.insumo}` : ""}
-                          onChange={e => {
-                            const v = e.target.value; const ls = [...facturaExtraida.lineas];
-                            ls[i2] = { ...l2, codigoMP: v.startsWith("mp:") ? v.slice(3) : "", insumo: v.startsWith("in:") ? v.slice(3) : "" };
-                            setFacturaExtraida({ ...facturaExtraida, lineas: ls });
-                          }} style={{ ...inputStyle, flex: "1 1 150px", marginBottom: 0, padding: "7px 8px" }}>
-                          <option value="">No inventariar</option>
-                          <optgroup label="Materias primas (kardex)">{mpCat.map(m => <option key={m.c} value={`mp:${m.c}`}>{m.n}</option>)}</optgroup>
-                          <optgroup label="Insumos">{insumos.map(i3 => <option key={i3.id} value={`in:${i3.nombre}`}>{i3.nombre}</option>)}</optgroup>
-                        </select>
-                      </div>
-                    ))}
-                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                      <button onClick={async () => {
-                        if (!facturaExtraida.proveedor || !Number(facturaExtraida.monto)) { avisar("⚠ Proveedor y monto son obligatorios"); return; }
-                        const fid = Date.now();
-                        const nueva = { id: fid, proveedor: facturaExtraida.proveedor.trim(), numero: facturaExtraida.numero.trim(), emision: facturaExtraida.emision.split("-").reverse().join("/"), vence: facturaExtraida.vence.split("-").reverse().join("/"), monto: Number(facturaExtraida.monto), categoria: facturaExtraida.categoria, detalle: facturaExtraida.detalle, registrada: hoyStr(), origen: "pdf" };
-                        if (!(await guardarCxp(c3 => ({ ...c3, facturas: [nueva, ...c3.facturas] })))) return;
-                        // Entradas al kardex (MP) e insumos
-                        const entradasMP = facturaExtraida.lineas.filter(l2 => l2.codigoMP && Number(l2.kg) > 0)
-                          .map(l2 => ({ id: Date.now() + Math.random(), fecha: hoyStr(), mp: l2.codigoMP, tipo: "entrada", kg: +Number(l2.kg).toFixed(2), ref: `Fact ${facturaExtraida.proveedor} #${facturaExtraida.numero || "s/n"}` }));
-                        await registrarKardex(entradasMP);
-                        const lineasIns = facturaExtraida.lineas.filter(l2 => l2.insumo && Number(l2.cantidad) > 0);
-                        if (lineasIns.length) {
-                          const nuevoIns = insumos.map(it => { const l2 = lineasIns.find(x => x.insumo === it.nombre); return l2 ? { ...it, saldo: +(Number(it.saldo || 0) + Number(l2.cantidad)).toFixed(2) } : it; });
-                          const movsIns = lineasIns.map(l2 => ({ id: Date.now() + Math.random(), fecha: hoyStr(), item: l2.insumo, tipo: "entrada", cantidad: Number(l2.cantidad), detalle: `Fact ${facturaExtraida.proveedor} #${facturaExtraida.numero || "s/n"}`, auto: true }));
-                          if (await escribir(K.insumos, nuevoIns) && await escribir(K.insumosMovs, [...movsIns, ...insumosMovs])) { setInsumos(nuevoIns); setInsumosMovs([...movsIns, ...insumosMovs]); }
-                        }
-                        setFacturaExtraida(null);
-                        avisar(`✓ Factura registrada en CxP${entradasMP.length ? ` + ${entradasMP.length} entrada(s) al kardex` : ""}${lineasIns.length ? ` + ${lineasIns.length} insumo(s)` : ""}`);
-                      }} style={{ ...btnStyle, flex: 1 }}>✓ Confirmar y registrar todo</button>
-                      <button onClick={() => setFacturaExtraida(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>Descartar</button>
-                    </div>
-                  </>
-                )}
-              </Seccion>
-
-              <Seccion titulo="Registrar factura recibida (manual)" sub="El documento del proveedor entra aquí el día que llega">
+              <Seccion titulo="Registrar factura recibida" sub="El documento del proveedor entra aquí el día que llega">
                 {!fCxpFac && <button onClick={() => setFCxpFac({ tipo: "Factura", refId: "", proveedor: "", numero: "", emision: new Date().toISOString().slice(0, 10), vence: new Date().toISOString().slice(0, 10), monto: "", categoria: "Materia prima", detalle: "" })} style={btnStyle}>+ Nuevo documento (factura / NC / ND)</button>}
                 {fCxpFac && (
                   <>
@@ -3619,7 +3490,7 @@ export default function App() {
                         <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de vencimiento</span>
                         <input type="date" value={fCxpFac.vence} onChange={e => setFCxpFac({ ...fCxpFac, vence: e.target.value })} style={inputStyle} />
                       </label>
-                      <Campo mitad etiqueta="Monto total ₡" type="number" inputMode="decimal" placeholder="ej. 850000" value={fCxpFac.monto} onChange={e => setFCxpFac({ ...fCxpFac, monto: e.target.value })} />
+                      <Campo mitad etiqueta="Monto total ₡" type="text" inputMode="decimal" placeholder="ej. 850000" value={fCxpFac.monto} onChange={e => setFCxpFac({ ...fCxpFac, monto: e.target.value })} />
                       <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140, ...(fCxpFac.tipo && fCxpFac.tipo !== "Factura" ? { display: "none" } : {}) }}>
                         <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
                         <select value={fCxpFac.categoria} onChange={e => setFCxpFac({ ...fCxpFac, categoria: e.target.value })} style={inputStyle}>
@@ -3715,7 +3586,7 @@ export default function App() {
                                         <div style={{ background: C.fondo, borderRadius: 10, padding: 10, textAlign: "left" }}>
                                           {f.detalle && <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 6 }}>{f.detalle} · original {colones(f.monto)}</div>}
                                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                            <Campo mitad etiqueta={`Monto del pago (saldo: ${colones(sal)})`} type="number" inputMode="decimal" value={fAbono.monto} onChange={e => setFAbono({ ...fAbono, monto: e.target.value })} />
+                                            <Campo mitad etiqueta={`Monto del pago (saldo: ${colones(sal)})`} type="text" inputMode="decimal" value={fAbono.monto} onChange={e => setFAbono({ ...fAbono, monto: e.target.value })} />
                                             <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 130 }}>
                                               <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del pago</span>
                                               <input type="date" value={fAbono.fecha} onChange={e => setFAbono({ ...fAbono, fecha: e.target.value })} style={inputStyle} />
@@ -4087,12 +3958,12 @@ export default function App() {
             {formLote && (
               <Seccion titulo={formLote.id ? "Editar lote" : "Nuevo lote"} sub="Galpón, raza y fecha de nacimiento son obligatorios">
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Campo tercio etiqueta="Gallinero #" type="number" inputMode="numeric" placeholder="ej. 1" value={formLote.galpon} onChange={e => setFormLote({ ...formLote, galpon: e.target.value })} />
+                  <Campo tercio etiqueta="Gallinero #" type="text" inputMode="numeric" placeholder="ej. 1" value={formLote.galpon} onChange={e => setFormLote({ ...formLote, galpon: e.target.value })} />
                   <Campo tercio etiqueta="Lote #" type="text" placeholder="ej. 03" value={formLote.lote} onChange={e => setFormLote({ ...formLote, lote: e.target.value })} />
                   <Campo tercio etiqueta="Raza / línea" type="text" placeholder="ej. ISA Brown" value={formLote.raza} onChange={e => setFormLote({ ...formLote, raza: e.target.value })} />
                   <Campo mitad etiqueta="Fecha de nacimiento" type="date" value={formLote.nac} onChange={e => setFormLote({ ...formLote, nac: e.target.value })} />
-                  <Campo mitad etiqueta="Aves alojadas (iniciales)" type="number" inputMode="numeric" placeholder="ej. 2400" value={formLote.avesIniciales} onChange={e => setFormLote({ ...formLote, avesIniciales: e.target.value })} />
-                  {formLote.id && <Campo mitad etiqueta="Aves actuales (corrección)" type="number" inputMode="numeric" value={formLote.aves} onChange={e => setFormLote({ ...formLote, aves: e.target.value })} />}
+                  <Campo mitad etiqueta="Aves alojadas (iniciales)" type="text" inputMode="numeric" placeholder="ej. 2400" value={formLote.avesIniciales} onChange={e => setFormLote({ ...formLote, avesIniciales: e.target.value })} />
+                  {formLote.id && <Campo mitad etiqueta="Aves actuales (corrección)" type="text" inputMode="numeric" value={formLote.aves} onChange={e => setFormLote({ ...formLote, aves: e.target.value })} />}
                   <Campo mitad etiqueta="Proveedor de pollonas" type="text" placeholder="opcional" value={formLote.proveedor} onChange={e => setFormLote({ ...formLote, proveedor: e.target.value })} />
                 </div>
                 {formLote.nac && <div style={{ fontSize: 13, color: C.verde, fontWeight: 600, marginBottom: 10 }}>Edad actual: {semanasDe(formLote.nac).toFixed(1)} semanas</div>}
@@ -4107,7 +3978,7 @@ export default function App() {
                   <datalist id="formulas">{Object.keys(costos).map(f => <option key={f} value={f} />)}</datalist>
                 </label>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Campo mitad etiqueta="Ración a servir (g/ave/día)" type="number" inputMode="decimal" placeholder="ej. 115" value={formLote.racionGAve} onChange={e => setFormLote({ ...formLote, racionGAve: e.target.value })} />
+                  <Campo mitad etiqueta="Ración a servir (g/ave/día)" type="text" inputMode="decimal" placeholder="ej. 115" value={formLote.racionGAve} onChange={e => setFormLote({ ...formLote, racionGAve: e.target.value })} />
                 </div>
                 {Number(formLote.racionGAve) > 0 && Number(formLote.aves || formLote.avesIniciales) > 0 && (() => {
                   const avesN = Number(formLote.aves || formLote.avesIniciales);
@@ -4119,8 +3990,8 @@ export default function App() {
 
                 <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Metas de la tabla genética</div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Campo mitad etiqueta="% postura ideal (semana actual)" type="number" inputMode="decimal" placeholder="ej. 92" value={formLote.posturaIdeal} onChange={e => setFormLote({ ...formLote, posturaIdeal: e.target.value })} />
-                  <Campo mitad etiqueta="Peso corporal meta (g)" type="number" inputMode="numeric" placeholder="ej. 2050" value={formLote.pesoMeta} onChange={e => setFormLote({ ...formLote, pesoMeta: e.target.value })} />
+                  <Campo mitad etiqueta="% postura ideal (semana actual)" type="text" inputMode="decimal" placeholder="ej. 92" value={formLote.posturaIdeal} onChange={e => setFormLote({ ...formLote, posturaIdeal: e.target.value })} />
+                  <Campo mitad etiqueta="Peso corporal meta (g)" type="text" inputMode="numeric" placeholder="ej. 2050" value={formLote.pesoMeta} onChange={e => setFormLote({ ...formLote, pesoMeta: e.target.value })} />
                 </div>
 
                 <div style={{ display: "flex", gap: 10 }}>
@@ -4325,7 +4196,7 @@ export default function App() {
 
               <div style={{ fontSize: 13.5, fontWeight: 700, margin: "16px 0 8px", color: C.verde }}>Agregar vacuna al programa</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Campo tercio etiqueta="Día de edad" type="number" inputMode="numeric" placeholder="ej. 120" value={fPlan.dia} onChange={e => setFPlan({ ...fPlan, dia: e.target.value })} />
+                <Campo tercio etiqueta="Día de edad" type="text" inputMode="numeric" placeholder="ej. 120" value={fPlan.dia} onChange={e => setFPlan({ ...fPlan, dia: e.target.value })} />
                 <Campo tercio etiqueta="Vacuna" type="text" placeholder="ej. Newcastle refuerzo" value={fPlan.vacuna} onChange={e => setFPlan({ ...fPlan, vacuna: e.target.value })} />
                 <Campo tercio etiqueta="Cepa" type="text" placeholder="opcional" value={fPlan.cepa} onChange={e => setFPlan({ ...fPlan, cepa: e.target.value })} />
                 <Campo mitad etiqueta="Vía de aplicación" type="text" placeholder="ej. al agua" value={fPlan.via} onChange={e => setFPlan({ ...fPlan, via: e.target.value })} />
