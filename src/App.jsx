@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.6";
+const VERSION_APP = "6.7";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -608,18 +608,32 @@ export default function App() {
     const soloLote = soloLoteId ? lotes.find(x => x.id === soloLoteId) : null;
     setGuardando(true);
     const fecha = (fechaCaptura || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
-    // Validación: números de tiquete únicos (contra el historial y dentro del mismo guardado)
+    // Validación de tiquetes: duplicado en el MISMO formulario = error (bloquea);
+    // coincidencia con el historial = advertencia con detalle, y el usuario decide si guarda igual
     {
       const enFormulario = [];
-      lotes.forEach(l => (capturas[l.id]?.tiquetes || []).forEach(t => { if (t.num) enFormulario.push(String(t.num).trim()); }));
+      lotes.forEach(l => {
+        if (soloLoteId && l.id !== soloLoteId) return;
+        (capturas[l.id]?.tiquetes || []).forEach(t => { if (t.num && t.cartones) enFormulario.push(String(t.num).trim()); });
+      });
       const repetidoForm = enFormulario.find((n2, i) => enFormulario.indexOf(n2) !== i);
-      const usados = new Set();
-      registros.forEach(r => { if (r.fecha !== fecha) (r.tiquetes || []).forEach(t => t.num && usados.add(String(t.num).trim())); });
-      const repetidoHist = enFormulario.find(n2 => usados.has(n2));
-      if (repetidoForm || repetidoHist) {
-        avisar(`⚠ El tiquete #${repetidoForm || repetidoHist} ya existe${repetidoHist ? " en otro día" : " (repetido en este formulario)"} — corrige antes de guardar`);
+      if (repetidoForm) {
+        avisar(`⚠ El tiquete #${repetidoForm} está repetido DENTRO de este formulario — corrige antes de guardar`);
         setGuardando(false); return;
       }
+      let choque = null;
+      for (const r of registros) {
+        if (r.fecha === fecha) continue;
+        const t = (r.tiquetes || []).find(x => enFormulario.includes(String(x.num).trim()));
+        if (t) { const l2 = lotes.find(x => x.id === r.lote); choque = { num: String(t.num).trim(), fecha: r.fecha, galpon: l2?.galpon }; break; }
+      }
+      if (choque && confirmar !== "tiqDup") {
+        setConfirmar("tiqDup");
+        avisar(`⚠ El tiquete #${choque.num} ya se usó el ${String(choque.fecha).slice(0, 5)}${choque.galpon ? ` en G${choque.galpon}` : ""}. Si es correcto (talonario reinicia números), toca Guardar OTRA VEZ para guardar así.`);
+        setTimeout(() => setConfirmar(c2 => c2 === "tiqDup" ? null : c2), 12000);
+        setGuardando(false); return;
+      }
+      if (confirmar === "tiqDup") setConfirmar(null);
     }
     const nuevos = [];
     const reemplazados = [];
