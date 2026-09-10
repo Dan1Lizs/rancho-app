@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.2";
+const VERSION_APP = "6.3";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -845,6 +845,65 @@ export default function App() {
     if (await escribir(K.planta, nuevo)) { setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "", fecha: new Date().toISOString().slice(0, 10) }); avisar("✓ Servido a ganado registrado"); }
     else avisar("⚠ No se pudo guardar");
     setGuardando(false);
+  };
+
+  // Eliminar un movimiento de planta revirtiendo sus efectos (kardex, inventario de núcleo)
+  const eliminarMovPlanta = async (m) => {
+    const clave = `delplanta:${m.id}`;
+    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para ELIMINAR este movimiento — sus efectos se revierten"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    setConfirmar(null); setGuardando(true);
+    const nuevo = plantaMovs.filter(x => x.id !== m.id);
+    if (!(await escribir(K.planta, nuevo))) { avisar("⚠ No se pudo eliminar"); setGuardando(false); return; }
+    setPlantaMovs(nuevo);
+    const f2 = recetas.formulas[m.formula];
+    if (m.tipo === "bache" && f2) {
+      const nB = Number(m.baches || 0);
+      const reversas = Object.entries(f2.items)
+        .filter(([c2, kg]) => basculaDe(c2) !== 4 && Number(kg) > 0)
+        .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nB).toFixed(2), ref: `Reversión bache ${m.formula} ×${nB}${m.numBache ? ` #${m.numBache}` : ""}` }));
+      await registrarKardex(reversas);
+      if (nB > 0 && kgNucleoDe(m.formula) > 0) {
+        const invReal = await leer(K.nucleo, {});
+        const inv = { ...invReal, [m.formula]: +((invReal[m.formula] || 0) + nB).toFixed(2) };
+        if (await escribir(K.nucleo, inv)) setNucleoInv(inv);
+      }
+    }
+    if (m.tipo === "nucleo" && f2) {
+      const nP = Number(m.porciones || 0);
+      const invReal = await leer(K.nucleo, {});
+      const inv = { ...invReal, [m.formula]: +((invReal[m.formula] || 0) - nP).toFixed(2) };
+      if (await escribir(K.nucleo, inv)) setNucleoInv(inv);
+      const reversas = Object.entries(f2.items)
+        .filter(([c2, kg]) => basculaDe(c2) === 4 && Number(kg) > 0)
+        .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nP).toFixed(3), ref: `Reversión núcleo ${m.formula} ×${nP}${m.numNucleo ? ` #${m.numNucleo}` : ""}` }));
+      await registrarKardex(reversas);
+    }
+    avisar("✓ Movimiento eliminado y efectos revertidos");
+    setGuardando(false);
+  };
+
+  const eliminarFacturaPlanta = async (f) => {
+    const clave = `delfacpl:${f.id || f.fecha + f.proveedor}`;
+    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para eliminar esta factura"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    setConfirmar(null);
+    const nuevo = facturas.filter(x => x !== f && x.id !== f.id);
+    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); avisar("✓ Factura eliminada"); }
+    else avisar("⚠ No se pudo eliminar");
+  };
+
+  const eliminarMovInsumo = async (m) => {
+    const clave = `delins:${m.id}`;
+    if (confirmar !== clave) { setConfirmar(clave); avisar(`⚠ Toca × otra vez para eliminar${m.tipo === "ajuste" ? " (el saldo actual no se recalcula)" : " — el saldo se revierte"}`); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    setConfirmar(null);
+    const nuevoMovs = insumosMovs.filter(x => x.id !== m.id);
+    let nuevoIns = insumos;
+    if (m.tipo === "entrada" || m.tipo === "salida") {
+      nuevoIns = insumos.map(it => it.id === m.itemId ? { ...it, saldo: +(Number(it.saldo) + (m.tipo === "entrada" ? -1 : 1) * Number(m.cantidad)).toFixed(2) } : it);
+    }
+    const ok1 = await escribir(K.insumosMovs, nuevoMovs);
+    const ok2 = nuevoIns === insumos ? true : await escribir(K.insumos, nuevoIns);
+    if (ok1 && ok2) { setInsumosMovs(nuevoMovs); setInsumos(nuevoIns); avisar("✓ Movimiento eliminado"); }
+    else avisar("⚠ No se pudo eliminar");
   };
 
   const guardarAjustePlanta = async () => {
@@ -2790,6 +2849,7 @@ export default function App() {
                   <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
                     <span><b>{f.fecha.slice(0, 5)}</b> · {f.proveedor} — {f.producto}</span>
                     {f.monto && <b>₡{Number(f.monto).toLocaleString()}</b>}
+                    <button onClick={() => eliminarFacturaPlanta(f)} title="Eliminar" style={{ padding: "0 9px", fontSize: 14, background: "transparent", color: C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
                   </div>
                 ))}
               </div>
@@ -2801,6 +2861,7 @@ export default function App() {
                   <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                     <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.detalle ? ` (${m.detalle})` : ""}`}</span>
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" ? `${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
+                    <button onClick={() => eliminarMovPlanta(m)} title="Eliminar (revierte efectos)" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
                   </div>
                 ))}
               </Seccion>
@@ -3201,6 +3262,7 @@ export default function App() {
                         <div key={i} style={{ fontSize: 12.5, padding: "7px 11px", background: C.fondo, borderRadius: 9, marginBottom: 5, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                           <span><b>{m.fecha.slice(0, 5)}</b> · {it?.nombre || "?"} {m.detalle && <span style={{ color: C.textoSuave }}>· {m.detalle}{m.auto ? " (auto)" : ""}</span>}</span>
                           <b style={{ color: colores[m.tipo] }}>{m.tipo === "entrada" ? "+" : m.tipo === "salida" ? "−" : "="}{m.cantidad} {it?.unidad}</b>
+                          <button onClick={() => eliminarMovInsumo(m)} title="Eliminar" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delins:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delins:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
                         </div>
                       );
                     })}
