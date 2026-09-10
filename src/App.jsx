@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.1";
+const VERSION_APP = "6.2";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -346,8 +346,8 @@ export default function App() {
   const [bodegaCfg, setBodegaCfg] = useState({ inicialCart: 128 });
   const [aperturaIns, setAperturaIns] = useState({});
   const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", fecha: new Date().toISOString().slice(0, 10) });
-  const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", saldoReal: "" });
-  const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "" });
+  const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", saldoReal: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: new Date().toISOString().slice(0, 10) });
 
   const [fPeso, setFPeso] = useState({ lote: "G1", pesos: "", fecha: new Date().toISOString().slice(0, 10) });
   const [fVac, setFVac] = useState({ lote: "G1", vacuna: "", cepa: "", via: "", proveedor: "" });
@@ -398,7 +398,7 @@ export default function App() {
   const [fNuevaMP, setFNuevaMP] = useState({ n: "", prov: "", pres: "" });
   const [insumos, setInsumos] = useState(SEED_INSUMOS);
   const [insumosMovs, setInsumosMovs] = useState([]);
-  const [fMovIns, setFMovIns] = useState({ tipo: "entrada", itemId: "", cantidad: "", detalle: "" });
+  const [fMovIns, setFMovIns] = useState({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: new Date().toISOString().slice(0, 10) });
   const [fNuevoIns, setFNuevoIns] = useState({ nombre: "", categoria: "Medicinas", unidad: "ml", saldo: "", presentacion: "", dosis: "", proveedor: "" });
   const [recActiva, setRecActiva] = useState("Impulsor");
   const [fNuevaRec, setFNuevaRec] = useState({ nombre: "", uso: "Aves" });
@@ -852,7 +852,7 @@ export default function App() {
     const actual = fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado;
     const delta = +(Number(fAjPlanta.saldoReal) - actual).toFixed(1);
     if (delta === 0) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); setFAjPlanta({ ...fAjPlanta, saldoReal: "" }); return; }
-    const nuevo = [{ fecha: hoyStr(), tipo: "ajuste", categoria: fAjPlanta.categoria, kg: delta, detalle: `Conteo físico: ${fAjPlanta.saldoReal} kg`, por: completadoPor }, ...plantaMovs];
+    const nuevo = [{ fecha: (fAjPlanta.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, kg: delta, detalle: `Conteo físico: ${fAjPlanta.saldoReal} kg`, por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) { setPlantaMovs(nuevo); setFAjPlanta({ ...fAjPlanta, saldoReal: "" }); avisar(`✓ Ajuste de ${delta > 0 ? "+" : ""}${delta} kg registrado`); }
     else avisar("⚠ No se pudo guardar");
   };
@@ -881,8 +881,8 @@ export default function App() {
 
   const guardarFactura = async () => {
     if (!fFactura.proveedor && !fFactura.producto) return;
-    const nuevo = [{ ...fFactura, fecha: hoyStr() }, ...facturas];
-    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); setFFactura({ proveedor: "", producto: "", monto: "" }); avisar("✓ Factura registrada"); }
+    const nuevo = [{ ...fFactura, fecha: (fFactura.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/") }, ...facturas];
+    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); setFFactura({ proveedor: "", producto: "", monto: "", fecha: new Date().toISOString().slice(0, 10) }); avisar("✓ Factura registrada"); }
     else avisar("⚠ No se pudo guardar");
   };
 
@@ -961,17 +961,17 @@ export default function App() {
       return t.includes(n) || n.includes(t) || t.split(/[\s/]+/).some(w => w.length > 3 && n.includes(w));
     });
   };
-  const registrarMovInsumo = async (tipo, itemId, cantidad, detalle) => {
+  const registrarMovInsumo = async (tipo, itemId, cantidad, detalle, fechaISO) => {
     const cant = Number(cantidad);
     if (!itemId || !cant) { avisar("⚠ Elige el insumo y la cantidad"); return; }
     const nuevoIns = insumos.map(it => it.id === Number(itemId)
       ? { ...it, saldo: tipo === "ajuste" ? cant : +(it.saldo + (tipo === "entrada" ? cant : -cant)).toFixed(2) }
       : it);
-    const mov = { fecha: hoyStr(), itemId: Number(itemId), tipo, cantidad: cant, detalle: detalle || "", por: completadoPor };
+    const mov = { fecha: (fechaISO || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/"), itemId: Number(itemId), tipo, cantidad: cant, detalle: detalle || "", por: completadoPor };
     const nuevosMovs = [mov, ...insumosMovs];
     const ok1 = await escribir(K.insumos, nuevoIns);
     const ok2 = await escribir(K.insumosMovs, nuevosMovs);
-    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setFMovIns({ tipo: "entrada", itemId: "", cantidad: "", detalle: "" }); avisar("✓ Movimiento registrado"); }
+    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setFMovIns({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: new Date().toISOString().slice(0, 10) }); avisar("✓ Movimiento registrado"); }
     else avisar("⚠ No se pudo guardar");
   };
   const agregarInsumo = async () => {
@@ -2482,7 +2482,7 @@ export default function App() {
                   return (
                     <div key={l.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: p != null ? 0 : 4 }}>
-                        <b>Gallinero {l.galpon} · {l.raza} ({semanasDe(l.nac).toFixed(0)} sem)</b>
+                        <b>Gallinero {l.galpon} · {l.raza} ({semanasDe(l.nac).toFixed(0)} sem){l.estadoProd && l.estadoProd !== "Producción normal" ? <span style={{ color: "#9A6605", fontWeight: 700 }}> · {l.estadoProd}</span> : null}</b>
                         {p == null && <span style={{ color: C.textoSuave }}>sin registro hoy</span>}
                       </div>
                       {p != null && <BarraPostura actual={p} meta={l.posturaIdeal} />}
@@ -2766,6 +2766,10 @@ export default function App() {
                   </select>
                 </label>
                 <Campo mitad etiqueta={`Saldo real contado (app: ${(fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(0)} kg)`} type="text" inputMode="decimal" placeholder="kg" value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
+                  <input type="date" value={fAjPlanta.fecha} onChange={e => setFAjPlanta({ ...fAjPlanta, fecha: e.target.value })} style={inputStyle} />
+                </label>
               </div>
               <button onClick={guardarAjustePlanta} style={btnStyle}>Registrar ajuste</button>
             </Seccion>
@@ -2775,6 +2779,10 @@ export default function App() {
                 <Campo tercio etiqueta="Proveedor" type="text" placeholder="ej. AVIN" value={fFactura.proveedor} onChange={e => setFFactura({ ...fFactura, proveedor: e.target.value })} />
                 <Campo tercio etiqueta="Producto" type="text" placeholder="ej. Maíz 2 ton" value={fFactura.producto} onChange={e => setFFactura({ ...fFactura, producto: e.target.value })} />
                 <Campo tercio etiqueta="Monto ₡" type="text" inputMode="decimal" placeholder="0" value={fFactura.monto} onChange={e => setFFactura({ ...fFactura, monto: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha</span>
+                  <input type="date" value={fFactura.fecha} onChange={e => setFFactura({ ...fFactura, fecha: e.target.value })} style={inputStyle} />
+                </label>
               </div>
               <button onClick={guardarFactura} style={btnStyle}>Registrar factura</button>
               <div style={{ marginTop: 12 }}>
@@ -3176,8 +3184,12 @@ export default function App() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <Campo mitad etiqueta={fMovIns.tipo === "ajuste" ? "Saldo real contado" : "Cantidad"} type="text" inputMode="decimal" placeholder="0" value={fMovIns.cantidad} onChange={e => setFMovIns({ ...fMovIns, cantidad: e.target.value })} />
                   <Campo mitad etiqueta={fMovIns.tipo === "entrada" ? "Factura / proveedor" : "Motivo / detalle"} type="text" placeholder="opcional" value={fMovIns.detalle} onChange={e => setFMovIns({ ...fMovIns, detalle: e.target.value })} />
+                  <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
+                    <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha</span>
+                    <input type="date" value={fMovIns.fecha} onChange={e => setFMovIns({ ...fMovIns, fecha: e.target.value })} style={inputStyle} />
+                  </label>
                 </div>
-                <button onClick={() => registrarMovInsumo(fMovIns.tipo, fMovIns.itemId, fMovIns.cantidad, fMovIns.detalle)} disabled={guardando} style={btnStyle}>Registrar movimiento</button>
+                <button onClick={() => registrarMovInsumo(fMovIns.tipo, fMovIns.itemId, fMovIns.cantidad, fMovIns.detalle, fMovIns.fecha)} disabled={guardando} style={btnStyle}>Registrar movimiento</button>
 
                 {insumosMovs.length > 0 && (
                   <div style={{ marginTop: 14 }}>
@@ -3965,6 +3977,16 @@ export default function App() {
                   <Campo mitad etiqueta="Aves alojadas (iniciales)" type="text" inputMode="numeric" placeholder="ej. 2400" value={formLote.avesIniciales} onChange={e => setFormLote({ ...formLote, avesIniciales: e.target.value })} />
                   {formLote.id && <Campo mitad etiqueta="Aves actuales (corrección)" type="text" inputMode="numeric" value={formLote.aves} onChange={e => setFormLote({ ...formLote, aves: e.target.value })} />}
                   <Campo mitad etiqueta="Proveedor de pollonas" type="text" placeholder="opcional" value={formLote.proveedor} onChange={e => setFormLote({ ...formLote, proveedor: e.target.value })} />
+                  <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 150 }}>
+                    <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Estado productivo</span>
+                    <select value={formLote.estadoProd || "Producción normal"} onChange={e => setFormLote({ ...formLote, estadoProd: e.target.value })} style={inputStyle}>
+                      <option>Producción normal</option>
+                      <option>Pelecha (muda)</option>
+                      <option>En tratamiento</option>
+                      <option>Levante / pre-postura</option>
+                      <option>Estrés (calor, manejo, susto)</option>
+                    </select>
+                  </label>
                 </div>
                 {formLote.nac && <div style={{ fontSize: 13, color: C.verde, fontWeight: 600, marginBottom: 10 }}>Edad actual: {semanasDe(formLote.nac).toFixed(1)} semanas</div>}
 
@@ -4012,6 +4034,7 @@ export default function App() {
                       <div>
                         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>Gallinero {l.galpon} · Lote {l.lote || ""}</div>
                         <div style={{ fontSize: 12, color: C.textoSuave }}>{l.raza} · nac. {l.nac.split("-").reverse().join("/")} · <b>{semanasDe(l.nac).toFixed(1)} sem</b></div>
+                        {l.estadoProd && l.estadoProd !== "Producción normal" && <div style={{ display: "inline-block", marginTop: 4, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 12, background: C.yemaSuave, color: "#9A6605" }}>⚠ {l.estadoProd}</div>}
                         {l.proveedor && <div style={{ fontSize: 11.5, color: C.textoSuave }}>Pollonas: {l.proveedor}</div>}
                       </div>
                       <div style={{ textAlign: "right" }}>
