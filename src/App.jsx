@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.8";
+const VERSION_APP = "7.0";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -219,6 +219,10 @@ const TRABAJOS = [
   "Lavado de caños", "Limpieza caja de registro", "Limpieza de trampas de ratas",
 ];
 
+// La base de datos devuelve las filas sin orden garantizado — ordenamos por fecha (dd/mm/yyyy) descendente
+const fechaVal = (f) => { const p = String(f || "").split("/"); return p.length === 3 ? Number(p[2]) * 10000 + Number(p[1]) * 100 + Number(p[0]) : 0; };
+const ordenarPorFecha = (arr) => [...(arr || [])].sort((a, b) => (fechaVal(b.fecha) - fechaVal(a.fecha)) || ((Number(b.id) || 0) - (Number(a.id) || 0)));
+
 const capturaVacia = () => ({
   tiquetes: [{ num: "", cartones: "", peso: "" }, { num: "", cartones: "", peso: "" }, { num: "", cartones: "", peso: "" }],
   quebrados: "", muertas: "", dx: "",
@@ -397,6 +401,7 @@ export default function App() {
   const [mpResponsable, setMpResponsable] = useState("");
   const [mpConfig, setMpConfig] = useState({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {} });
   const [mpPedidos, setMpPedidos] = useState([]);
+  const [fPedidoMP, setFPedidoMP] = useState({ fecha: new Date().toISOString().slice(0, 10), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] });
   const [recetas, setRecetas] = useState(SEED_RECETAS);
   const [mpCat, setMpCat] = useState(MP_LISTA);
   const [fNuevaMP, setFNuevaMP] = useState({ n: "", prov: "", pres: "" });
@@ -422,7 +427,7 @@ export default function App() {
       galpon: Number(formLote.galpon), lote: formLote.lote || "01", raza: formLote.raza, nac: formLote.nac,
       formula: formLote.formula || "", racionGAve: Number(formLote.racionGAve || 0),
       posturaIdeal: Number(formLote.posturaIdeal || 90), pesoMeta: Number(formLote.pesoMeta || 0),
-      proveedor: formLote.proveedor || "",
+      proveedor: formLote.proveedor || "", estadoProd: formLote.estadoProd || "Producción normal",
     };
     if (formLote.id) {
       nuevos = lotes.map(l => l.id === formLote.id ? { ...l, ...campos, avesIniciales: Number(formLote.avesIniciales || l.avesIniciales), aves: Number(formLote.aves ?? l.aves) } : l);
@@ -474,7 +479,7 @@ export default function App() {
       const siembras = [];
       const ls = ls0 ?? (siembras.push(escribir(K.lotes, SEED_LOTES)), SEED_LOTES);
       const rs = rs0 ?? (siembras.push(escribir(K.registros, SEED_REGISTROS)), SEED_REGISTROS);
-      setLotes(ls); setRegistros(rs);
+      setLotes(ls); setRegistros(ordenarPorFecha(rs));
       if (primera) setCapturas(Object.fromEntries(ls.map(l => [l.id, capturaVacia()])));
       setErrorCarga(false);
       setCargando(false);           // ← la app ya se ve y se puede navegar
@@ -511,13 +516,13 @@ export default function App() {
       }
       if (mi) { setMpInv(mi.items || {}); setMpFechaConteo(mi.fecha || ""); setMpResponsable(mi.responsable || ""); }
       if (mc) setMpConfig({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {}, ...mc });
-      setMpPedidos(pedidos); setRecetas(rc); setMpCat(mcat); setInsumos(ins); setInsumosMovs(insMovs);
-      setPesajes(ps); setMedicaciones(ms); setFumigaciones(fs);
-      setBodegaMovs(mv); setPlantaMovs(pl); setFacturas(fa); setBitacora(bi); setCostos(cs);
-      setVacunas(va); setEnfermedades(en); setNecropsias(ne); setPlanVac(pv);
+      setMpPedidos(ordenarPorFecha(pedidos)); setRecetas(rc); setMpCat(mcat); setInsumos(ins); setInsumosMovs(ordenarPorFecha(insMovs));
+      setPesajes(ordenarPorFecha(ps)); setMedicaciones(ordenarPorFecha(ms)); setFumigaciones(ordenarPorFecha(fs));
+      setBodegaMovs(ordenarPorFecha(mv)); setPlantaMovs(ordenarPorFecha(pl)); setFacturas(ordenarPorFecha(fa)); setBitacora(ordenarPorFecha(bi)); setCostos(cs);
+      setVacunas(ordenarPorFecha(va)); setEnfermedades(ordenarPorFecha(en)); setNecropsias(ordenarPorFecha(ne)); setPlanVac(pv);
       setNucleoInv(nuc0 || {});
       if (cxp0) setCxp({ facturas: [], pagos: [], notas: [], ...cxp0 });
-      setKardex(kdx0 || []);
+      setKardex(ordenarPorFecha(kdx0 || []));
       setCfgAdmins(adm0 || []);
       setFavoritos(fav0 || []);
       {
@@ -734,7 +739,7 @@ export default function App() {
     if (nBitacora !== bitacora) await escribir(K.bitacora, nBitacora);
 
     if (ok1 && ok2) {
-      setRegistros(nuevosRegistros); setLotes(nuevosLotes); setMedicaciones(nMeds); setFumigaciones(nFums); setBitacora(nBitacora);
+      setRegistros(ordenarPorFecha(nuevosRegistros)); setLotes(nuevosLotes); setMedicaciones(ordenarPorFecha(nMeds)); setFumigaciones(ordenarPorFecha(nFums)); setBitacora(nBitacora);
       setCapturas(Object.fromEntries(nuevosLotes.map(l => [l.id, capturaVacia()])));
       setNotaDia("");
       avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}`);
@@ -1152,6 +1157,23 @@ export default function App() {
   const consumoFormulas = { ...consumoAvesFormulas };
   Object.entries(consumoGanadoFormulas).forEach(([f, kg]) => { consumoFormulas[f] = (consumoFormulas[f] || 0) + kg; });
 
+  const recibirPedidoMP = async (p) => {
+    const clave = `recped:${p.id || p.fecha}`;
+    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca ✓ otra vez para marcar RECIBIDO — las materias primas entran al kardex"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 7000); return; }
+    setConfirmar(null);
+    const entradas = (p.lineas || []).filter(l2 => (l2.kg || 0) > 0 && l2.c)
+      .map(l2 => ({ id: Date.now() + Math.random(), fecha: hoyStr(), mp: l2.c, tipo: "entrada", kg: +Number(l2.kg).toFixed(1), ref: `Pedido ${p.fecha}${p.proveedor ? ` · ${p.proveedor}` : ""}` }));
+    await registrarKardex(entradas);
+    const nuevos = mpPedidos.map(x => x === p || (p.id && x.id === p.id) ? { ...x, estado: "recibido", recibido: hoyStr() } : x);
+    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar(`✓ Pedido recibido — ${entradas.length} entrada(s) al kardex`); }
+  };
+  const eliminarPedidoMP = async (p) => {
+    const clave = `delped:${p.id || p.fecha}`;
+    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para eliminar este pedido"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    setConfirmar(null);
+    const nuevos = mpPedidos.filter(x => x !== p && (!p.id || x.id !== p.id));
+    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar("✓ Pedido eliminado"); }
+  };
   const lineasPedido = mpCat.map(mp => {
     let kgDia = 0;
     Object.entries(consumoFormulas).forEach(([f, kgF]) => {
@@ -1204,7 +1226,7 @@ export default function App() {
 
   const registrarPedido = async () => {
     setGuardando(true);
-    const doc = { fecha: hoyStr(), cobertura: mpConfig.cobertura, lineas: lineasPedido.filter(x => x.pedido > 0).map(x => ({ c: x.c, n: x.n, prov: x.prov, pedido: x.pedido, kg: x.pedidoKg })) };
+    const doc = { id: Date.now(), fecha: hoyStr(), cobertura: mpConfig.cobertura, estado: "pendiente", lineas: lineasPedido.filter(x => x.pedido > 0).map(x => ({ c: x.c, n: x.n, prov: x.prov, pedido: x.pedido, kg: x.pedidoKg })) };
     const nuevos = [doc, ...mpPedidos.filter(m => m.fecha !== hoyStr())];
     if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar("✓ Pedido registrado en el historial"); }
     else avisar("⚠ No se pudo registrar");
@@ -2790,7 +2812,7 @@ export default function App() {
                           <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textoSuave, marginBottom: 3 }}>
                             Tiquetes que se lleva — NÚMEROS separados por espacio: el sistema busca cada tiquete y suma sus cartones
                           </span>
-                          <input type="text" inputMode="numeric" placeholder="ej. 4521 4522 4530" value={r.tiq || ""}
+                          <input type="text" placeholder="ej. 4521 4522 4530" value={r.tiq || ""}
                             onChange={e => {
                               const crudo = e.target.value;
                               const ns2 = crudo.trim().split(/[\s,;]+/).filter(Boolean);
@@ -3170,6 +3192,53 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+            </Seccion>
+
+            <Seccion titulo="4 · Registrar pedido realizado" sub="El pedido que colocaste al proveedor — al marcarlo recibido, las materias primas entran solas al kardex">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del pedido</span>
+                  <input type="date" value={fPedidoMP.fecha} onChange={e => setFPedidoMP({ ...fPedidoMP, fecha: e.target.value })} style={inputStyle} />
+                </label>
+                <Campo mitad etiqueta="Proveedor" type="text" placeholder="ej. VYMISA" value={fPedidoMP.proveedor} onChange={e => setFPedidoMP({ ...fPedidoMP, proveedor: e.target.value })} />
+              </div>
+              {fPedidoMP.lineas.map((l2, i2) => (
+                <div key={i2} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                  <select value={l2.mp} onChange={e => { const ls = [...fPedidoMP.lineas]; ls[i2] = { ...l2, mp: e.target.value }; setFPedidoMP({ ...fPedidoMP, lineas: ls }); }} style={{ ...inputStyle, flex: 1.4, marginBottom: 0 }}>
+                    <option value="">— Materia prima —</option>
+                    {mpCat.map(m => <option key={m.c} value={m.c}>{m.n}</option>)}
+                  </select>
+                  <input type="text" inputMode="decimal" placeholder="kg" value={l2.kg} onChange={e => { const ls = [...fPedidoMP.lineas]; ls[i2] = { ...l2, kg: e.target.value }; setFPedidoMP({ ...fPedidoMP, lineas: ls }); }} style={{ ...inputStyle, flex: 0.7, marginBottom: 0 }} />
+                  <button onClick={() => setFPedidoMP({ ...fPedidoMP, lineas: fPedidoMP.lineas.length > 1 ? fPedidoMP.lineas.filter((_, j) => j !== i2) : [{ mp: "", kg: "" }] })} style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={() => setFPedidoMP({ ...fPedidoMP, lineas: [...fPedidoMP.lineas, { mp: "", kg: "" }] })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Línea</button>
+                <button onClick={async () => {
+                  const ls = fPedidoMP.lineas.filter(l2 => l2.mp && Number(l2.kg) > 0);
+                  if (!ls.length) { avisar("⚠ Agrega al menos una materia prima con kilos"); return; }
+                  const doc = { id: Date.now(), fecha: fPedidoMP.fecha.split("-").reverse().join("/"), proveedor: fPedidoMP.proveedor.trim(), nota: fPedidoMP.nota, manual: true, estado: "pendiente", lineas: ls.map(l2 => ({ c: l2.mp, n: (mpCat.find(m => m.c === l2.mp) || {}).n, kg: Number(l2.kg) })) };
+                  const nuevos = [doc, ...mpPedidos];
+                  if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); setFPedidoMP({ fecha: new Date().toISOString().slice(0, 10), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] }); avisar("✓ Pedido registrado — pendiente de recibir"); }
+                }} style={{ ...btnStyle, flex: 1, marginTop: 0 }}>Registrar pedido</button>
+              </div>
+            </Seccion>
+
+            <Seccion titulo="5 · Historial de pedidos" sub="Pendientes y recibidos — al recibir, el kardex se alimenta solo">
+              {mpPedidos.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin pedidos registrados todavía.</div>}
+              {mpPedidos.slice(0, 8).map((p, i2) => (
+                <div key={p.id || i2} style={{ padding: "10px 12px", background: C.fondo, borderRadius: 10, marginBottom: 7, fontSize: 12.5 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <span><b>{p.fecha}</b>{p.proveedor ? ` · ${p.proveedor}` : ""}{p.manual ? "" : " · calculado"}</span>
+                    <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 10, background: p.estado === "recibido" ? C.verdeSuave : C.yemaSuave, color: p.estado === "recibido" ? C.verde : "#9A6605" }}>{p.estado === "recibido" ? `✓ recibido ${p.recibido ? p.recibido.slice(0, 5) : ""}` : "pendiente"}</span>
+                      {p.estado !== "recibido" && <button onClick={() => recibirPedidoMP(p)} style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>✓ Recibido</button>}
+                      <button onClick={() => eliminarPedidoMP(p)} style={{ padding: "2px 8px", fontSize: 13, background: "transparent", color: C.textoSuave, border: "none", cursor: "pointer" }}>×</button>
+                    </span>
+                  </div>
+                  <div style={{ color: C.textoSuave, marginTop: 4 }}>{(p.lineas || []).map(l2 => `${l2.n || l2.c}: ${(l2.kg ?? l2.pedidoKg ?? 0)} kg`).join(" · ")}</div>
+                </div>
+              ))}
             </Seccion>
 
             <Seccion titulo="4 · Pedido por proveedor" sub="Envía cada orden por WhatsApp o cópiala">
