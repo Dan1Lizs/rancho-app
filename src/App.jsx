@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
 import { leer, escribir } from "./storage";
@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "7.2";
+const VERSION_APP = "7.3";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -321,6 +321,9 @@ export default function App() {
   const [guardando, setGuardando] = useState(false);
 
   const [galponActivo, setGalponActivo] = useState("G1");
+  const suciosRef = useRef({}); // gallineros con ediciones locales sin guardar — el refresco en vivo no los toca
+  const notaSuciaRef = useRef(false);
+  const fechaCapturaRef = useRef(new Date().toISOString().slice(0, 10));
   const [completadoPor, setCompletadoPor] = useState("");
   const [capturas, setCapturas] = useState({});
   const [notaDia, setNotaDia] = useState("");
@@ -363,34 +366,41 @@ export default function App() {
   const [fechasAplicar, setFechasAplicar] = useState({});
   const [fechaCaptura, setFechaCaptura] = useState(new Date().toISOString().slice(0, 10));
 
+  const construirCaptura = (l, dmy, regs, medsAll, fumsAll) => {
+    const reg = regs.find(r => r.fecha === dmy && r.lote === l.id);
+    if (!reg) return null;
+    const medsG = medsAll.filter(m => m.fecha === dmy && m.galpon === l.galpon);
+    const meds = medsG.filter(m => m.tipo === "Medicamento").map(m => ({ producto: m.producto, dosis: m.dosis || "", enfermedad: m.enfermedad || "", retiro: m.retiroDias ? String(m.retiroDias) : "" }));
+    const vits = medsG.filter(m => m.tipo === "Vitamina").map(m => ({ producto: m.producto, dosis: m.dosis || "" }));
+    const fums = fumsAll.filter(m => m.fecha === dmy && m.galpon === l.galpon).map(m => ({ producto: m.producto, dosis: m.dosis || "", hora: m.hora || "" }));
+    const tiq = (reg.tiquetes || []).map(t => ({ num: t.num ?? "", cartones: String(t.cartones ?? ""), peso: String(t.peso ?? "") }));
+    const base = capturaVacia();
+    return {
+      tiquetes: tiq.length ? tiq : base.tiquetes,
+      quebrados: reg.quebrados ? String(reg.quebrados) : "",
+      muertas: reg.muertas ? String(reg.muertas) : "", dx: reg.dx || "",
+      fums: fums.length ? fums : base.fums,
+      meds: meds.length ? meds : base.meds,
+      vits: vits.length ? vits : base.vits,
+      alimento6am: reg.alimento6am ? String(reg.alimento6am) : "",
+      obsAlimento: reg.obsAlimento || "",
+      alimento1pm: reg.alimento1pm ? String(reg.alimento1pm) : "",
+      aguaL: reg.aguaL ? String(reg.aguaL) : "",
+      trabajos: reg.trabajos || {},
+      chequeo: { ...base.chequeo, ...(reg.chequeo || {}) },
+    };
+  };
+
   const cambiarFechaCaptura = (iso) => {
     setFechaCaptura(iso);
+    fechaCapturaRef.current = iso;
+    suciosRef.current = {};
     const dmy = iso.split("-").reverse().join("/");
     let cargados = 0;
     const nuevas = Object.fromEntries(lotes.map(l => {
-      const reg = registros.find(r => r.fecha === dmy && r.lote === l.id);
-      if (!reg) return [l.id, capturaVacia()];
-      cargados++;
-      const medsG = medicaciones.filter(m => m.fecha === dmy && m.galpon === l.galpon);
-      const meds = medsG.filter(m => m.tipo === "Medicamento").map(m => ({ producto: m.producto, dosis: m.dosis || "", enfermedad: m.enfermedad || "", retiro: m.retiroDias ? String(m.retiroDias) : "" }));
-      const vits = medsG.filter(m => m.tipo === "Vitamina").map(m => ({ producto: m.producto, dosis: m.dosis || "" }));
-      const fums = fumigaciones.filter(m => m.fecha === dmy && m.galpon === l.galpon).map(m => ({ producto: m.producto, dosis: m.dosis || "", hora: m.hora || "" }));
-      const tiq = (reg.tiquetes || []).map(t => ({ num: t.num ?? "", cartones: String(t.cartones ?? ""), peso: String(t.peso ?? "") }));
-      const base = capturaVacia();
-      return [l.id, {
-        tiquetes: tiq.length ? tiq : base.tiquetes,
-        quebrados: reg.quebrados ? String(reg.quebrados) : "",
-        muertas: reg.muertas ? String(reg.muertas) : "", dx: reg.dx || "",
-        fums: fums.length ? fums : base.fums,
-        meds: meds.length ? meds : base.meds,
-        vits: vits.length ? vits : base.vits,
-        alimento6am: reg.alimento6am ? String(reg.alimento6am) : "",
-        obsAlimento: reg.obsAlimento || "",
-        alimento1pm: reg.alimento1pm ? String(reg.alimento1pm) : "",
-        aguaL: reg.aguaL ? String(reg.aguaL) : "",
-        trabajos: reg.trabajos || {},
-        chequeo: { ...base.chequeo, ...(reg.chequeo || {}) },
-      }];
+      const c2 = construirCaptura(l, dmy, registros, medicaciones, fumigaciones);
+      if (c2) cargados++;
+      return [l.id, c2 || capturaVacia()];
     }));
     setCapturas(nuevas);
     if (cargados > 0) avisar(`✓ Se cargó lo guardado del ${dmy} (${cargados} gallinero(s)) — edita solo lo necesario`);
@@ -541,6 +551,25 @@ export default function App() {
         setMovBodega({ comprado: movHoy.comprado || "", vendGranja: movHoy.vendGranja || "", destruido: movHoy.destruido || "", regalado: movHoy.regalado || "" });
         if (movHoy.repartos) setRepartos(movHoy.repartos);
         setObsInv(movHoy.obs || "");
+      }
+      // Sincronizar el formulario de captura con lo que llegó de otros dispositivos,
+      // SIN tocar los gallineros que este usuario está editando (marcados "sucios")
+      {
+        const dmy = (fechaCapturaRef.current || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+        const rsOrd = ordenarPorFecha(rs);
+        setCapturas(prev => {
+          const nuevas = { ...prev };
+          ls.forEach(l => {
+            if (suciosRef.current[l.id]) return; // en edición local — no tocar
+            const c2 = construirCaptura(l, dmy, rsOrd, ms, fs);
+            nuevas[l.id] = c2 || prev[l.id] || capturaVacia();
+          });
+          return nuevas;
+        });
+        if (!notaSuciaRef.current) {
+          const nota2 = (bi || []).find(b => b.fecha === dmy);
+          setNotaDia(nota2 ? nota2.texto : "");
+        }
       }
       setCargandoFondo(false); // no-op si silencioso (ya estaba en false)
     } catch { if (!silencioso) { setErrorCarga(true); setCargando(false); setCargandoFondo(false); } }
@@ -747,9 +776,11 @@ export default function App() {
 
     if (ok1 && ok2) {
       setRegistros(ordenarPorFecha(nuevosRegistros)); setLotes(nuevosLotes); setMedicaciones(ordenarPorFecha(nMeds)); setFumigaciones(ordenarPorFecha(nFums)); setBitacora(nBitacora);
-      // El formulario NO se toca tras guardar: lo que ves es lo que se guardó,
-      // y lo que tengas a medio digitar (otras secciones o gallineros) sigue intacto
-      // hasta su propio guardado. Nada de reconstrucciones que pisen el teclado.
+      // El formulario no se reconstruye tras guardar (lo que ves es lo guardado).
+      // Los gallineros recién guardados quedan "limpios": el refresco en vivo ya puede sincronizarlos.
+      if (soloLoteId) delete suciosRef.current[soloLoteId];
+      else suciosRef.current = {};
+      if (!soloLoteId || notaDia.trim()) notaSuciaRef.current = false;
       avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}`);
     } else avisar("⚠ No se pudo guardar. Revisa la conexión.");
     setGuardando(false);
@@ -2299,7 +2330,7 @@ export default function App() {
   }
 
   const cap = capturas[galponActivo] || capturaVacia();
-  const setCap = (cambios) => setCapturas({ ...capturas, [galponActivo]: { ...cap, ...cambios } });
+  const setCap = (cambios) => { suciosRef.current[galponActivo] = true; setCapturas({ ...capturas, [galponActivo]: { ...cap, ...cambios } }); };
   const tGal = totalesGalpon(cap);
   const loteActivo = lotes.find(l => l.id === galponActivo);
 
@@ -2630,7 +2661,7 @@ export default function App() {
             </Seccion>
 
             <Seccion titulo="Bitácora de novedades" sub="UNA sola para toda la granja — compartida entre los 3 galpones y guardada con cualquier botón Guardar">
-              <textarea value={notaDia} onChange={e => setNotaDia(e.target.value)} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}
+              <textarea value={notaDia} onChange={e => { notaSuciaRef.current = true; setNotaDia(e.target.value); }} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
             </Seccion>
 
