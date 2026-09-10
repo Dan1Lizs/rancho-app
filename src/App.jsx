@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "7.1";
+const VERSION_APP = "7.2";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -747,8 +747,9 @@ export default function App() {
 
     if (ok1 && ok2) {
       setRegistros(ordenarPorFecha(nuevosRegistros)); setLotes(nuevosLotes); setMedicaciones(ordenarPorFecha(nMeds)); setFumigaciones(ordenarPorFecha(nFums)); setBitacora(nBitacora);
-      // El formulario NO se vacía: se re-precarga con lo recién guardado, para seguir viéndolo y editándolo
-      setTimeout(() => cambiarFechaCaptura(fechaCaptura), 120);
+      // El formulario NO se toca tras guardar: lo que ves es lo que se guardó,
+      // y lo que tengas a medio digitar (otras secciones o gallineros) sigue intacto
+      // hasta su propio guardado. Nada de reconstrucciones que pisen el teclado.
       avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}`);
     } else avisar("⚠ No se pudo guardar. Revisa la conexión.");
     setGuardando(false);
