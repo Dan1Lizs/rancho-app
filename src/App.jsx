@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.5";
+const VERSION_APP = "6.6";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -2729,23 +2729,53 @@ export default function App() {
                       }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
                     </div>
                     {(() => {
-                      const nums = String(r.tiq || "").trim().split(/[\s,;]+/).filter(Boolean).map(x => parseFloat(x.replace(",", "."))).filter(x => !isNaN(x) && x > 0);
-                      const totalTiq = nums.reduce((a, x) => a + x, 0);
+                      // Buscar cada número de tiquete en la producción registrada (Control diario)
+                      const nums = String(r.tiq || "").trim().split(/[\s,;]+/).filter(Boolean);
+                      const buscarTiquete = (num) => {
+                        for (const reg of registros) {
+                          const t = (reg.tiquetes || []).find(x => String(x.num).trim() === num);
+                          if (t) { const l2 = lotes.find(x => x.id === reg.lote); return { cartones: Number(t.cartones || 0), peso: Number(t.peso || 0), fecha: reg.fecha, galpon: l2?.galpon }; }
+                        }
+                        return null;
+                      };
+                      const yaSalio = (num) => bodegaMovs.some(mv => (mv.repartos || []).some(rp => (rp.tiquetesDet || []).some(td => String(td.num) === num)));
+                      const det = nums.map(num => { const info = buscarTiquete(num); return { num, ...info, hallado: !!info, repetido: info && yaSalio(num) }; });
+                      const hallados = det.filter(d => d.hallado);
+                      const totalCart = hallados.reduce((a, d) => a + d.cartones, 0);
+                      const totalKg = hallados.reduce((a, d) => a + d.peso, 0);
                       return (
-                        <label style={{ display: "block", marginBottom: 8 }}>
+                        <div style={{ marginBottom: 8 }}>
                           <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textoSuave, marginBottom: 3 }}>
-                            Tiquetes de salida — cartones separados por espacio (ej. 45 30 28){nums.length > 0 ? ` · ${nums.length} tiquete(s) = ${totalTiq.toFixed(1)} cart. → llena la Salida solo` : ""}
+                            Tiquetes que se lleva — NÚMEROS separados por espacio: el sistema busca cada tiquete y suma sus cartones
                           </span>
-                          <input type="text" inputMode="decimal" placeholder="45 30 28" value={r.tiq || ""}
+                          <input type="text" inputMode="numeric" placeholder="ej. 4521 4522 4530" value={r.tiq || ""}
                             onChange={e => {
                               const crudo = e.target.value;
-                              const ns = crudo.trim().split(/[\s,;]+/).filter(Boolean).map(x => parseFloat(x.replace(",", "."))).filter(x => !isNaN(x) && x > 0);
+                              const ns2 = crudo.trim().split(/[\s,;]+/).filter(Boolean);
+                              const dets = ns2.map(num => { const info = buscarTiquete(num); return info ? { num, cartones: info.cartones, peso: info.peso } : null; }).filter(Boolean);
+                              const tot = dets.reduce((a, d) => a + d.cartones, 0);
                               const rs = [...repartos];
-                              rs[i] = { ...r, tiq: crudo, tiquetes: ns, ...(ns.length ? { salida: String(+ns.reduce((a, x) => a + x, 0).toFixed(1)) } : {}) };
+                              rs[i] = { ...r, tiq: crudo, tiquetesDet: dets, ...(dets.length ? { salida: String(+tot.toFixed(1)) } : {}) };
                               setRepartos(rs);
                             }}
-                            style={{ ...inputStyle, marginBottom: 0, padding: "8px 10px", fontSize: 13.5, background: nums.length ? C.verdeSuave : C.superficie }} />
-                        </label>
+                            style={{ ...inputStyle, marginBottom: 4, padding: "8px 10px", fontSize: 13.5, background: hallados.length ? C.verdeSuave : C.superficie }} />
+                          {det.length > 0 && (
+                            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                              {det.map((d, j) => (
+                                <span key={j} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 10,
+                                  background: !d.hallado ? "#FBEAE6" : d.repetido ? C.yemaSuave : C.verdeSuave,
+                                  color: !d.hallado ? C.alerta : d.repetido ? "#9A6605" : C.verde }}>
+                                  #{d.num}{d.hallado ? `: ${d.cartones} cart` + (d.peso ? ` · ${d.peso.toFixed(1)} kg` : "") + ` (G${d.galpon} ${String(d.fecha).slice(0, 5)})` : ": no existe en producción"}{d.repetido ? " ⚠ ya salió antes" : ""}
+                                </span>
+                              ))}
+                              {hallados.length > 0 && (
+                                <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: C.verde, color: "#fff" }}>
+                                  Σ {hallados.length} tiq · {totalCart.toFixed(1)} cart{totalKg > 0 ? ` · ${totalKg.toFixed(1)} kg` : ""} → Salida
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       );
                     })()}
                     <div style={{ display: "flex", gap: 8 }}>
@@ -2756,7 +2786,7 @@ export default function App() {
                   </div>
                 );
               })}
-              <button onClick={() => setRepartos([...repartos, { nombre: "", tiq: "", salida: "", devBueno: "", devMalo: "" }])}
+              <button onClick={() => setRepartos([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
                 style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Agregar repartidor</button>
             </Seccion>
 
