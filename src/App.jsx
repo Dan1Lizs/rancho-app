@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "7.0";
+const VERSION_APP = "7.1";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -399,7 +399,8 @@ export default function App() {
   const [fotosVista, setFotosVista] = useState({});
   const [printDoc, setPrintDoc] = useState(null);
   const [mpInv, setMpInv] = useState({});
-  const [mpInvUltimo, setMpInvUltimo] = useState({}); // último conteo GUARDADO — se usa para calcular el pedido, aunque el formulario de arriba ya esté vacío
+  const [mpInvUltimo, setMpInvUltimo] = useState({});
+  const [mpFechaInput, setMpFechaInput] = useState(new Date().toISOString().slice(0, 10)); // último conteo GUARDADO — se usa para calcular el pedido, aunque el formulario de arriba ya esté vacío
   const [mpFechaConteo, setMpFechaConteo] = useState("");
   const [mpResponsable, setMpResponsable] = useState("");
   const [mpConfig, setMpConfig] = useState({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {} });
@@ -746,8 +747,8 @@ export default function App() {
 
     if (ok1 && ok2) {
       setRegistros(ordenarPorFecha(nuevosRegistros)); setLotes(nuevosLotes); setMedicaciones(ordenarPorFecha(nMeds)); setFumigaciones(ordenarPorFecha(nFums)); setBitacora(nBitacora);
-      setCapturas(Object.fromEntries(nuevosLotes.map(l => [l.id, capturaVacia()])));
-      setNotaDia("");
+      // El formulario NO se vacía: se re-precarga con lo recién guardado, para seguir viéndolo y editándolo
+      setTimeout(() => cambiarFechaCaptura(fechaCaptura), 120);
       avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}`);
     } else avisar("⚠ No se pudo guardar. Revisa la conexión.");
     setGuardando(false);
@@ -1206,7 +1207,7 @@ export default function App() {
     const items = Object.fromEntries(Object.entries(mpInv).filter(([, v]) => (v?.sacos ?? "") !== "" || (v?.kg ?? "") !== ""));
     if (!Object.keys(items).length) { avisar("⚠ Digita al menos un dato del conteo"); return; }
     setGuardando(true);
-    const fecha = hoyStr();
+    const fecha = (mpFechaInput || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
     const doc = { fecha, responsable: mpResponsable, items };
     const registroHist = { id: Date.now(), fecha, responsable: mpResponsable, items };
     const nuevoHist = [registroHist, ...mpInvHist];
@@ -2627,7 +2628,7 @@ export default function App() {
               })()}
             </Seccion>
 
-            <Seccion titulo="Bitácora de novedades" sub="Anota cualquier situación del día (una sola por granja)">
+            <Seccion titulo="Bitácora de novedades" sub="UNA sola para toda la granja — compartida entre los 3 galpones y guardada con cualquier botón Guardar">
               <textarea value={notaDia} onChange={e => setNotaDia(e.target.value)} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
             </Seccion>
@@ -3196,7 +3197,13 @@ export default function App() {
             </Seccion>
 
             <Seccion titulo="2 · Inventario físico" sub="El encargado cuenta el jueves: sacos completos + saldo suelto en kg de cada materia prima">
-              <Campo etiqueta="Responsable del conteo" type="text" placeholder="Nombre" value={mpResponsable} onChange={e => setMpResponsable(e.target.value)} />
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
+                  <input type="date" value={mpFechaInput} onChange={e => setMpFechaInput(e.target.value)} style={inputStyle} />
+                </label>
+                <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre" value={mpResponsable} onChange={e => setMpResponsable(e.target.value)} />
+              </div>
               {mpCat.map(mp => {
                 const inv = mpInv[mp.c] || {};
                 return (
