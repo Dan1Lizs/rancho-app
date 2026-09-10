@@ -15,7 +15,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "6.4";
+const VERSION_APP = "6.5";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -2728,6 +2728,26 @@ export default function App() {
                         guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });
                       }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
                     </div>
+                    {(() => {
+                      const nums = String(r.tiq || "").trim().split(/[\s,;]+/).filter(Boolean).map(x => parseFloat(x.replace(",", "."))).filter(x => !isNaN(x) && x > 0);
+                      const totalTiq = nums.reduce((a, x) => a + x, 0);
+                      return (
+                        <label style={{ display: "block", marginBottom: 8 }}>
+                          <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textoSuave, marginBottom: 3 }}>
+                            Tiquetes de salida — cartones separados por espacio (ej. 45 30 28){nums.length > 0 ? ` · ${nums.length} tiquete(s) = ${totalTiq.toFixed(1)} cart. → llena la Salida solo` : ""}
+                          </span>
+                          <input type="text" inputMode="decimal" placeholder="45 30 28" value={r.tiq || ""}
+                            onChange={e => {
+                              const crudo = e.target.value;
+                              const ns = crudo.trim().split(/[\s,;]+/).filter(Boolean).map(x => parseFloat(x.replace(",", "."))).filter(x => !isNaN(x) && x > 0);
+                              const rs = [...repartos];
+                              rs[i] = { ...r, tiq: crudo, tiquetes: ns, ...(ns.length ? { salida: String(+ns.reduce((a, x) => a + x, 0).toFixed(1)) } : {}) };
+                              setRepartos(rs);
+                            }}
+                            style={{ ...inputStyle, marginBottom: 0, padding: "8px 10px", fontSize: 13.5, background: nums.length ? C.verdeSuave : C.superficie }} />
+                        </label>
+                      );
+                    })()}
                     <div style={{ display: "flex", gap: 8 }}>
                       <input type="text" inputMode="decimal" placeholder="Salida" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
                       <input type="text" inputMode="decimal" placeholder="Dev. bueno" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
@@ -2736,7 +2756,7 @@ export default function App() {
                   </div>
                 );
               })}
-              <button onClick={() => setRepartos([...repartos, { nombre: "", salida: "", devBueno: "", devMalo: "" }])}
+              <button onClick={() => setRepartos([...repartos, { nombre: "", tiq: "", salida: "", devBueno: "", devMalo: "" }])}
                 style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Agregar repartidor</button>
             </Seccion>
 
