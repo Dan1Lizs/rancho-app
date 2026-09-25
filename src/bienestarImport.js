@@ -1,18 +1,23 @@
 import * as XLSX from "xlsx";
 
 export const fechaPesajeISO = (valor) => {
-  if (valor instanceof Date && !isNaN(valor)) return `${valor.getFullYear()}-${String(valor.getMonth() + 1).padStart(2, "0")}-${String(valor.getDate()).padStart(2, "0")}`;
+  const fechaValida = (y, m, d) => {
+    const fecha = new Date(Date.UTC(y, m - 1, d));
+    return fecha.getUTCFullYear() === y && fecha.getUTCMonth() === m - 1 && fecha.getUTCDate() === d;
+  };
+  const isoValido = (y, m, d) => fechaValida(+y, +m, +d) ? `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` : "";
+  if (valor instanceof Date && !isNaN(valor)) return isoValido(valor.getFullYear(), valor.getMonth() + 1, valor.getDate());
   if (typeof valor === "number" && valor > 30000 && valor < 80000) {
     const d = XLSX.SSF.parse_date_code(valor);
-    return d ? `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}` : "";
+    return d ? isoValido(d.y, d.m, d.d) : "";
   }
   const s = String(valor ?? "").trim();
-  const iso = /^(20\d\d)-(\d\d?)-(\d\d?)/.exec(s);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  const iso = /^(20\d\d)-(\d\d?)-(\d\d?)$/.exec(s);
+  if (iso) return isoValido(iso[1], iso[2], iso[3]);
   const dmy = /^(\d{1,2})\/(\d{1,3})\/(20\d\d)$/.exec(s);
   // La hoja antigua tiene "17/011/2025": se interpreta como 17/11/2025.
   const mes = dmy?.[2].length === 3 && dmy[2].startsWith("0") ? dmy[2].slice(1) : dmy?.[2];
-  if (dmy && +mes >= 1 && +mes <= 12 && +dmy[1] >= 1 && +dmy[1] <= 31) return `${dmy[3]}-${mes.padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  if (dmy) return isoValido(dmy[3], mes, dmy[1]);
   return "";
 };
 
