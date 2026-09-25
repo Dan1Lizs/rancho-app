@@ -1468,7 +1468,7 @@ export default function App() {
   const fHoy = fechas[0], fAyer = fechas[1];
   const dHoy = fHoy ? resumenDia(fHoy) : null;
   const dAyer = fAyer ? resumenDia(fAyer) : null;
-  let dFechaCercana = null, fechaObjetivo = "", fechaComparacion = "", diasDiferencia = 0;
+  let dFechaCercana = null, fechaObjetivo = "", fechaComparacion = "", diasDiferencia = 0, fechasDescartadas = 0;
   if (fHoy) {
     const [dd, mm, yy] = fHoy.split("/").map(Number);
     const pm = mm === 1 ? 12 : mm - 1, py = mm === 1 ? yy - 1 : yy;
@@ -1477,7 +1477,17 @@ export default function App() {
     const objetivo = aDate(fechaObjetivo).getTime();
     // Se busca en los controles reales, incluso a ambos lados del cambio de mes.
     // En empate se prefiere la fecha anterior al día objetivo.
-    const candidatas = fechas.filter(f => aDate(f).getTime() < aDate(fHoy).getTime());
+    const candidatas = fechas.filter(f => aDate(f).getTime() < aDate(fHoy).getTime()).filter(f => {
+      const rs = registros.filter(r => r.fecha === f);
+      const avesRegistradas = [...new Set(rs.map(r => r.lote))].reduce((s, id) => {
+        const l = lotes.find(x => x.id === id);
+        return s + Number(l?.avesIniciales || l?.aves || 0);
+      }, 0);
+      const huevos = rs.reduce((s, r) => s + Number(r.cartones || 0) * HXC, 0);
+      const valido = avesRegistradas > 0 && huevos <= avesRegistradas * 1.05;
+      if (!valido) fechasDescartadas++;
+      return valido;
+    });
     fechaComparacion = candidatas.reduce((mejor, f) => {
       if (!mejor) return f;
       const distancia = Math.abs(aDate(f).getTime() - objetivo);
@@ -2762,7 +2772,7 @@ export default function App() {
                 </div>
               </div>
 
-              <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} día(s) ${diasDiferencia < 0 ? "antes" : "después"}`}` : ""})`}>
+              <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} día(s) ${diasDiferencia < 0 ? "antes" : "después"}`}` : ""}). ${fechasDescartadas ? `${fechasDescartadas} control(es) con producción superior a las aves alojadas excluido(s).` : ""}`}>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                     <thead>
