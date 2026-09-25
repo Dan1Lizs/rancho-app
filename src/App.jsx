@@ -1468,6 +1468,7 @@ export default function App() {
   const fHoy = fechas[0], fAyer = fechas[1];
   const dHoy = fHoy ? resumenDia(fHoy) : null;
   const dAyer = fAyer ? resumenDia(fAyer) : null;
+  const mesDe = (f) => { const p = f.split("/"); return `${p[1]}/${p[2]}`; };
   let dFechaCercana = null, fechaObjetivo = "", fechaComparacion = "", diasDiferencia = 0, fechasDescartadas = 0;
   if (fHoy) {
     const [dd, mm, yy] = fHoy.split("/").map(Number);
