@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
-import { leer, escribir } from "./storage";
+import { leer, escribir, agregarPesajesFaltantes, eliminarLotePorId } from "./storage";
+import { extraerPesajesExcel, clavePesaje, pesoEnGramos } from "./bienestarImport";
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
 
@@ -362,6 +363,9 @@ export default function App() {
   const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: new Date().toISOString().slice(0, 10) });
 
   const [fPeso, setFPeso] = useState({ lote: "G1", pesos: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [excelPesajes, setExcelPesajes] = useState([]);
+  const [excelAbierto, setExcelAbierto] = useState(-1);
+  const [importandoPesajes, setImportandoPesajes] = useState(false);
   const [fVac, setFVac] = useState({ lote: "G1", vacuna: "", cepa: "", via: "", proveedor: "" });
   const [fechasAplicar, setFechasAplicar] = useState({});
   const [fechaCaptura, setFechaCaptura] = useState(new Date().toISOString().slice(0, 10));
@@ -480,7 +484,8 @@ export default function App() {
   const eliminarLote = async (id) => {
     if (!pideConfirm(`elimLote-${id}`, "⚠ Toca 'Eliminar' otra vez para BORRAR DEFINITIVAMENTE este lote")) return;
     const nuevos = lotes.filter(l => l.id !== id);
-    if (await escribir(K.lotes, nuevos)) { setLotes(nuevos); avisar("✓ Lote eliminado"); }
+    if (await eliminarLotePorId(id)) { setLotes(nuevos); avisar("✓ Lote eliminado"); }
+    else avisar("⚠ No se pudo eliminar el lote; revisa la conexión");
   };
 
   // ── Carga inicial ──
@@ -493,9 +498,10 @@ export default function App() {
       // FASE 1: solo lo esencial para pintar la pantalla (2 lecturas)
       const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
       const [ls0, rs0] = await Promise.race([timeout, Promise.all([leer(K.lotes, null), leer(K.registros, null)])]);
+      if (ls0 === null || rs0 === null) throw new Error("No se pudieron leer los lotes o registros");
       const siembras = [];
-      const ls = ls0 ?? (siembras.push(escribir(K.lotes, SEED_LOTES)), SEED_LOTES);
-      const rs = rs0 ?? (siembras.push(escribir(K.registros, SEED_REGISTROS)), SEED_REGISTROS);
+      const ls = ls0;
+      const rs = rs0;
       setLotes(ls); setRegistros(ordenarPorFecha(rs));
       if (primera) setCapturas(Object.fromEntries(ls.map(l => [l.id, capturaVacia()])));
       setErrorCarga(false);
@@ -510,7 +516,8 @@ export default function App() {
         leer(K.recetas, null), leer(K.mpCat, null), leer(K.insumos, null), leer(K.insumosMovs, []),
         leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []), leer(K.mpInvHist, []),
       ]);
-      const ps = ps0 ?? (siembras.push(escribir(K.pesajes, SEED_PESAJES)), SEED_PESAJES);
+      if (ps0 === null) throw new Error("No se pudieron leer los pesajes");
+      const ps = ps0;
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
       let rc = rc0 ?? (siembras.push(escribir(K.recetas, SEED_RECETAS)), SEED_RECETAS);
       // Actualización a hoja oficial VYMISA 18/08/2026 — solo si sigue la versión anterior sin editar
@@ -1050,6 +1057,11 @@ export default function App() {
     setGuardando(true);
     const fISO = fPeso.fecha || new Date().toISOString().slice(0, 10);
     const fechaDMY = fISO.split("-").reverse().join("/");
+    if (pesajes.some(p => clavePesaje(p.lote, p.fecha) === clavePesaje(fPeso.lote, fISO))) {
+      setGuardando(false);
+      avisar("⚠ Ya existe un pesaje de este lote en esta fecha; no se modificó");
+      return;
+    }
     const [ny, nm, nd] = lote.nac.split("-").map(Number);
     const [py, pm, pd] = fISO.split("-").map(Number);
     const semanaPesaje = Math.floor((new Date(py, pm - 1, pd) - new Date(ny, nm - 1, nd)) / (7 * 86400000));
@@ -1062,6 +1074,54 @@ export default function App() {
     if (ok) { setPesajes(nuevo); setFPeso({ ...fPeso, pesos: "" }); avisar(`✓ Pesaje guardado: ${validos.length} aves${enKg ? " (kg convertidos a gramos)" : ""}${fuera ? ` · ${fuera} dato(s) fuera de rango ignorado(s)` : ""}`); }
     else avisar("⚠ Sin conexión con el almacenamiento — tus pesos siguen digitados, revisa la señal y toca Guardar otra vez");
     setGuardando(false);
+  };
+
+  const abrirExcelPesajes = async (archivo) => {
+    if (!archivo) return;
+    try {
+      const datos = extraerPesajesExcel(await archivo.arrayBuffer());
+      const asignados = datos.map(p => {
+        const posibles = lotes.filter(l => String(l.galpon) === p.galpon && p.fecha >= l.nac &&
+          (!p.nacimiento || p.nacimiento === l.nac) &&
+          (!p.codigo || !l.lote || String(l.lote).padStart(2, "0") === p.codigo));
+        return { ...p, lote: posibles.length === 1 ? posibles[0].id : "", incluir: posibles.length === 1 };
+      });
+      setExcelPesajes(asignados);
+      setExcelAbierto(-1);
+      avisar(asignados.length ? `✓ ${asignados.length} fechas encontradas; revisa y confirma` : "⚠ No encontré columnas de pesaje con fecha y muestra numerada");
+    } catch (e) { console.error(e); avisar("⚠ No se pudo leer el archivo Excel"); }
+  };
+
+  const confirmarExcelPesajes = async () => {
+    if (importandoPesajes || cargandoFondo) return;
+    const claves = new Set(pesajes.map(p => clavePesaje(p.lote, p.fecha)));
+    const seleccion = [];
+    for (const p of excelPesajes.filter(x => x.incluir)) {
+      if (!p.lote) { avisar("⚠ Asigna un lote a cada fecha antes de importar"); return; }
+      if (p.fecha < lotes.find(l => l.id === p.lote)?.nac) { avisar(`⚠ ${p.fecha} es anterior al nacimiento del lote elegido`); return; }
+      if (p.pesos.some(v => pesoEnGramos(v) == null)) { avisar(`⚠ Revisa pesos inválidos en ${p.hoja}, ${p.fecha}`); return; }
+      const k = clavePesaje(p.lote, p.fecha);
+      if (claves.has(k)) continue;
+      claves.add(k);
+      const lote = lotes.find(l => l.id === p.lote);
+      const [ny, nm, nd] = lote.nac.split("-").map(Number);
+      const [py, pm, pd] = p.fecha.split("-").map(Number);
+      seleccion.push({ lote: p.lote, fecha: `${pd}/${pm}/${py}`, semana: Math.floor((new Date(py, pm - 1, pd) - new Date(ny, nm - 1, nd)) / (7 * 86400000)), pesos: p.pesos.map(pesoEnGramos), meta: Number(lote.pesoMeta) || 2000 });
+    }
+    if (!seleccion.length) { avisar("ℹ Todas estas fechas ya están registradas"); return; }
+    setImportandoPesajes(true);
+    try {
+      const resultado = await agregarPesajesFaltantes(seleccion);
+      const actual = await leer(K.pesajes, null);
+      if (actual) setPesajes(ordenarPorFecha(actual));
+      setExcelPesajes([]);
+      avisar(`✓ ${resultado.agregados} pesajes nuevos; ${resultado.omitidos + excelPesajes.filter(x => x.incluir).length - seleccion.length} existentes omitidos`);
+    } catch (e) {
+      console.error(e);
+      const actual = await leer(K.pesajes, null);
+      if (actual) setPesajes(ordenarPorFecha(actual));
+      avisar("⚠ Importación interrumpida. Revisa la conexión y vuelve a cargar el Excel; lo ya registrado se omitirá.");
+    } finally { setImportandoPesajes(false); }
   };
 
   const guardarCostos = async (nuevos) => { setCostos(nuevos); await escribir(K.costos, nuevos); };
@@ -4518,6 +4578,39 @@ export default function App() {
                   style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
               </label>
               <button onClick={guardarPesaje} style={btnStyle}>Calcular y guardar pesaje</button>
+              <label style={{ display: "block", marginTop: 12, fontSize: 13, fontWeight: 600 }}>
+                Importar historial de pesajes desde Excel (.xlsx / .xls)
+                <input type="file" accept=".xlsx,.xls" onChange={e => { abrirExcelPesajes(e.target.files?.[0]); e.target.value = ""; }} style={{ display: "block", marginTop: 7, maxWidth: "100%" }} />
+              </label>
+              {!!excelPesajes.length && <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 10 }}>
+                <b>Vista previa · {excelPesajes.length} fechas detectadas</b>
+                <p style={{ fontSize: 12.5, color: C.textoSuave }}>Selecciona las fechas y revisa el lote y los pesos. Las fechas sin lote histórico quedan excluidas. Una fecha ya registrada se omite; nunca se reemplaza.</p>
+                <div style={{ maxHeight: 430, overflowY: "auto" }}>
+                  {excelPesajes.map((p, i) => {
+                    const duplicado = p.lote && (pesajes.some(v => clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) || excelPesajes.findIndex((v, j) => j < i && v.lote && clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) !== -1);
+                    const invalidos = p.pesos.filter(v => pesoEnGramos(v) == null).length;
+                    return <div key={`${p.hoja}-${p.columna}-${i}`} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12.5 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                        <label><input type="checkbox" checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
+                        <span>{p.hoja} · {p.columna} · <b>{p.fecha}</b> · {p.pesos.length} aves</span>
+                        <select aria-label={`Lote para ${p.hoja} ${p.fecha}`} value={p.lote} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, lote: e.target.value, incluir: !!e.target.value } : x))} style={{ ...selectStyle, width: "auto", margin: 0, padding: 5 }}>
+                          <option value="">Elegir lote</option>
+                          {lotes.map(l => <option key={l.id} value={l.id}>G{l.galpon} · {l.lote || l.id} · {l.nac}</option>)}
+                        </select>
+                        <span style={{ color: duplicado || invalidos ? C.alerta : C.verde }}>{!p.incluir ? "Excluido" : duplicado ? "Ya existe: omitir" : invalidos ? `${invalidos} inválido(s)` : "Nuevo"}</span>
+                        <button type="button" onClick={() => setExcelAbierto(excelAbierto === i ? -1 : i)} style={{ cursor: "pointer" }}>{excelAbierto === i ? "Cerrar" : "Revisar / editar"}</button>
+                      </div>
+                      {excelAbierto === i && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7, marginTop: 9 }}>
+                        {p.pesos.map((v, j) => <label key={j}>Ave {j + 1}<input aria-label={`Ave ${j + 1}`} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: pesoEnGramos(v) == null ? C.alerta : C.borde }} /></label>)}
+                      </div>}
+                    </div>;
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button disabled={importandoPesajes} onClick={confirmarExcelPesajes} style={btnStyle}>{importandoPesajes ? "Guardando…" : "Confirmar y agregar faltantes"}</button>
+                  <button disabled={importandoPesajes} onClick={() => setExcelPesajes([])}>Cancelar</button>
+                </div>
+              </div>}
               <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de pesajes (Dr. / nutricionista)</button>
             </Seccion>
 
