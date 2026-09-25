@@ -88,15 +88,23 @@ async function yaSembrada(tabla) {
 }
 async function marcarSembrada(tabla) {
   if (sembradas.has(tabla)) return;
-  sembradas.add(tabla);
-  try { await supabase.from("config").upsert({ key: `sembrado:${tabla}`, data: true, updated_by: emailActual() }); } catch { /* no crítico */ }
+  try {
+    const { error } = await supabase.from("config").upsert({ key: `sembrado:${tabla}`, data: true, updated_by: emailActual() });
+    revisarError(error);
+    if (!error) sembradas.add(tabla);
+  } catch (e) { console.error("marcarSembrada:", e); }
 }
 
 async function leerColeccion(tabla) {
-  const { data, error } = await supabase.from(tabla).select("id, data");
-  revisarError(error);
-  if (error) return null;
-  return (data || []).map((fila) => ({ ...fila.data, id: fila.data?.id ?? fila.id }));
+  const filas = [];
+  for (let desde = 0; ; desde += 500) {
+    const { data, error } = await supabase.from(tabla).select("id, data").order("id").range(desde, desde + 499);
+    revisarError(error);
+    if (error) return null;
+    filas.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return filas.map((fila) => ({ ...fila.data, id: fila.data?.id ?? fila.id }));
 }
 
 async function escribirColeccion(claveCache, tabla, arregloNuevo) {
@@ -117,6 +125,17 @@ async function escribirColeccion(claveCache, tabla, arregloNuevo) {
   const aBorrar = [...porId.keys()].filter((idb) => !usados.has(idb));
 
   try {
+    if (tabla === "lotes") {
+      // Si otro usuario eliminó un lote desde nuestra última lectura, una
+      // actualización con estado viejo no puede volver a insertarlo.
+      const anteriores = filas.filter(f => porId.has(f.id)).map(f => f.id);
+      for (let i = 0; i < anteriores.length; i += 400) {
+        const { data, error } = await supabase.from("lotes").select("id").in("id", anteriores.slice(i, i + 400));
+        if (error) { revisarError(error); return false; }
+        const presentes = new Set((data || []).map(f => String(f.id)));
+        if (anteriores.slice(i, i + 400).some(id => !presentes.has(id))) return false;
+      }
+    }
     // Se envía en bloques por si algún día una colección crece mucho
     for (let i = 0; i < filas.length; i += 400) {
       const { error } = await supabase.from(tabla).upsert(filas.slice(i, i + 400));
@@ -137,6 +156,15 @@ async function escribirColeccion(claveCache, tabla, arregloNuevo) {
     console.error("escribir:", e);
     return false;
   }
+}
+
+export async function eliminarLotePorId(id) {
+  const { error } = await supabase.from("lotes").delete().eq("id", String(id));
+  revisarError(error);
+  if (error) return false;
+  const anterior = ultimaVersion.get("granja2:lotes") || [];
+  ultimaVersion.set("granja2:lotes", anterior.filter(l => String(l.id) !== String(id)));
+  return true;
 }
 
 export async function leer(key, porDefecto) {
@@ -160,6 +188,12 @@ export async function leer(key, porDefecto) {
     if (tabla) {
       const arr = await leerColeccion(tabla);
       if (arr === null) return porDefecto; // error de conexión / tabla inexistente
+      // Los datos operativos solo se recuperan mediante la migración explícita.
+      // Un lote borrado no debe reaparecer desde config ni desde la semilla.
+      if (tabla === "lotes" || tabla === "registros" || tabla === "pesajes") {
+        ultimaVersion.set(key, arr);
+        return arr;
+      }
       if (arr.length === 0 && !(await yaSembrada(tabla))) {
         // Rescate: si esta colección vivía antes como un solo bloque (p.ej. una
         // lista nueva que se agregó a la app antes de tener su tabla propia),
@@ -208,4 +242,42 @@ export async function escribir(key, valor) {
     console.error("escribir:", e);
     return false;
   }
+}
+
+// Importación aditiva: consulta la base actual y usa INSERT; nunca actualiza ni
+// elimina pesajes anteriores. La clave lógica es lote + fecha de medición.
+export async function agregarPesajesFaltantes(nuevos) {
+  const fechaISO = (fecha) => {
+    const s = String(fecha || "");
+    if (/^\d{4}-\d\d-\d\d/.test(s)) return s.slice(0, 10);
+    const m = /^(\d\d?)\/(\d\d?)\/(\d{4})$/.exec(s);
+    return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : s;
+  };
+  const clave = (p) => `${p.lote}|${fechaISO(p.fecha)}`;
+  const existentes = [];
+  for (let desde = 0; ; desde += 500) {
+    const { data, error } = await supabase.from("pesajes").select("id, data").order("id").range(desde, desde + 499);
+    if (error) { revisarError(error); throw error; }
+    existentes.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  const claves = new Set(existentes.map(f => clave(f.data)));
+  let agregados = 0, omitidos = 0;
+  for (const nuevo of nuevos) {
+    const k = clave(nuevo);
+    if (claves.has(k)) { omitidos++; continue; }
+    const id = `excel:${nuevo.lote}:${fechaISO(nuevo.fecha)}`;
+    const { error } = await supabase.from("pesajes").insert({ id, data: { ...nuevo, id } });
+    if (error) {
+      // Otro usuario pudo importar la misma fecha mientras se procesaba el archivo.
+      if (error.code === "23505") { omitidos++; claves.add(k); continue; }
+      revisarError(error);
+      throw Object.assign(new Error(error.message), { agregados, omitidos });
+    }
+    claves.add(k);
+    existentes.push({ id, data: { ...nuevo, id } });
+    agregados++;
+  }
+  ultimaVersion.set("granja2:pesajes", existentes.map(f => ({ ...f.data, id: f.data?.id ?? f.id })));
+  return { agregados, omitidos };
 }
