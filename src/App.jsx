@@ -16,7 +16,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "7.5";
+const VERSION_APP = "7.3";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1468,18 +1468,13 @@ export default function App() {
   const fHoy = fechas[0], fAyer = fechas[1];
   const dHoy = fHoy ? resumenDia(fHoy) : null;
   const dAyer = fAyer ? resumenDia(fAyer) : null;
-  const mesDe = (f) => { const p = f.split("/"); return `${p[1]}/${p[2]}`; };
-  let promMes = null, nombreMesAnt = "";
+  let dMismoDiaMesAnterior = null, fechaMesAnterior = "";
   if (fHoy) {
-    const [, mm, yy] = fHoy.split("/").map(Number);
+    const [dd, mm, yy] = fHoy.split("/").map(Number);
     const pm = mm === 1 ? 12 : mm - 1, py = mm === 1 ? yy - 1 : yy;
-    nombreMesAnt = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"][pm];
-    const clave = `${String(pm).padStart(2, "0")}/${py}`;
-    const fsMes = fechas.filter(f => mesDe(f) === clave);
-    if (fsMes.length) {
-      const ds = fsMes.map(resumenDia).filter(Boolean);
-      const avg = (k) => ds.reduce((s, d) => s + d[k], 0) / ds.length;
-      promMes = { cartones: avg("cartones"), postura: avg("postura"), consumo: avg("consumo"), conv: avg("conv"), muertas: avg("muertas"), pctQueb: avg("pctQueb"), pesoH: avg("pesoH"), dias: ds.length };
+    if (dd <= new Date(py, pm, 0).getDate()) {
+      fechaMesAnterior = `${String(dd).padStart(2, "0")}/${String(pm).padStart(2, "0")}/${py}`;
+      dMismoDiaMesAnterior = resumenDia(fechaMesAnterior);
     }
   }
   const metaGenetica = totalAves ? activos.reduce((s, l) => s + l.posturaIdeal * l.aves, 0) / totalAves : 0;
@@ -2733,13 +2728,13 @@ export default function App() {
             return <span style={{ color, fontWeight: 600 }}>{igual ? "=" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(dec)}${unidad}`}</span>;
           };
           const filas = [
-            { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: promMes?.cartones, hoy: dHoy.cartones, u: "" },
-            { n: "% Postura", v: `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: promMes?.postura, hoy: dHoy.postura, u: " pts" },
-            { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: promMes?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
-            { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: promMes?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
-            { n: "Mortalidad", v: `${dHoy.muertas} aves`, a: dAyer?.muertas, m: promMes?.muertas, hoy: dHoy.muertas, u: "", inv: true, dec: 0 },
-            { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: promMes?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
-            { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: promMes?.pesoH, hoy: dHoy.pesoH, u: " g" },
+            { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dMismoDiaMesAnterior?.cartones, hoy: dHoy.cartones, u: "" },
+            { n: "% Postura", v: `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dMismoDiaMesAnterior?.postura, hoy: dHoy.postura, u: " pts" },
+            { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: dMismoDiaMesAnterior?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
+            { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: dMismoDiaMesAnterior?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
+            { n: "Mortalidad", v: `${dHoy.muertas} aves`, a: dAyer?.muertas, m: dMismoDiaMesAnterior?.muertas, hoy: dHoy.muertas, u: "", inv: true, dec: 0 },
+            { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: dMismoDiaMesAnterior?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
+            { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dMismoDiaMesAnterior?.pesoH, hoy: dHoy.pesoH, u: " g" },
           ];
           const brechaGen = metaGenetica - dHoy.postura;
           const notasHoy = bitacora.filter(b => b.fecha === fHoy);
@@ -2755,15 +2750,15 @@ export default function App() {
                 </div>
               </div>
 
-              <Seccion titulo="Comparativo" sub={`Hoy vs ayer${promMes ? ` y vs promedio de ${nombreMesAnt} (${promMes.dias} días)` : " · el mes anterior se activa al acumular datos"}`}>
+              <Seccion titulo="Comparativo" sub={`Hoy vs último día registrado y vs ${fechaMesAnterior || "mismo día del mes anterior"}${dMismoDiaMesAnterior ? "" : " (sin registro)"}`}>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                     <thead>
                       <tr style={{ color: C.textoSuave, textAlign: "right", fontSize: 12 }}>
                         <th style={{ textAlign: "left", padding: "6px 4px" }}>Indicador</th>
                         <th style={{ padding: "6px 4px" }}>Hoy</th>
-                        <th style={{ padding: "6px 4px" }}>vs ayer</th>
-                        <th style={{ padding: "6px 4px" }}>vs {nombreMesAnt || "mes ant."}</th>
+                        <th style={{ padding: "6px 4px" }}>vs último registro ({fAyer?.slice(0, 5) || "—"})</th>
+                        <th style={{ padding: "6px 4px" }}>vs {fechaMesAnterior?.slice(0, 5) || "mes ant."}</th>
                       </tr>
                     </thead>
                     <tbody>
