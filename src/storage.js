@@ -88,8 +88,11 @@ async function yaSembrada(tabla) {
 }
 async function marcarSembrada(tabla) {
   if (sembradas.has(tabla)) return;
-  sembradas.add(tabla);
-  try { await supabase.from("config").upsert({ key: `sembrado:${tabla}`, data: true, updated_by: emailActual() }); } catch { /* no crítico */ }
+  try {
+    const { error } = await supabase.from("config").upsert({ key: `sembrado:${tabla}`, data: true, updated_by: emailActual() });
+    revisarError(error);
+    if (!error) sembradas.add(tabla);
+  } catch (e) { console.error("marcarSembrada:", e); }
 }
 
 async function leerColeccion(tabla) {
@@ -253,7 +256,7 @@ export async function agregarPesajesFaltantes(nuevos) {
   const clave = (p) => `${p.lote}|${fechaISO(p.fecha)}`;
   const existentes = [];
   for (let desde = 0; ; desde += 500) {
-    const { data, error } = await supabase.from("pesajes").select("id, data").range(desde, desde + 499);
+    const { data, error } = await supabase.from("pesajes").select("id, data").order("id").range(desde, desde + 499);
     if (error) { revisarError(error); throw error; }
     existentes.push(...(data || []));
     if (!data || data.length < 500) break;

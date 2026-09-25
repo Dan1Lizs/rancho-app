@@ -61,6 +61,10 @@ async function insertarEnBloques(tabla, filas) {
 
 async function migrarColeccion(claveVieja, tabla, resumen) {
   if (await tablaTieneFilas(tabla)) { resumen.saltadas.push(tabla); return; }
+  // Una tabla vaciada después de haber sido usada no se restaura desde kv.
+  const { data: marcada, error: errorMarca } = await supabase.from("config").select("key").eq("key", `sembrado:${tabla}`).maybeSingle();
+  if (errorMarca) throw new Error(`No se pudo comprobar si ${tabla} ya fue migrada: ${errorMarca.message}`);
+  if (marcada) { resumen.saltadas.push(tabla); return; }
   const arr = await leerViejo(claveVieja);
   if (!Array.isArray(arr) || !arr.length) { resumen.vacias.push(tabla); return; }
   const filas = arr.map((item) => {
