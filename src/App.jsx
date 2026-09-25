@@ -1468,13 +1468,25 @@ export default function App() {
   const fHoy = fechas[0], fAyer = fechas[1];
   const dHoy = fHoy ? resumenDia(fHoy) : null;
   const dAyer = fAyer ? resumenDia(fAyer) : null;
-  let dMismoDiaMesAnterior = null, fechaMesAnterior = "";
+  let dFechaCercana = null, fechaObjetivo = "", fechaComparacion = "", diasDiferencia = 0;
   if (fHoy) {
     const [dd, mm, yy] = fHoy.split("/").map(Number);
     const pm = mm === 1 ? 12 : mm - 1, py = mm === 1 ? yy - 1 : yy;
-    if (dd <= new Date(py, pm, 0).getDate()) {
-      fechaMesAnterior = `${String(dd).padStart(2, "0")}/${String(pm).padStart(2, "0")}/${py}`;
-      dMismoDiaMesAnterior = resumenDia(fechaMesAnterior);
+    const diaObjetivo = Math.min(dd, new Date(py, pm, 0).getDate());
+    fechaObjetivo = `${String(diaObjetivo).padStart(2, "0")}/${String(pm).padStart(2, "0")}/${py}`;
+    const objetivo = aDate(fechaObjetivo).getTime();
+    // Se busca en los controles reales, incluso a ambos lados del cambio de mes.
+    // En empate se prefiere la fecha anterior al día objetivo.
+    const candidatas = fechas.filter(f => aDate(f).getTime() < aDate(fHoy).getTime());
+    fechaComparacion = candidatas.reduce((mejor, f) => {
+      if (!mejor) return f;
+      const distancia = Math.abs(aDate(f).getTime() - objetivo);
+      const distanciaMejor = Math.abs(aDate(mejor).getTime() - objetivo);
+      return distancia < distanciaMejor || (distancia === distanciaMejor && aDate(f) < aDate(mejor)) ? f : mejor;
+    }, "");
+    if (fechaComparacion) {
+      diasDiferencia = Math.round((aDate(fechaComparacion).getTime() - objetivo) / 86400000);
+      dFechaCercana = resumenDia(fechaComparacion);
     }
   }
   const metaGenetica = totalAves ? activos.reduce((s, l) => s + l.posturaIdeal * l.aves, 0) / totalAves : 0;
@@ -2728,13 +2740,13 @@ export default function App() {
             return <span style={{ color, fontWeight: 600 }}>{igual ? "=" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(dec)}${unidad}`}</span>;
           };
           const filas = [
-            { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dMismoDiaMesAnterior?.cartones, hoy: dHoy.cartones, u: "" },
-            { n: "% Postura", v: `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dMismoDiaMesAnterior?.postura, hoy: dHoy.postura, u: " pts" },
-            { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: dMismoDiaMesAnterior?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
-            { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: dMismoDiaMesAnterior?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
-            { n: "Mortalidad", v: `${dHoy.muertas} aves`, a: dAyer?.muertas, m: dMismoDiaMesAnterior?.muertas, hoy: dHoy.muertas, u: "", inv: true, dec: 0 },
-            { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: dMismoDiaMesAnterior?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
-            { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dMismoDiaMesAnterior?.pesoH, hoy: dHoy.pesoH, u: " g" },
+            { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dFechaCercana?.cartones, hoy: dHoy.cartones, u: "" },
+            { n: "% Postura", v: `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dFechaCercana?.postura, hoy: dHoy.postura, u: " pts" },
+            { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: dFechaCercana?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
+            { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: dFechaCercana?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
+            { n: "Mortalidad", v: `${dHoy.muertas} aves`, a: dAyer?.muertas, m: dFechaCercana?.muertas, hoy: dHoy.muertas, u: "", inv: true, dec: 0 },
+            { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: dFechaCercana?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
+            { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dFechaCercana?.pesoH, hoy: dHoy.pesoH, u: " g" },
           ];
           const brechaGen = metaGenetica - dHoy.postura;
           const notasHoy = bitacora.filter(b => b.fecha === fHoy);
@@ -2750,15 +2762,15 @@ export default function App() {
                 </div>
               </div>
 
-              <Seccion titulo="Comparativo" sub={`Hoy vs último día registrado y vs ${fechaMesAnterior || "mismo día del mes anterior"}${dMismoDiaMesAnterior ? "" : " (sin registro)"}`}>
+              <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} día(s) ${diasDiferencia < 0 ? "antes" : "después"}`}` : ""})`}>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                     <thead>
                       <tr style={{ color: C.textoSuave, textAlign: "right", fontSize: 12 }}>
                         <th style={{ textAlign: "left", padding: "6px 4px" }}>Indicador</th>
-                        <th style={{ padding: "6px 4px" }}>Hoy</th>
-                        <th style={{ padding: "6px 4px" }}>vs último registro ({fAyer?.slice(0, 5) || "—"})</th>
-                        <th style={{ padding: "6px 4px" }}>vs {fechaMesAnterior?.slice(0, 5) || "mes ant."}</th>
+                        <th style={{ padding: "6px 4px" }}>Datos {fHoy}</th>
+                        <th style={{ padding: "6px 4px" }}>vs {fAyer || "—"}</th>
+                        <th style={{ padding: "6px 4px" }}>vs {fechaComparacion || "—"}</th>
                       </tr>
                     </thead>
                     <tbody>
