@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
 import { leer, escribir, agregarPesajesFaltantes, eliminarLotePorId } from "./storage";
-import { extraerPesajesExcel, clavePesaje, pesoEnGramos } from "./bienestarImport";
+import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
 
@@ -1079,6 +1079,7 @@ export default function App() {
     if (!incluidos.length) { avisar("⚠ Selecciona al menos una fecha para importar"); return; }
     for (const p of incluidos) {
       if (!p.lote) { avisar("⚠ Asigna un lote a cada fecha antes de importar"); return; }
+      if (!p.fecha || fechaPesajeISO(p.fecha) !== p.fecha) { avisar(`⚠ Revisa la fecha en ${p.hoja}, columna ${p.columna}`); return; }
       const lote = lotes.find(l => l.id === p.lote);
       if (!lote) { avisar("⚠ El lote elegido ya no existe; revisa la selección"); return; }
       if (p.nacimiento && p.nacimiento !== lote.nac) { avisar(`⚠ La fecha de nacimiento en ${p.hoja} no coincide con el lote elegido`); return; }
@@ -4567,7 +4568,7 @@ export default function App() {
               </label>
               {!!excelPesajes.length && <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 10 }}>
                 <b>Vista previa · {excelPesajes.length} fechas detectadas · {excelPesajes.filter(p => p.incluir).length} seleccionadas</b>
-                <p style={{ fontSize: 12.5, color: C.textoSuave }}>Selecciona las fechas y revisa el lote y los pesos. Las fechas sin lote histórico quedan excluidas. Una fecha ya registrada se omite; nunca se reemplaza.</p>
+                <p style={{ fontSize: 12.5, color: C.textoSuave }}>Selecciona los pesajes y usa Revisar / editar para corregir la galera, la fecha o los pesos. Las fechas sin lote histórico quedan excluidas. Una fecha ya registrada se omite; nunca se reemplaza.</p>
                 <div style={{ maxHeight: 430, overflowY: "auto" }}>
                   {excelPesajes.map((p, i) => {
                     const duplicado = p.lote && (pesajes.some(v => clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) || excelPesajes.findIndex((v, j) => j < i && v.incluir && v.lote && clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) !== -1);
@@ -4575,17 +4576,26 @@ export default function App() {
                     return <div key={`${p.hoja}-${p.columna}-${i}`} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12.5 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                         <label><input type="checkbox" checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
-                        <span>{p.hoja} · {p.columna} · <b>{p.fecha}</b> · {p.pesos.length} aves</span>
-                        <select aria-label={`Lote para ${p.hoja} ${p.fecha}`} value={p.lote} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, lote: e.target.value, incluir: !!e.target.value } : x))} style={{ ...selectStyle, width: "auto", margin: 0, padding: 5 }}>
-                          <option value="">Elegir lote</option>
-                          {lotes.map(l => <option key={l.id} value={l.id}>G{l.galpon} · {l.lote || l.id} · {l.nac}</option>)}
-                        </select>
+                        <span>{p.hoja} · {p.columna} · <b>{p.fecha || "Sin fecha"}</b> · {p.lote ? `Galera ${lotes.find(l => l.id === p.lote)?.galpon || "?"}` : "Sin galera"} · {p.pesos.length} aves</span>
                         <span style={{ color: duplicado || invalidos ? C.alerta : C.verde }}>{!p.incluir ? "Excluido" : duplicado ? "Ya existe: omitir" : invalidos ? `${invalidos} inválido(s)` : "Nuevo"}</span>
                         {p.incluir && !duplicado && !invalidos && <span style={{ color: C.textoSuave }}>Prom. {(p.pesos.reduce((a, v) => a + pesoEnGramos(v), 0) / p.pesos.length).toFixed(0)} g</span>}
                         <button type="button" onClick={() => setExcelAbierto(excelAbierto === i ? -1 : i)} style={{ cursor: "pointer" }}>{excelAbierto === i ? "Cerrar" : "Revisar / editar"}</button>
                       </div>
-                      {excelAbierto === i && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7, marginTop: 9 }}>
-                        {p.pesos.map((v, j) => <label key={j}>Ave {j + 1}<input aria-label={`Ave ${j + 1}`} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: pesoEnGramos(v) == null ? C.alerta : C.borde }} /></label>)}
+                      {excelAbierto === i && <div style={{ marginTop: 9 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
+                          <label style={{ minWidth: 190, flex: 1 }}>Galera
+                            <select value={p.lote} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, lote: e.target.value, incluir: !!e.target.value } : x))} style={{ ...selectStyle, width: "100%", marginTop: 4 }}>
+                              <option value="">Elegir galera y lote</option>
+                              {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · lote {l.lote || l.id} · nac. {l.nac}</option>)}
+                            </select>
+                          </label>
+                          <label style={{ minWidth: 160, flex: 1 }}>Fecha
+                            <input type="date" value={p.fecha} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, fecha: e.target.value } : x))} style={{ ...inputStyle, width: "100%", marginTop: 4, borderColor: fechaPesajeISO(p.fecha) === p.fecha ? C.borde : C.alerta }} />
+                          </label>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7 }}>
+                          {p.pesos.map((v, j) => <label key={j}>Ave {j + 1}<input aria-label={`Ave ${j + 1}`} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: pesoEnGramos(v) == null ? C.alerta : C.borde }} /></label>)}
+                        </div>
                       </div>}
                     </div>;
                   })}
