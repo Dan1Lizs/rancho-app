@@ -8,7 +8,7 @@ import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
 import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgramada, eliminarTareaProgramada } from "./tareasProgramadas";
-import { actividadesDelDia, trabajosDelDia } from "./reporteActividades";
+import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 
 // ─── Tokens ─────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.2";
+const VERSION_APP = "8.3";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -457,6 +457,7 @@ export default function App() {
   const [fotosVista, setFotosVista] = useState({});
   const [printDoc, setPrintDoc] = useState(null);
   const [elegirReporteActividades, setElegirReporteActividades] = useState(false);
+  const [tareasManualesReporte, setTareasManualesReporte] = useState("");
   const [alcanceReporteActividades, setAlcanceReporteActividades] = useState("");
   const [mpInv, setMpInv] = useState({});
   const [mpInvUltimo, setMpInvUltimo] = useState({});
@@ -1997,6 +1998,10 @@ export default function App() {
   const decisionesVisibles = procesarAdvertencias(decisiones, "decisiones");
   const auditoriaVisibles = procesarAdvertencias(auditoria, "auditoria");
   const ajustesAuditoria = advAjustes;
+  const pendientesReporte = (id, fecha) => pendientesDeAuditoria({
+    lote: id ? lotes.find(x => x.id === id) : null,
+    registros, fumigaciones, trabajos: TRABAJOS, bodegaMovs, mpFechaConteo,
+  }, fecha);
   if (printDoc) {
     const l = printDoc.lote ? lotes.find(x => x.id === printDoc.lote) : null;
     const celda = { padding: "7px 6px", borderBottom: "1px solid #ccc", fontSize: 12.5, textAlign: "left", verticalAlign: "top" };
@@ -2027,31 +2032,31 @@ export default function App() {
           {printDoc.tipo === "nucleo" && `Checklist de producción de NÚCLEO — ${printDoc.formula}`}
           {printDoc.tipo === "enfermedades" && "Expediente de enfermedades y tratamientos"}
           {printDoc.tipo === "necropsias" && "Registro de necropsias y resultados de laboratorio"}
-          {printDoc.tipo === "actividades" && `Actividades del día — ${l ? `Galera ${l.galpon} · ${l.raza}` : "Generales de la granja"}`}
+          {printDoc.tipo === "actividades" && `Tareas por hacer — ${l ? `Galera ${l.galpon} · ${l.raza}` : "Generales de la granja"}`}
           {" · Emitido: "}{hoyStr()}
         </div>
 
         {printDoc.tipo === "actividades" && (() => {
           const programadas = actividadesDelDia(tareasProgramadas, printDoc.fecha, printDoc.lote || "");
           const fecha = printDoc.fecha.split("-").reverse().join("/");
-          const registro = l ? registros.find(r => r.lote === l.id && r.fecha === fecha) : null;
-          const diarios = l ? trabajosDelDia(TRABAJOS, registro).filter(t => !t.realizado) : [];
+          const hallazgos = pendientesReporte(printDoc.lote, printDoc.fecha);
+          const manuales = printDoc.manuales || [];
           return <div style={{ fontSize: 14, lineHeight: 1.5 }}>
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, padding: "12px 0", borderTop: "2px solid #222", borderBottom: "1px solid #aaa" }}>
               <b>Fecha de trabajo: {fecha}</b><b>{l ? `GALERA ${l.galpon} · LOTE ${l.lote || ""}` : "ACTIVIDADES GENERALES"}</b>
             </div>
-            <div style={{ marginTop: 16, fontWeight: 700, fontSize: 17 }}>Actividades programadas pendientes ({programadas.length})</div>
-            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Incluye actividades programadas para hoy y las atrasadas. Marca cada casilla al terminar.</p>
+            <div style={{ marginTop: 16, fontWeight: 700, fontSize: 17 }}>Obligatorias por fecha ({programadas.length})</div>
+            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Programadas para hoy o atrasadas. Marca cada casilla al terminar y registra su realización en la app.</p>
             {programadas.map((t, i) => <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 13, padding: "11px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}>
               <span style={{ fontSize: 22, lineHeight: 1 }}>☐</span><div><b>{i + 1}. {t.nombre}</b><div style={{ color: t.programada < printDoc.fecha ? "#9a3d20" : "#555", fontSize: 12 }}>{t.programada < printDoc.fecha ? `Atrasada · programada ${t.programada.split("-").reverse().join("/")}` : "Para hoy"}</div></div>
             </div>)}
             {!programadas.length && <p>No hay actividades programadas pendientes para este ámbito.</p>}
-            {l && <>
-              <div style={{ marginTop: 20, fontWeight: 700, fontSize: 17 }}>Trabajos diarios pendientes ({diarios.length})</div>
-              <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Según el último control guardado para esta fecha. Registra lo realizado en la app al terminar.</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 18px" }}>{diarios.map(t => <div key={t.indice} style={{ padding: "6px 4px", borderBottom: "1px solid #ddd", breakInside: "avoid" }}>☐ {t.nombre}</div>)}</div>
-              {!diarios.length && <p>Los trabajos diarios ya constan como realizados.</p>}
-            </>}
+            <div style={{ marginTop: 20, fontWeight: 700, fontSize: 17 }}>Pendientes detectados por auditoría ({hallazgos.length})</div>
+            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Labores que requieren atención según los controles registrados; confirma en campo antes de ejecutarlas.</p>
+            {hallazgos.map((t, i) => <div key={t.id} style={{ display: "flex", gap: 13, padding: "10px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}><span style={{ fontSize: 22, lineHeight: 1 }}>☐</span><div><b>{i + 1}. {t.nombre}</b><div style={{ color: "#555", fontSize: 12 }}>{t.detalle}</div></div></div>)}
+            {!hallazgos.length && <p>Sin pendientes detectados por las reglas de auditoría para este ámbito.</p>}
+            {manuales.length > 0 && <><div style={{ marginTop: 20, fontWeight: 700, fontSize: 17 }}>Tareas agregadas para este reporte ({manuales.length})</div>
+              {manuales.map((t, i) => <div key={i} style={{ display: "flex", gap: 13, padding: "10px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}><span style={{ fontSize: 22, lineHeight: 1 }}>☐</span><b>{i + 1}. {t}</b></div>)}</>}
             <div style={{ display: "flex", gap: 30, marginTop: 50, fontSize: 12 }}><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Nombre y firma de quien realizó</span><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Revisado por</span></div>
             <div style={{ marginTop: 30, fontSize: 12 }}>Observaciones: ________________________________________________________________</div>
           </div>;
@@ -2776,17 +2781,21 @@ export default function App() {
 
       {elegirReporteActividades && <div role="dialog" aria-modal="true" aria-label="Elegir reporte de actividades" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
         <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(430px, 100%)" }}>
-          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Reporte de actividades de hoy</h2>
-          <p style={{ fontSize: 13, color: C.textoSuave }}>Selecciona las labores generales o la galera que recibirá el trabajador.</p>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>¿Qué actividades quieres imprimir?
+          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Tareas por hacer hoy</h2>
+          <p style={{ fontSize: 13, color: C.textoSuave }}>Elige la galera o las tareas generales y añade aquí labores específicas antes de generar el reporte.</p>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>Ámbito del reporte
             <select value={alcanceReporteActividades} onChange={e => setAlcanceReporteActividades(e.target.value)} style={{ ...inputStyle, marginTop: 6 }}>
               <option value="">Actividades generales de la granja</option>
               {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.raza} · lote {l.lote || ""}</option>)}
             </select>
           </label>
-          <div style={{ padding: "10px 0", fontSize: 13, color: C.textoSuave }}>{actividadesDelDia(tareasProgramadas, hoyISO(), alcanceReporteActividades).length} actividades programadas pendientes{alcanceReporteActividades ? ` · ${TRABAJOS.length} trabajos diarios como máximo` : ""}</div>
+          <label style={{ display: "block", marginTop: 14, fontSize: 13, fontWeight: 600 }}>Tareas manuales para hacer hoy (una por línea)
+            <textarea value={tareasManualesReporte} onChange={e => setTareasManualesReporte(e.target.value)} maxLength={2000} rows={5} placeholder={"Ej. Revisar el tanque de agua\nLimpiar la entrada"} style={{ ...inputStyle, width: "100%", marginTop: 6, resize: "vertical", boxSizing: "border-box" }} />
+          </label>
+          <p style={{ fontSize: 12, color: C.textoSuave, margin: "5px 0" }}>Estas tareas solo aparecerán en este reporte; no se guardan ni sustituyen las programadas.</p>
+          <div style={{ padding: "10px 0", fontSize: 13, color: C.textoSuave }}>{actividadesDelDia(tareasProgramadas, hoyISO(), alcanceReporteActividades).length} obligatorias por fecha · {pendientesReporte(alcanceReporteActividades, hoyISO()).length} pendientes de auditoría · {tareasManualesDelReporte(tareasManualesReporte).length} manuales</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { setPrintDoc({ tipo: "actividades", fecha: hoyISO(), lote: alcanceReporteActividades }); setElegirReporteActividades(false); }} style={{ ...btnStyle, flex: 1 }}>Ver reporte para imprimir</button>
+            <button onClick={() => { setPrintDoc({ tipo: "actividades", fecha: hoyISO(), lote: alcanceReporteActividades, manuales: tareasManualesDelReporte(tareasManualesReporte) }); setElegirReporteActividades(false); }} style={{ ...btnStyle, flex: 1 }}>Ver reporte para imprimir</button>
             <button onClick={() => setElegirReporteActividades(false)} style={{ padding: "10px 12px" }}>Cancelar</button>
           </div>
         </div>
@@ -3028,7 +3037,7 @@ export default function App() {
             </Seccion>
 
             <Seccion titulo="Actividades programadas" sub="Avisos dentro de la app para labores de la granja o de una galera. Marca Realizada para calcular el siguiente aviso.">
-              <button onClick={() => { setAlcanceReporteActividades(""); setElegirReporteActividades(true); }} style={{ ...btnStyle, marginBottom: 14 }}>🖨 Reporte de actividades de hoy</button>
+              <button onClick={() => { setAlcanceReporteActividades(""); setTareasManualesReporte(""); setElegirReporteActividades(true); }} style={{ ...btnStyle, marginBottom: 14 }}>🖨 Tareas por hacer hoy</button>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 <Campo mitad etiqueta="Actividad" placeholder="ej. Mantenimiento del zacate" value={formTarea.nombre} onChange={e => setFormTarea({ ...formTarea, nombre: e.target.value })} />
                 <label style={{ flex: "1 1 190px", fontSize: 12.5 }}>Ámbito
