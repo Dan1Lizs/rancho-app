@@ -10,6 +10,7 @@ import { supabase } from "./supabase";
 import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgramada, eliminarTareaProgramada } from "./tareasProgramadas";
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
+import logoOficial from "./assets/logo-oficial.png";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -99,21 +100,8 @@ const SEED_PLANTA = { saldoKg: 3850 };
 
 // ─── Identidad ───
 const RAZON_SOCIAL = "Granja Avícola y Ganadería Rancho El Soñado LTDA.";
-const IconoGallina = ({ size = 34, oscuro = false }) => (
-  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
-    <path d="M38 22 L45 34 M50 14 L53 33 M63 18 L60 34" stroke="#E23B2E" strokeWidth="8" strokeLinecap="round" />
-    <ellipse cx="48" cy="62" rx="26" ry="32" transform="rotate(12 48 62)" stroke={oscuro ? C.verde : "#FFFDF6"} strokeWidth="6" />
-    <path d="M74 46 Q88 50 92 58 Q82 60 72 56 Z" fill="#E8940A" />
-  </svg>
-);
 const MarcaRancho = ({ impresion = false }) => (
-  <div role="img" aria-label="Rancho El Soñado, granja avícola" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "8px 14px", background: impresion ? "white" : C.verde, color: impresion ? C.verde : "white", border: impresion ? `1px solid ${C.verde}` : "none", borderRadius: 12 }}>
-    <IconoGallina size={42} oscuro={impresion} />
-    <span style={{ display: "grid", textAlign: "left", lineHeight: 1.15 }}>
-      <b style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 19 }}>Rancho El Soñado</b>
-      <small style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, letterSpacing: 1 }}>GRANJA AVÍCOLA</small>
-    </span>
-  </div>
+  <img src={logoOficial} alt="Logo oficial de Granja Avícola Rancho El Soñado" style={{ display: "block", width: impresion ? 190 : 108, height: "auto", margin: impresion ? "0 auto" : undefined, background: "white", borderRadius: impresion ? 0 : 6 }} />
 );
 
 // ─── Materias primas y recetas (del archivo Pedido de Materia Prima) ───
@@ -2820,8 +2808,7 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                <IconoGallina size={30} />
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 19 }}>Rancho El Soñado</div>
+                <MarcaRancho />
               </div>
               <div style={{ fontSize: 11.5, opacity: 0.75 }}>{totalAves.toLocaleString()} aves · 4 gallineros · último registro: {ultDia.slice(0, 5)} · v{VERSION_APP}</div>
             </div>
