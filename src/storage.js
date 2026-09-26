@@ -246,7 +246,7 @@ export async function escribir(key, valor) {
 
 // Importación aditiva: consulta la base actual y usa INSERT; nunca actualiza ni
 // elimina pesajes anteriores. La clave lógica es lote + fecha de medición.
-export async function agregarPesajesFaltantes(nuevos) {
+export async function agregarPesajesFaltantes(nuevos, { reemplazar = [] } = {}) {
   const fechaISO = (fecha) => {
     const s = String(fecha || "");
     if (/^\d{4}-\d\d-\d\d/.test(s)) return s.slice(0, 10);
@@ -261,23 +261,142 @@ export async function agregarPesajesFaltantes(nuevos) {
     existentes.push(...(data || []));
     if (!data || data.length < 500) break;
   }
-  const claves = new Set(existentes.map(f => clave(f.data)));
-  let agregados = 0, omitidos = 0;
+  const porClave = new Map();
+  existentes.forEach(f => porClave.set(clave(f.data), [...(porClave.get(clave(f.data)) || []), f]));
+  const reemplazables = new Set(reemplazar);
+  let agregados = 0, omitidos = 0, actualizados = 0;
   for (const nuevo of nuevos) {
     const k = clave(nuevo);
-    if (claves.has(k)) { omitidos++; continue; }
+    const anteriores = porClave.get(k) || [];
+    if (anteriores.length) {
+      if (!reemplazables.has(k)) { omitidos++; continue; }
+      if (anteriores.length !== 1) throw new Error(`Hay ${anteriores.length} pesajes para ${k}; revisa los duplicados antes de reemplazar`);
+      const anterior = anteriores[0];
+      const { error } = await supabase.from("pesajes").update({ data: { ...nuevo, id: anterior.id } }).eq("id", anterior.id);
+      if (error) { revisarError(error); throw error; }
+      anterior.data = { ...nuevo, id: anterior.id };
+      actualizados++;
+      continue;
+    }
     const id = `excel:${nuevo.lote}:${fechaISO(nuevo.fecha)}`;
     const { error } = await supabase.from("pesajes").insert({ id, data: { ...nuevo, id } });
     if (error) {
       // Otro usuario pudo importar la misma fecha mientras se procesaba el archivo.
-      if (error.code === "23505") { omitidos++; claves.add(k); continue; }
+      if (error.code === "23505") { omitidos++; continue; }
       revisarError(error);
       throw Object.assign(new Error(error.message), { agregados, omitidos });
     }
-    claves.add(k);
-    existentes.push({ id, data: { ...nuevo, id } });
+    const fila = { id, data: { ...nuevo, id } };
+    porClave.set(k, [fila]);
+    existentes.push(fila);
     agregados++;
   }
   ultimaVersion.set("granja2:pesajes", existentes.map(f => ({ ...f.data, id: f.data?.id ?? f.id })));
-  return { agregados, omitidos };
+  return { agregados, omitidos, actualizados };
+}
+
+// Un respaldo nunca utiliza escribirColeccion: esa función interpreta los
+// registros ausentes del archivo como borrados y puede actualizar filas vivas.
+export async function agregarRespaldoFaltante(datos) {
+  const resumen = { agregados: 0, omitidos: 0, configuraciones: 0, desconocidos: 0 };
+  const insertarFaltantes = async (tabla, items) => {
+    if (!Array.isArray(items)) throw new Error(`Formato inválido para ${tabla}`);
+    const actuales = [];
+    for (let desde = 0; ; desde += 500) {
+      const { data, error } = await supabase.from(tabla).select("id, data").order("id").range(desde, desde + 499);
+      if (error) throw error;
+      actuales.push(...(data || []));
+      if (!data || data.length < 500) break;
+    }
+    const ids = new Set(actuales.map(x => String(x.id)));
+    const huellaDe = (x) => JSON.stringify({ ...x, id: undefined });
+    const huellas = new Set(actuales.map(x => huellaDe(x.data || {})));
+    const claveLogica = (x) => {
+      if (tabla !== "registros" && tabla !== "pesajes") return "";
+      const fecha = String(x.fecha || "");
+      const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(fecha);
+      return `${x.lote}|${m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : fecha.slice(0, 10)}`;
+    };
+    const claves = new Set(actuales.map(x => claveLogica(x.data || {})).filter(Boolean));
+    for (const item of items) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`Registro inválido en ${tabla}`);
+      const id = item.id == null || item.id === "" ? idNuevo() : String(item.id);
+      const k = claveLogica(item);
+      const huella = huellaDe(item);
+      if (ids.has(id) || huellas.has(huella) || (k && claves.has(k))) { resumen.omitidos++; continue; }
+      const { error } = await supabase.from(tabla).insert({ id, data: { ...item, id: item.id ?? id } });
+      if (error?.code === "23505") { resumen.omitidos++; continue; }
+      if (error) throw error;
+      ids.add(id); huellas.add(huella); if (k) claves.add(k);
+      resumen.agregados++;
+    }
+    ultimaVersion.delete(Object.keys(TABLA).find(k => TABLA[k] === tabla));
+  };
+  for (const [key, valor] of Object.entries(datos)) {
+    if (TABLA[key]) await insertarFaltantes(TABLA[key], valor);
+    else if (ES_CXP(key)) {
+      if (!valor || typeof valor !== "object") throw new Error("Formato inválido para cuentas por pagar");
+      for (const [parte, tabla] of Object.entries(SUBTABLAS_CXP)) await insertarFaltantes(tabla, valor[parte] || []);
+    } else if (key.startsWith("granja2:") && !key.startsWith("granja2:preImport")) {
+      const { data, error } = await supabase.from("config").select("key").eq("key", key).maybeSingle();
+      if (error) throw error;
+      if (data) { resumen.omitidos++; continue; }
+      const { error: errorInsert } = await supabase.from("config").insert({ key, data: valor, updated_by: emailActual() });
+      if (errorInsert?.code === "23505") { resumen.omitidos++; continue; }
+      if (errorInsert) throw errorInsert;
+      resumen.configuraciones++;
+    } else resumen.desconocidos++;
+  }
+  return resumen;
+}
+
+const fechaRespaldoISO = (fecha) => {
+  const s = String(fecha || "");
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : s.slice(0, 10);
+};
+
+export async function detectarFechasRespaldo(datos) {
+  const conflictos = [];
+  for (const [key, tabla] of [["granja2:registros", "registros"], ["granja2:pesajes", "pesajes"]]) {
+    const items = datos[key];
+    if (!Array.isArray(items)) continue;
+    const filas = [];
+    for (let desde = 0; ; desde += 500) {
+      const { data, error } = await supabase.from(tabla).select("id,data").order("id").range(desde, desde + 499);
+      if (error) throw error;
+      filas.push(...(data || []));
+      if (!data || data.length < 500) break;
+    }
+    const porFecha = new Map();
+    filas.forEach(f => {
+      const k = `${f.data?.lote}|${fechaRespaldoISO(f.data?.fecha)}`;
+      porFecha.set(k, [...(porFecha.get(k) || []), f]);
+    });
+    const vistos = new Set();
+    items.forEach(item => {
+      const k = `${item.lote}|${fechaRespaldoISO(item.fecha)}`;
+      if (vistos.has(k) || !porFecha.has(k)) return;
+      vistos.add(k);
+      const actuales = porFecha.get(k);
+      conflictos.push({ token: `${tabla}|${k}`, tabla, lote: item.lote, fecha: fechaRespaldoISO(item.fecha), actual: actuales[0], nuevo: item, duplicados: actuales.length });
+    });
+  }
+  return conflictos;
+}
+
+export async function reemplazarFechasRespaldo(conflictos) {
+  let actualizados = 0;
+  for (const c of conflictos) {
+    if (!['registros', 'pesajes'].includes(c.tabla) || c.duplicados !== 1) throw new Error(`Fecha duplicada en ${c.tabla}: ${c.fecha}`);
+    const { data: vigente, error: errorLectura } = await supabase.from(c.tabla).select("id,data").eq("id", c.actual.id).maybeSingle();
+    if (errorLectura) throw errorLectura;
+    if (!vigente || JSON.stringify(vigente.data) !== JSON.stringify(c.actual.data)) throw new Error(`Los datos de ${c.fecha} cambiaron; vuelve a cargar el respaldo antes de reemplazar`);
+    const { error } = await supabase.from(c.tabla).update({ data: { ...c.nuevo, id: c.actual.id } }).eq("id", c.actual.id);
+    if (error) throw error;
+    actualizados++;
+  }
+  ultimaVersion.delete("granja2:registros");
+  ultimaVersion.delete("granja2:pesajes");
+  return actualizados;
 }
