@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
-import { leer, escribir, agregarPesajesFaltantes, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
+import { leer, escribir, agregarPesajesFaltantes, actualizarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
@@ -78,13 +78,21 @@ const SEED_PLANTA = { saldoKg: 3850 };
 
 // ─── Identidad ───
 const RAZON_SOCIAL = "Granja Avícola y Ganadería Rancho El Soñado LTDA.";
-const LOGO_B64 = "data:image/jpeg;base64,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";
-const IconoGallina = ({ size = 34 }) => (
+const IconoGallina = ({ size = 34, oscuro = false }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
     <path d="M38 22 L45 34 M50 14 L53 33 M63 18 L60 34" stroke="#E23B2E" strokeWidth="8" strokeLinecap="round" />
-    <ellipse cx="48" cy="62" rx="26" ry="32" transform="rotate(12 48 62)" stroke="#FFFDF6" strokeWidth="6" />
+    <ellipse cx="48" cy="62" rx="26" ry="32" transform="rotate(12 48 62)" stroke={oscuro ? C.verde : "#FFFDF6"} strokeWidth="6" />
     <path d="M74 46 Q88 50 92 58 Q82 60 72 56 Z" fill="#E8940A" />
   </svg>
+);
+const MarcaRancho = ({ impresion = false }) => (
+  <div role="img" aria-label="Rancho El Soñado, granja avícola" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "8px 14px", background: impresion ? "white" : C.verde, color: impresion ? C.verde : "white", border: impresion ? `1px solid ${C.verde}` : "none", borderRadius: 12 }}>
+    <IconoGallina size={42} oscuro={impresion} />
+    <span style={{ display: "grid", textAlign: "left", lineHeight: 1.15 }}>
+      <b style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 19 }}>Rancho El Soñado</b>
+      <small style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, letterSpacing: 1 }}>GRANJA AVÍCOLA</small>
+    </span>
+  </div>
 );
 
 // ─── Materias primas y recetas (del archivo Pedido de Materia Prima) ───
@@ -270,6 +278,35 @@ function Seccion({ titulo, sub, children, num, accion }) {
     </div>
   );
 }
+
+const filtroVacio = () => ({ texto: "", lote: "", desde: "", hasta: "", estado: "", orden: "desc" });
+const filtrarLista = (filas, f) => filas.filter(x => {
+  const q = f.texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const fecha = fechaPesajeISO(x.fecha);
+  const texto = `${x.texto || ""} ${fecha ? fecha.split("-").reverse().join("/") : ""}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return (!q || texto.includes(q)) && (!f.lote || x.lote === f.lote) &&
+    (!f.desde || fecha >= f.desde) && (!f.hasta || fecha <= f.hasta) && (!f.estado || x.estado === f.estado);
+}).sort((a, b) => f.orden === "asc" ? fechaPesajeISO(a.fecha).localeCompare(fechaPesajeISO(b.fecha)) : fechaPesajeISO(b.fecha).localeCompare(fechaPesajeISO(a.fecha)));
+
+function FiltrosLista({ filtro, setFiltro, lotes, estados = [], total, visibles }) {
+  const [avanzados, setAvanzados] = useState(false);
+  const cambiar = (k, v) => setFiltro(f => ({ ...f, [k]: v }));
+  return <div style={{ padding: 10, background: C.fondo, borderRadius: 10, margin: "10px 0", fontSize: 12.5 }}>
+    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
+      <input aria-label="Buscar por palabra, hoja o fecha" placeholder="Buscar palabra, galera, hoja o fecha…" value={filtro.texto} onChange={e => cambiar("texto", e.target.value)} style={{ ...inputStyle, flex: "1 1 210px" }} />
+      <button type="button" onClick={() => setAvanzados(v => !v)}>{avanzados ? "Menos filtros" : "+ Filtros"}</button>
+      <button type="button" onClick={() => setFiltro(filtroVacio())}>Limpiar</button>
+      <span>{visibles} de {total}</span>
+    </div>
+    {avanzados && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+      <label>Galera / lote<select value={filtro.lote} onChange={e => cambiar("lote", e.target.value)} style={inputStyle}><option value="">Todas</option>{lotes.map(l => <option key={l.id} value={l.id}>G{l.galpon} · {l.lote || l.id}</option>)}</select></label>
+      <label>Desde<input type="date" value={filtro.desde} onChange={e => cambiar("desde", e.target.value)} style={inputStyle} /></label>
+      <label>Hasta<input type="date" value={filtro.hasta} onChange={e => cambiar("hasta", e.target.value)} style={inputStyle} /></label>
+      {!!estados.length && <label>Estado<select value={filtro.estado} onChange={e => cambiar("estado", e.target.value)} style={inputStyle}><option value="">Todos</option>{estados.map(x => <option key={x} value={x}>{x}</option>)}</select></label>}
+      <label>Orden<select value={filtro.orden} onChange={e => cambiar("orden", e.target.value)} style={inputStyle}><option value="desc">Más recientes</option><option value="asc">Más antiguos</option></select></label>
+    </div>}
+  </div>;
+}
 export default function App() {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(false);
@@ -343,6 +380,11 @@ export default function App() {
   const [importandoPesajes, setImportandoPesajes] = useState(false);
   const [conflictosPesaje, setConflictosPesaje] = useState(null);
   const [conflictosRespaldo, setConflictosRespaldo] = useState(null);
+  const [filtroExcel, setFiltroExcel] = useState(filtroVacio);
+  const [filtroHistPesajes, setFiltroHistPesajes] = useState(filtroVacio);
+  const [filtroConfPesajes, setFiltroConfPesajes] = useState(filtroVacio);
+  const [filtroConfRespaldo, setFiltroConfRespaldo] = useState(filtroVacio);
+  const [editarPesaje, setEditarPesaje] = useState(null);
   const [tareasProgramadas, setTareasProgramadas] = useState([]);
   const [formTarea, setFormTarea] = useState({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] });
   const [guardandoTarea, setGuardandoTarea] = useState(false);
@@ -753,6 +795,13 @@ export default function App() {
 
   // ── Bodega ──
   const activos = lotes.filter(l => l.estado !== "cerrado").sort((a, b) => Number(a.galpon) - Number(b.galpon));
+  const filasExcelVisibles = filtrarLista(excelPesajes.map((p, indice) => {
+    const l = lotes.find(x => x.id === p.lote);
+    const existe = p.lote && pesajes.some(x => clavePesaje(x.lote, x.fecha) === clavePesaje(p.lote, p.fecha));
+    return { ...p, indice, texto: `${p.hoja} ${p.fecha} G${l?.galpon || p.galpon || ""} ${l?.raza || ""} ${p.codigo || ""}`, estado: p.fecha > hoyISO() ? "Fecha futura" : !p.lote ? "Sin lote" : existe ? "Ya existe" : p.incluir ? "Nuevo" : "Excluido" };
+  }), filtroExcel);
+  const filasConfPesajes = conflictosPesaje ? filtrarLista(conflictosPesaje.items.map(x => ({ ...x, lote: x.nuevo.lote, fecha: x.nuevo.fecha, texto: `${x.nuevo.fecha} G${x.galpon} ${lotes.find(l => l.id === x.nuevo.lote)?.raza || ""}` })), filtroConfPesajes) : [];
+  const filasConfRespaldo = conflictosRespaldo ? filtrarLista(conflictosRespaldo.items.map(x => ({ ...x, texto: `${x.fecha} ${x.lote} ${x.tabla} ${lotes.find(l => l.id === x.lote)?.raza || ""}`, estado: x.tabla === "pesajes" ? "Pesaje" : "Control diario" })), filtroConfRespaldo) : [];
   const regsHoy = registros.filter(r => r.fecha === hoyStr());
   const fechaB = (fechaBodega || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
   const regsFechaB = registros.filter(r => r.fecha === fechaB);
@@ -1007,8 +1056,9 @@ export default function App() {
     if (!validos.length) { avisar("⚠ Revisa lo digitado — acepto gramos (ej. 1850) o kilos (ej. 1.85)"); return; }
     const lote = lotes.find(l => l.id === fPeso.lote);
     if (!lote) { avisar("⚠ Elige el gallinero del pesaje"); return; }
+    const fISO = fPeso.fecha || hoyISO();
+    if (fechaPesajeISO(fISO) !== fISO || fISO > hoyISO() || fISO < lote.nac) { avisar("⚠ La fecha debe ser válida, no futura y posterior al nacimiento del lote"); return; }
     setGuardando(true);
-    const fISO = fPeso.fecha || new Date().toISOString().slice(0, 10);
     const fechaDMY = fISO.split("-").reverse().join("/");
     if (pesajes.some(p => clavePesaje(p.lote, p.fecha) === clavePesaje(fPeso.lote, fISO))) {
       setGuardando(false);
@@ -1026,7 +1076,7 @@ export default function App() {
         setFPeso({ ...fPeso, pesos: "" });
         avisar(`✓ Pesaje guardado: ${validos.length} aves${enKg ? " (kg convertidos a gramos)" : ""}${fuera ? ` · ${fuera} dato(s) fuera de rango ignorado(s)` : ""}`);
       } else avisar("⚠ Ya existe un pesaje de este lote en esta fecha; no se modificó");
-    } catch (e) { console.error(e); avisar("⚠ Sin conexión con el almacenamiento — tus pesos siguen digitados para intentar de nuevo"); }
+    } catch (e) { console.error(e); avisar(`⚠ No se guardó el pesaje: ${e.message}`); }
     finally { setGuardando(false); }
   };
 
@@ -1035,10 +1085,10 @@ export default function App() {
     try {
       const datos = extraerPesajesExcel(await archivo.arrayBuffer(), { fecha: fPeso.fecha, lote: fPeso.lote });
       const asignados = datos.map(p => {
-        if (p.lote) return p;
+        if (p.lote) return { ...p, incluir: p.fecha <= hoyISO() && p.incluir };
         const posibles = lotes.filter(l => String(l.galpon) === p.galpon && p.fecha >= l.nac &&
           (!p.codigo || !l.lote || String(l.lote).padStart(2, "0") === p.codigo));
-        return { ...p, lote: posibles.length === 1 ? posibles[0].id : "", incluir: posibles.length === 1 };
+        return { ...p, lote: posibles.length === 1 ? posibles[0].id : "", incluir: posibles.length === 1 && p.fecha <= hoyISO() };
       });
       setExcelPesajes(asignados);
       setExcelAbierto(-1);
@@ -1048,7 +1098,9 @@ export default function App() {
 
   const confirmarExcelPesajes = async () => {
     if (importandoPesajes || guardando || cargandoFondo) return;
-    const existentes = new Map(pesajes.map(p => [clavePesaje(p.lote, p.fecha), p]));
+    const vigentes = await leer(K.pesajes, null);
+    if (vigentes === null) { avisar("⚠ No se pudo consultar los pesajes actuales; no se importó nada"); return; }
+    const existentes = new Map(vigentes.map(p => [clavePesaje(p.lote, p.fecha), p]));
     const clavesArchivo = new Set();
     const seleccion = [];
     const conflictos = [];
@@ -1057,6 +1109,7 @@ export default function App() {
     for (const p of incluidos) {
       if (!p.lote) { avisar("⚠ Asigna un lote a cada fecha antes de importar"); return; }
       if (!p.fecha || fechaPesajeISO(p.fecha) !== p.fecha) { avisar(`⚠ Revisa la fecha en ${p.hoja}, columna ${p.columna}`); return; }
+      if (p.fecha > hoyISO()) { avisar(`⚠ ${p.fecha} es posterior a hoy (${hoyISO()}); corrige o excluye esa fecha`); return; }
       const lote = lotes.find(l => l.id === p.lote);
       if (!lote) { avisar("⚠ El lote elegido ya no existe; revisa la selección"); return; }
       // El Excel de G3 declara 13/01/2025, mientras el lote actual nació
@@ -1103,6 +1156,30 @@ export default function App() {
       avisar(`✓ ${r.actualizados} pesajes reemplazados; ${conflictosPesaje.items.length - r.actualizados} conservados`);
     } catch (e) { console.error(e); avisar(`⚠ No se completó el reemplazo: ${e.message}`); }
     finally { setImportandoPesajes(false); }
+  };
+
+  const abrirEdicionPesaje = p => setEditarPesaje({ ...p, fechaISO: fechaPesajeISO(p.fecha), pesosTexto: (p.pesos || []).join("\n") });
+  const guardarEdicionPesaje = async () => {
+    if (!editarPesaje || guardando) return;
+    const lote = lotes.find(l => l.id === editarPesaje.lote);
+    const fecha = editarPesaje.fechaISO;
+    if (!lote || !fecha || fechaPesajeISO(fecha) !== fecha || fecha > hoyISO() || fecha < lote.nac) { avisar("⚠ Revisa el lote y la fecha: no puede ser futura ni anterior al nacimiento"); return; }
+    const valores = editarPesaje.pesosTexto.split(/[\s;]+/).filter(Boolean);
+    const pesos = valores.map(pesoEnGramos);
+    if (!pesos.length || pesos.some(v => v == null)) { avisar("⚠ Corrige los pesos inválidos antes de guardar"); return; }
+    const [y, m, d] = fecha.split("-").map(Number);
+    const [ny, nm, nd] = lote.nac.split("-").map(Number);
+    const nuevo = { ...editarPesaje, lote: lote.id, fecha: `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`, pesos, semana: Math.floor((new Date(y, m - 1, d) - new Date(ny, nm - 1, nd)) / (7 * 86400000)) };
+    delete nuevo.fechaISO; delete nuevo.pesosTexto;
+    setGuardando(true);
+    try {
+      await actualizarPesajePorId(nuevo.id, nuevo);
+      const actual = await leer(K.pesajes, null);
+      if (actual) setPesajes(ordenarPorFecha(actual));
+      setEditarPesaje(null);
+      avisar("✓ Pesaje corregido");
+    } catch (e) { console.error(e); avisar(`⚠ No se guardó: ${e.message}`); }
+    finally { setGuardando(false); }
   };
 
   const guardarActividad = async () => {
@@ -1637,7 +1714,7 @@ export default function App() {
   if (cargando) return (
     <div style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: C.textoSuave }}>
       <style>{fuentes}</style>
-      <img src={LOGO_B64} alt="Rancho El Soñado" style={{ width: 220, maxWidth: "70vw" }} />
+      <MarcaRancho />
       <div>Cargando datos de la granja…</div>
     </div>
   );
@@ -1865,7 +1942,7 @@ export default function App() {
         </div>
         <div id="print-area">
         <div style={{ textAlign: "center", marginBottom: 6 }}>
-          <img src={LOGO_B64} alt="logo" style={{ width: 190 }} />
+          <MarcaRancho impresion />
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, marginTop: 2 }}>{RAZON_SOCIAL}</div>
         </div>
         <div style={{ textAlign: "center", fontSize: 13, color: "#555", marginBottom: 16 }}>
@@ -4553,7 +4630,7 @@ export default function App() {
                         const conflictos = await detectarFechasRespaldo(respaldo);
                         const r = await agregarRespaldoFaltante(respaldo);
                         if (conflictos.length) setConflictosRespaldo({ items: conflictos, elegidos: [] });
-                        avisar(`✓ ${r.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar.`);
+                        avisar(`✓ ${r.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar${r.futuros ? `; ${r.futuros} fechas futuras excluidas` : ""}.`);
                         if (!conflictos.length) setTimeout(() => { try { location.reload(); } catch {} }, 1600);
                       } catch (error) { console.error(error); avisar(`⚠ Importación interrumpida: ${error.message}. Lo ya agregado permanece; al reintentar se omite.`); }
                       setGuardando(false);
@@ -4796,7 +4873,7 @@ export default function App() {
               </select>
               <label style={{ display: "block", marginBottom: 12 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del pesaje</span>
-                <input type="date" value={fPeso.fecha} onChange={e => setFPeso({ ...fPeso, fecha: e.target.value })} style={inputStyle} />
+                <input type="date" max={hoyISO()} value={fPeso.fecha} onChange={e => setFPeso({ ...fPeso, fecha: e.target.value })} style={inputStyle} />
               </label>
               <label style={{ display: "block", marginBottom: 12 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>
@@ -4813,16 +4890,22 @@ export default function App() {
               </label>
               {!!excelPesajes.length && <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 10 }}>
                 <b>Vista previa · {excelPesajes.length} fechas detectadas · {excelPesajes.filter(p => p.incluir).length} seleccionadas</b>
-                <p style={{ fontSize: 12.5, color: C.textoSuave }}>Selecciona los pesajes y usa Revisar / editar para corregir la galera, la fecha o los pesos. Las fechas sin lote histórico quedan excluidas. Una fecha ya registrada se omite; nunca se reemplaza.</p>
+                <p style={{ fontSize: 12.5, color: C.textoSuave }}>Selecciona los pesajes y usa Revisar / editar para corregir la galera, fecha o pesos. Las fechas futuras quedan excluidas hasta que las corrijas. Las existentes se revisan antes de reemplazar.</p>
+                <FiltrosLista filtro={filtroExcel} setFiltro={setFiltroExcel} lotes={lotes} estados={["Nuevo", "Ya existe", "Sin lote", "Fecha futura", "Excluido"]} total={excelPesajes.length} visibles={filasExcelVisibles.length} />
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button type="button" onClick={() => { const ids = new Set(filasExcelVisibles.filter(p => p.lote && p.fecha <= hoyISO()).map(p => p.indice)); setExcelPesajes(xs => xs.map((x, i) => ids.has(i) ? { ...x, incluir: true } : x)); }}>Incluir visibles</button>
+                  <button type="button" onClick={() => { const ids = new Set(filasExcelVisibles.map(p => p.indice)); setExcelPesajes(xs => xs.map((x, i) => ids.has(i) ? { ...x, incluir: false } : x)); }}>Excluir visibles</button>
+                </div>
                 <div style={{ maxHeight: 430, overflowY: "auto" }}>
-                  {excelPesajes.map((p, i) => {
+                  {filasExcelVisibles.map(p => {
+                    const i = p.indice;
                     const duplicado = p.lote && (pesajes.some(v => clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) || excelPesajes.findIndex((v, j) => j < i && v.incluir && v.lote && clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) !== -1);
                     const invalidos = p.pesos.filter(v => pesoEnGramos(v) == null).length;
                     return <div key={`${p.hoja}-${p.columna}-${i}`} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12.5 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                        <label><input type="checkbox" checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
+                        <label><input type="checkbox" disabled={p.fecha > hoyISO()} checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
                         <span>{p.hoja} · {p.columna} · <b>{p.fecha || "Sin fecha"}</b> · {p.lote ? `Galera ${lotes.find(l => l.id === p.lote)?.galpon || "?"}` : "Sin galera"} · {p.pesos.length} aves</span>
-                        <span style={{ color: duplicado || invalidos ? C.alerta : C.verde }}>{!p.incluir ? "Excluido" : duplicado ? "Ya existe: omitir" : invalidos ? `${invalidos} inválido(s)` : "Nuevo"}</span>
+                        <span style={{ color: p.fecha > hoyISO() || duplicado || invalidos ? C.alerta : C.verde }}>{p.fecha > hoyISO() ? "Fecha futura: corregir" : !p.incluir ? "Excluido" : duplicado ? "Ya existe: revisar" : invalidos ? `${invalidos} inválido(s)` : "Nuevo"}</span>
                         {p.nacimiento && p.lote && p.nacimiento !== lotes.find(l => l.id === p.lote)?.nac && <span style={{ color: C.alerta }}>⚠ Excel: nacimiento {p.nacimiento}; lote: {lotes.find(l => l.id === p.lote)?.nac}. Revisa la galera y la fecha.</span>}
                         {p.lote && p.fecha < (lotes.find(l => l.id === p.lote)?.nac || "") && <span style={{ color: C.alerta }}>⚠ Pesaje anterior al nacimiento del lote: corrige la fecha o elige el lote histórico.</span>}
                         {p.incluir && !duplicado && !invalidos && <span style={{ color: C.textoSuave }}>Prom. {(p.pesos.reduce((a, v) => a + pesoEnGramos(v), 0) / p.pesos.length).toFixed(0)} g</span>}
@@ -4831,13 +4914,13 @@ export default function App() {
                       {excelAbierto === i && <div style={{ marginTop: 9 }}>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
                           <label style={{ minWidth: 190, flex: 1 }}>Galera
-                            <select value={p.lote} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, lote: e.target.value, incluir: !!e.target.value } : x))} style={{ ...selectStyle, width: "100%", marginTop: 4 }}>
+                            <select value={p.lote} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, lote: e.target.value, incluir: !!e.target.value && x.fecha <= hoyISO() } : x))} style={{ ...selectStyle, width: "100%", marginTop: 4 }}>
                               <option value="">Elegir galera y lote</option>
                               {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · lote {l.lote || l.id} · nac. {l.nac}</option>)}
                             </select>
                           </label>
                           <label style={{ minWidth: 160, flex: 1 }}>Fecha
-                            <input type="date" value={p.fecha} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, fecha: e.target.value } : x))} style={{ ...inputStyle, width: "100%", marginTop: 4, borderColor: fechaPesajeISO(p.fecha) === p.fecha ? C.borde : C.alerta }} />
+                            <input type="date" max={hoyISO()} value={p.fecha} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, fecha: e.target.value, incluir: !!x.lote && !!e.target.value && e.target.value <= hoyISO() } : x))} style={{ ...inputStyle, width: "100%", marginTop: 4, borderColor: fechaPesajeISO(p.fecha) === p.fecha && p.fecha <= hoyISO() ? C.borde : C.alerta }} />
                           </label>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7 }}>
@@ -4895,6 +4978,31 @@ export default function App() {
                 </div>
               );
             })}
+
+            <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige un registro sin tocar los demás.">
+              {(() => {
+                const filas = pesajes.map(p => {
+                  const l = lotes.find(x => x.id === p.lote);
+                  const fecha = fechaPesajeISO(p.fecha);
+                  return { ...p, texto: `${p.fecha} ${fecha} G${l?.galpon || ""} ${l?.raza || ""} ${l?.lote || ""} ${p.lote}`, estado: fecha > hoyISO() ? "Fecha futura" : "Registrado" };
+                });
+                const visibles = filtrarLista(filas, filtroHistPesajes);
+                return <>
+                  <FiltrosLista filtro={filtroHistPesajes} setFiltro={setFiltroHistPesajes} lotes={lotes} estados={["Fecha futura", "Registrado"]} total={filas.length} visibles={visibles.length} />
+                  <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                    {visibles.map(p => {
+                      const l = lotes.find(x => x.id === p.lote);
+                      const prom = p.pesos?.length ? Math.round(p.pesos.reduce((s, v) => s + Number(v), 0) / p.pesos.length) : 0;
+                      return <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
+                        <span style={{ flex: "1 1 230px" }}><b>{p.fecha} · G{l?.galpon ?? p.lote}</b> · {p.pesos?.length || 0} aves · {prom} g {p.estado === "Fecha futura" && <b style={{ color: C.alerta }}>⚠ Fecha futura</b>}</span>
+                        <button onClick={() => abrirEdicionPesaje(p)}>Revisar / corregir</button>
+                      </div>;
+                    })}
+                    {!visibles.length && <div style={{ fontSize: 13, color: C.textoSuave }}>No hay pesajes para estos filtros.</div>}
+                  </div>
+                </>;
+              })()}
+            </Seccion>
 
             <Seccion titulo="Vacunación — programa y aplicación" sub="Plan del Dr. Heiner Hernández Ávila (C.M.V #666) por día de edad. Marca cada vacuna aplicada con su fecha.">
               <button onClick={() => setPrintDoc({ tipo: "vacunas", lote: fVac.lote })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de vacunación</button>
@@ -5046,7 +5154,10 @@ export default function App() {
         <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(680px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
           <h2 style={{ margin: "0 0 8px", color: C.verde }}>Fechas con pesajes existentes</h2>
           <p style={{ fontSize: 13 }}>Los pesajes nuevos ya se agregaron. Los actuales se conservarán, salvo los que selecciones para reemplazar. Revisa cantidad de aves y promedio antes de decidir.</p>
-          {conflictosPesaje.items.map(x => {
+          <FiltrosLista filtro={filtroConfPesajes} setFiltro={setFiltroConfPesajes} lotes={lotes} total={conflictosPesaje.items.length} visibles={filasConfPesajes.length} />
+          <button type="button" onClick={() => setConflictosPesaje(c => ({ ...c, elegidos: [...new Set([...c.elegidos, ...filasConfPesajes.map(x => x.clave)])] }))}>Marcar visibles</button>
+          <button type="button" onClick={() => { const ids = new Set(filasConfPesajes.map(x => x.clave)); setConflictosPesaje(c => ({ ...c, elegidos: c.elegidos.filter(k => !ids.has(k)) })); }} style={{ marginLeft: 8 }}>Desmarcar visibles</button>
+          {filasConfPesajes.map(x => {
             const promedio = a => a?.pesos?.length ? Math.round(a.pesos.reduce((s, v) => s + Number(v), 0) / a.pesos.length) : 0;
             return <label key={x.clave} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}`, alignItems: "flex-start" }}>
               <input type="checkbox" checked={conflictosPesaje.elegidos.includes(x.clave)} onChange={e => setConflictosPesaje(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.clave] : c.elegidos.filter(k => k !== x.clave) }))} />
@@ -5064,7 +5175,10 @@ export default function App() {
         <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(700px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
           <h2 style={{ margin: "0 0 8px", color: C.verde }}>Fechas que ya tienen datos</h2>
           <p style={{ fontSize: 13 }}>Los registros faltantes del respaldo ya se agregaron. Las fechas existentes conservan los datos actuales, a menos que marques cada reemplazo.</p>
-          {conflictosRespaldo.items.map(x => <label key={x.token} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}` }}>
+          <FiltrosLista filtro={filtroConfRespaldo} setFiltro={setFiltroConfRespaldo} lotes={lotes} estados={["Pesaje", "Control diario"]} total={conflictosRespaldo.items.length} visibles={filasConfRespaldo.length} />
+          <button type="button" onClick={() => setConflictosRespaldo(c => ({ ...c, elegidos: [...new Set([...c.elegidos, ...filasConfRespaldo.filter(x => x.duplicados === 1).map(x => x.token)])] }))}>Marcar visibles</button>
+          <button type="button" onClick={() => { const ids = new Set(filasConfRespaldo.map(x => x.token)); setConflictosRespaldo(c => ({ ...c, elegidos: c.elegidos.filter(k => !ids.has(k)) })); }} style={{ marginLeft: 8 }}>Desmarcar visibles</button>
+          {filasConfRespaldo.map(x => <label key={x.token} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}` }}>
             <input type="checkbox" disabled={x.duplicados !== 1} checked={conflictosRespaldo.elegidos.includes(x.token)} onChange={e => setConflictosRespaldo(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.token] : c.elegidos.filter(k => k !== x.token) }))} />
             <span style={{ fontSize: 13 }}><b>{x.tabla === "pesajes" ? "Pesaje" : "Control diario"} · {x.lote} · {x.fecha}</b><br />
               {x.tabla === "pesajes" ? `Actual: ${x.actual.data.pesos?.length || 0} aves · Respaldo: ${x.nuevo.pesos?.length || 0} aves` : `Actual: ${x.actual.data.cartones ?? "—"} cartones · Respaldo: ${x.nuevo.cartones ?? "—"} cartones`}
@@ -5075,6 +5189,26 @@ export default function App() {
             <button disabled={guardando} onClick={resolverConflictosRespaldo} style={btnStyle}>{conflictosRespaldo.elegidos.length ? `Reemplazar ${conflictosRespaldo.elegidos.length} fechas` : "Conservar todas"}</button>
             <button disabled={guardando} onClick={() => { setConflictosRespaldo(null); location.reload(); }}>Cerrar y conservar</button>
           </div>
+        </div>
+      </div>}
+
+      {editarPesaje && <div role="dialog" aria-modal="true" aria-label="Corregir pesaje" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
+        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(620px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
+          <h2 style={{ margin: "0 0 12px", color: C.verde }}>Corregir pesaje</h2>
+          <p style={{ fontSize: 13 }}>Se modificará solo este registro. Una fecha existente del mismo lote no se puede duplicar.</p>
+          <label style={{ display: "block", marginBottom: 10 }}>Galera / lote
+            <select value={editarPesaje.lote} onChange={e => setEditarPesaje(p => ({ ...p, lote: e.target.value }))} style={inputStyle}>
+              {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.lote || l.id} · nac. {l.nac}</option>)}
+            </select>
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>Fecha
+            <input type="date" max={hoyISO()} value={editarPesaje.fechaISO} onChange={e => setEditarPesaje(p => ({ ...p, fechaISO: e.target.value }))} style={inputStyle} />
+          </label>
+          <label style={{ display: "block", marginBottom: 12 }}>Pesos (gramos o kg; uno por línea)
+            <textarea rows={8} value={editarPesaje.pesosTexto} onChange={e => setEditarPesaje(p => ({ ...p, pesosTexto: e.target.value }))} style={{ ...inputStyle, resize: "vertical" }} />
+          </label>
+          <button disabled={guardando} onClick={guardarEdicionPesaje} style={btnStyle}>Guardar corrección</button>
+          <button disabled={guardando} onClick={() => setEditarPesaje(null)} style={{ marginLeft: 8 }}>Cancelar</button>
         </div>
       </div>}
 

@@ -254,6 +254,9 @@ export async function agregarPesajesFaltantes(nuevos, { reemplazar = [] } = {}) 
     return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : s;
   };
   const clave = (p) => `${p.lote}|${fechaISO(p.fecha)}`;
+  const ahora = new Date();
+  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+  if (nuevos.some(p => fechaISO(p.fecha) > hoy)) throw new Error(`No se permiten pesajes posteriores a hoy (${hoy})`);
   const existentes = [];
   for (let desde = 0; ; desde += 500) {
     const { data, error } = await supabase.from("pesajes").select("id, data").order("id").range(desde, desde + 499);
@@ -295,10 +298,29 @@ export async function agregarPesajesFaltantes(nuevos, { reemplazar = [] } = {}) 
   return { agregados, omitidos, actualizados };
 }
 
+export async function actualizarPesajePorId(id, nuevo) {
+  const fecha = String(nuevo.fecha || "");
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(fecha);
+  if (!m) throw new Error("Fecha de pesaje inválida");
+  const iso = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  const ahora = new Date();
+  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+  if (iso > hoy) throw new Error(`La fecha no puede ser posterior a hoy (${hoy})`);
+  const actuales = await leerColeccion("pesajes");
+  if (actuales === null) throw new Error("No se pudieron consultar los pesajes actuales");
+  if (!actuales.some(p => String(p.id) === String(id))) throw new Error("El pesaje ya no existe");
+  if (actuales.some(p => String(p.id) !== String(id) && p.lote === nuevo.lote && fechaRespaldoISO(p.fecha) === iso)) throw new Error("Ya existe otro pesaje de este lote en esa fecha");
+  const { error } = await supabase.from("pesajes").update({ data: { ...nuevo, id } }).eq("id", String(id));
+  if (error) throw error;
+  ultimaVersion.delete("granja2:pesajes");
+}
+
 // Un respaldo nunca utiliza escribirColeccion: esa función interpreta los
 // registros ausentes del archivo como borrados y puede actualizar filas vivas.
 export async function agregarRespaldoFaltante(datos) {
-  const resumen = { agregados: 0, omitidos: 0, configuraciones: 0, desconocidos: 0 };
+  const resumen = { agregados: 0, omitidos: 0, futuros: 0, configuraciones: 0, desconocidos: 0 };
+  const ahora = new Date();
+  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
   const insertarFaltantes = async (tabla, items) => {
     if (!Array.isArray(items)) throw new Error(`Formato inválido para ${tabla}`);
     const actuales = [];
@@ -320,6 +342,7 @@ export async function agregarRespaldoFaltante(datos) {
     const claves = new Set(actuales.map(x => claveLogica(x.data || {})).filter(Boolean));
     for (const item of items) {
       if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`Registro inválido en ${tabla}`);
+      if (item.fecha && fechaRespaldoISO(item.fecha) > hoy) { resumen.futuros++; continue; }
       const id = item.id == null || item.id === "" ? idNuevo() : String(item.id);
       const k = claveLogica(item);
       const huella = huellaDe(item);
@@ -376,7 +399,9 @@ export async function detectarFechasRespaldo(datos) {
     const vistos = new Set();
     items.forEach(item => {
       const k = `${item.lote}|${fechaRespaldoISO(item.fecha)}`;
-      if (vistos.has(k) || !porFecha.has(k)) return;
+      const ahora = new Date();
+      const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+      if (vistos.has(k) || fechaRespaldoISO(item.fecha) > hoy || !porFecha.has(k)) return;
       vistos.add(k);
       const actuales = porFecha.get(k);
       conflictos.push({ token: `${tabla}|${k}`, tabla, lote: item.lote, fecha: fechaRespaldoISO(item.fecha), actual: actuales[0], nuevo: item, duplicados: actuales.length });
@@ -388,6 +413,9 @@ export async function detectarFechasRespaldo(datos) {
 export async function reemplazarFechasRespaldo(conflictos) {
   let actualizados = 0;
   for (const c of conflictos) {
+    const ahora = new Date();
+    const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+    if (fechaRespaldoISO(c.nuevo.fecha) > hoy) throw new Error("No se permiten fechas futuras");
     if (!['registros', 'pesajes'].includes(c.tabla) || c.duplicados !== 1) throw new Error(`Fecha duplicada en ${c.tabla}: ${c.fecha}`);
     const { data: vigente, error: errorLectura } = await supabase.from(c.tabla).select("id,data").eq("id", c.actual.id).maybeSingle();
     if (errorLectura) throw errorLectura;
