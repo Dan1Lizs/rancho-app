@@ -21,7 +21,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.3";
+const VERSION_APP = "8.4";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1981,11 +1981,25 @@ export default function App() {
     }
   };
 
+  const borrarAdvertenciaDescartada = async (ajuste) => {
+    if (ajuste.accion !== "eliminar") return;
+    if (!window.confirm("¿Borrar definitivamente esta entrada del historial? La advertencia seguirá descartada y no se podrá reactivar desde aquí.")) return;
+    // Conserva solo la clave necesaria para evitar que la regla automática la vuelva a mostrar.
+    const nuevos = advAjustes.filter(a => a.id !== ajuste.id);
+    nuevos.push({ advId: ajuste.advId, seccion: ajuste.seccion, accion: "eliminar_definitivo" });
+    if (await escribir(K.advAjustes, nuevos)) {
+      setAdvAjustes(nuevos);
+      avisar("✓ Entrada borrada del historial; la advertencia permanece descartada");
+    } else {
+      avisar("⚠ No se pudo borrar la entrada");
+    }
+  };
+
   const procesarAdvertencias = (lista, seccion) => {
     return lista.map(item => {
       const advId = `${seccion}:${(item.texto || "").slice(0, 70)}`;
       const aj = advAjustes.find(a => a.advId === advId);
-      if (aj && aj.accion === "eliminar") return null;
+      if (aj && (aj.accion === "eliminar" || aj.accion === "eliminar_definitivo")) return null;
       return {
         ...item,
         advId,
@@ -1997,7 +2011,7 @@ export default function App() {
 
   const decisionesVisibles = procesarAdvertencias(decisiones, "decisiones");
   const auditoriaVisibles = procesarAdvertencias(auditoria, "auditoria");
-  const ajustesAuditoria = advAjustes;
+  const ajustesAuditoria = advAjustes.filter(a => a.accion !== "eliminar_definitivo");
   const pendientesReporte = (id, fecha) => pendientesDeAuditoria({
     lote: id ? lotes.find(x => x.id === id) : null,
     registros, fumigaciones, trabajos: TRABAJOS, bodegaMovs, mpFechaConteo,
@@ -4170,9 +4184,14 @@ export default function App() {
                               <div style={{ color: C.verde, marginTop: 2 }}><b>Texto ajustado:</b> {aj.nuevoTexto}</div>
                             )}
                           </div>
-                          <button onClick={() => revertirAjusteAdv(aj.id)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.verde, fontWeight: 600, whiteSpace: "nowrap" }}>
-                            Reactivar
-                          </button>
+                          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                            <button onClick={() => revertirAjusteAdv(aj.id)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.verde, fontWeight: 600, whiteSpace: "nowrap" }}>
+                              Reactivar
+                            </button>
+                            {aj.accion === "eliminar" && <button onClick={() => borrarAdvertenciaDescartada(aj)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.alerta, fontWeight: 600, whiteSpace: "nowrap" }}>
+                              Borrar
+                            </button>}
+                          </div>
                         </div>
                       ))}
                     </div>
