@@ -16,7 +16,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "7.7";
+const VERSION_APP = "7.8";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -28,6 +28,7 @@ const K = {
   insumos: "granja2:insumos", insumosMovs: "granja2:insumosMovs",
   plantaCfg: "granja2:plantaCfg", bodegaCfg: "granja2:bodegaCfg",
   costos: "granja2:costos",
+  advAjustes: "granja2:advertenciasAjustes",
 };
 
 const hoyStr = () => {
@@ -72,7 +73,7 @@ const SEED_PLANTA = { saldoKg: 3850 };
 
 // ─── Identidad ───
 const RAZON_SOCIAL = "Granja Avícola y Ganadería Rancho El Soñado LTDA.";
-const LOGO_B64 = "data:image/jpeg;base64,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";
+const LOGO_B64 = "data:image/jpeg;base64,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";
 const IconoGallina = ({ size = 34 }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
     <path d="M38 22 L45 34 M50 14 L53 33 M63 18 L60 34" stroke="#E23B2E" strokeWidth="8" strokeLinecap="round" />
@@ -120,13 +121,11 @@ const RECETAS_MP = {
   "Impulsor": { MP001: .510954, MP004: .243609, MP005: .01, MP006: .038783, MP007: .067696, MP008: .028598, MP009: .003, MP022: .040924, MP023: .001, MP026: .00175, MP033: .035, MP035: .007033, MP036: .003207, MP037: .00175, MP038: .0015, MP039: .001196, MP040: .001, MP041: .000712, MP042: .000543, MP043: .000522, MP044: .0005, MP045: .000402, MP046: .000196, MP047: .00012 },
   "Fase 1": { MP001: .524875, MP004: .217415, MP005: .03, MP006: .025652, MP007: .067001, MP008: .027696, MP009: .003, MP022: .038946, MP023: .001, MP026: .002641, MP031: .03, MP033: .015, MP035: .005141, MP036: .002913, MP037: .00175, MP038: .0015, MP039: .001413, MP040: .001, MP042: .000554, MP043: .000587, MP044: .0005, MP045: .000402, MP046: .000196, MP047: .000152 },
   "Impulsor Gortech": { MP001: .63004, MP004: .22379, MP006: .013105, MP007: .078629, MP008: .03629, MP009: .003024, MP013: .015121 },
-  // Hoja de fabricación oficial VYMISA/AVIN 18-08-2026 (Allix³, act. 19/8/2026) — fracción = kg/690
   "651 Impulsor VYMISA": { MP001: .521036, MP004: .252432, MP006: .031411, MP007: .0677, MP008: .029666, MP009: .003, MP022: .048486, MP026: .002128, MP033: .019802, MP035: .006258, MP036: .00346, MP037: .0015, MP039: .000808, MP040: .001, MP041: .00063, MP042: .000638, MP043: .000592, MP045: .0004, MP046: .0002, MP047: .000104, MP048: .01 },
   "Cría": { MP003: .623522, MP004: .217326, MP009: .021696, MP028: .008043, MP029: .001522, MP030: .021696, MP031: .106196 },
   "Desarrollo": { MP003: .65999, MP004: .259996, MP009: .017507, MP022: .044999, MP030: .017507 },
   "Engorde": { MP003: .475, MP004: .013507, MP009: .008, MP022: .411696, MP029: .000797, MP030: .008, MP031: .083 },
 };
-// Clasificación por báscula (proceso real de planta): 1 Macros · 2 Líquidos · 3 Medios · 4 Micros (= núcleo)
 const BASCULA_MP = {
   MP001: 1, MP003: 1, MP004: 1, MP005: 1, MP022: 1, MP033: 1,
   MP006: 2, MP031: 2,
@@ -135,7 +134,6 @@ const BASCULA_MP = {
 const basculaDe = (c) => BASCULA_MP[c] || 4;
 const NOMBRE_BASCULA = { 1: "BÁSCULA 1 — MACROS", 2: "BÁSCULA 2 — LÍQUIDOS", 3: "BÁSCULA 3 — MEDIOS", 4: "BÁSCULA 4 — MICROS (NÚCLEO)" };
 
-// Recetas editables: kg por bache (mixer de 690 kg). Semilla derivada de los % del archivo.
 const BACHE_KG_DEFAULT = 690;
 const SEED_RECETAS = {
   bacheKg: BACHE_KG_DEFAULT,
@@ -170,7 +168,6 @@ const GANADO_SEMILLA = [
   { nombre: "Estabulados — Toros", formula: "Engorde", animales: 15, kgAnimal: 5 },
 ];
 
-// Programa de vacunación ponedoras — Dr. Heiner Hernández Ávila, C.M.V #666 (por día de edad)
 const PLAN_VACUNAS_ESTANDAR = [
   { id: 1, dia: 0, vacuna: "Marek + Gumboro (HVT-IBD) + RISP", cepa: "", via: "Subcutánea", proveedor: "Incubadora" },
   { id: 2, dia: 3, vacuna: "Salmonella (S. enteritidis) viva", cepa: "", via: "Al agua", proveedor: "Vetim" },
@@ -196,7 +193,6 @@ const TRABAJOS = [
   "Lavado de caños", "Limpieza caja de registro", "Limpieza de trampas de ratas",
 ];
 
-// La base de datos devuelve las filas sin orden garantizado — ordenamos por fecha (dd/mm/yyyy) descendente
 const fechaVal = (f) => { const p = String(f || "").split("/"); return p.length === 3 ? Number(p[2]) * 10000 + Number(p[1]) * 100 + Number(p[0]) : 0; };
 const ordenarPorFecha = (arr) => [...(arr || [])].sort((a, b) => (fechaVal(b.fecha) - fechaVal(a.fecha)) || ((Number(b.id) || 0) - (Number(a.id) || 0)));
 
@@ -210,9 +206,6 @@ const capturaVacia = () => ({
   chequeo: { cascara: "", consumoObs: "", aguaObs: "", cresta: "", heces: "", respiratorio: "", secrecion: "", comederos: "", ph: "", cloro: "", temp: "", humedad: "", luz: "", obs: "" },
 });
 
-// Storage: Supabase (src/storage.js)
-
-// ─── UI básicos ─────────────────────────────────────────────────
 function KPI({ etiqueta, valor, unidad, tono, sub }) {
   const colorValor = tono === "alerta" ? C.alerta : tono === "ok" ? C.verde : C.texto;
   return (
@@ -246,7 +239,6 @@ function BarraPostura({ actual, meta }) {
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, border: `1.5px solid #E4E4DC`, borderRadius: 10, background: "#fff", fontFamily: "'Inter', sans-serif", outline: "none" };
 
 function Campo({ etiqueta, mitad, tercio, ...props }) {
-  // iPhone: el teclado decimal solo trae coma — convertimos a punto para que los números con decimales funcionen
   const esNum = props.type === "number";
   const extra = esNum ? {
     type: "text", inputMode: props.inputMode || "decimal",
@@ -273,8 +265,6 @@ function Seccion({ titulo, sub, children, num, accion }) {
     </div>
   );
 }
-
-// ─── App ────────────────────────────────────────────────────────
 export default function App() {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(false);
@@ -297,8 +287,12 @@ export default function App() {
   const [guardado, setGuardado] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  // Advertencias ajustadas / eliminadas
+  const [advAjustes, setAdvAjustes] = useState([]);
+  const [modalAdv, setModalAdv] = useState(null);
+
   const [galponActivo, setGalponActivo] = useState("G1");
-  const suciosRef = useRef({}); // gallineros con ediciones locales sin guardar — el refresco en vivo no los toca
+  const suciosRef = useRef({});
   const notaSuciaRef = useRef(false);
   const fechaCapturaRef = useRef(new Date().toISOString().slice(0, 10));
   const [completadoPor, setCompletadoPor] = useState("");
@@ -325,8 +319,8 @@ export default function App() {
   const [nuevoAdmin, setNuevoAdmin] = useState("");
   const [favoritos, setFavoritos] = useState([]);
   const [mpInvHist, setMpInvHist] = useState([]);
-  const [gestionFav, setGestionFav] = useState(null); // tipo: "fum" | "med" | "vit" — para borrar favoritos
-  const [modalFav, setModalFav] = useState(null); // {tipo, idx, nombre, dosis, retiro}
+  const [gestionFav, setGestionFav] = useState(null);
+  const [modalFav, setModalFav] = useState(null);
   const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) });
 
   // Planta
@@ -390,7 +384,7 @@ export default function App() {
   const [printDoc, setPrintDoc] = useState(null);
   const [mpInv, setMpInv] = useState({});
   const [mpInvUltimo, setMpInvUltimo] = useState({});
-  const [mpFechaInput, setMpFechaInput] = useState(new Date().toISOString().slice(0, 10)); // último conteo GUARDADO — se usa para calcular el pedido, aunque el formulario de arriba ya esté vacío
+  const [mpFechaInput, setMpFechaInput] = useState(new Date().toISOString().slice(0, 10));
   const [mpFechaConteo, setMpFechaConteo] = useState("");
   const [mpResponsable, setMpResponsable] = useState("");
   const [mpConfig, setMpConfig] = useState({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {} });
@@ -411,7 +405,7 @@ export default function App() {
   const [fPlan, setFPlan] = useState({ vacuna: "", cepa: "", via: "", proveedor: "", dia: "" });
   const [histFecha, setHistFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [histMes, setHistMes] = useState(() => new Date().toISOString().slice(0, 7));
-  const [formLote, setFormLote] = useState(null); // null = cerrado · objeto = creando/editando
+  const [formLote, setFormLote] = useState(null);
 
   const guardarLote = async () => {
     if (!formLote.galpon || !formLote.raza || !formLote.nac) { avisar("⚠ Galpón, raza y fecha de nacimiento son obligatorios"); return; }
@@ -465,13 +459,9 @@ export default function App() {
   };
 
   // ── Carga inicial ──
-  // silencioso=true: se usa para refrescos en vivo por cambios de OTRAS personas.
-  // En ese caso NO debe tapar la pantalla (cargando) ni bloquear el botón Guardar
-  // (cargandoFondo) — solo debe traer los datos nuevos calladamente.
   const cargarTodo = async (primera, silencioso = false) => {
     if (!silencioso) setCargando(true);
     try {
-      // FASE 1: solo lo esencial para pintar la pantalla (2 lecturas)
       const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
       const [ls0, rs0] = await Promise.race([timeout, Promise.all([leer(K.lotes, null), leer(K.registros, null)])]);
       if (ls0 === null || rs0 === null) throw new Error("No se pudieron leer los lotes o registros");
@@ -481,22 +471,21 @@ export default function App() {
       setLotes(ls); setRegistros(ordenarPorFecha(rs));
       if (primera) setCapturas(Object.fromEntries(ls.map(l => [l.id, capturaVacia()])));
       setErrorCarga(false);
-      if (!silencioso) { setCargando(false); setCargandoFondo(true); }           // ← la app ya se ve y se puede navegar
+      if (!silencioso) { setCargando(false); setCargandoFondo(true); }
 
-      // FASE 2: el resto en segundo plano (en paralelo)
-      const [ps0, ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0] = await Promise.all([
+      const [ps0, ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0, adv0] = await Promise.all([
         leer(K.pesajes, null), leer(K.meds, []), leer(K.fums, []), leer(K.movs, []), leer(K.planta, []),
         leer(K.plantaCfg, null), leer(K.bodegaCfg, null), leer(K.facturas, []), leer(K.vacunas, []),
         leer(K.enfermedades, []), leer(K.necropsias, []), leer(K.planVac, null), leer(K.bitacora, []),
         leer(K.costos, SEED_COSTOS), leer(K.mpInv, null), leer(K.mpConfig, null), leer(K.mpPedidos, []),
         leer(K.recetas, null), leer(K.mpCat, null), leer(K.insumos, null), leer(K.insumosMovs, []),
         leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []), leer(K.mpInvHist, []),
+        leer(K.advAjustes, []),
       ]);
       if (ps0 === null) throw new Error("No se pudieron leer los pesajes");
       const ps = ps0;
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
       let rc = rc0 ?? (siembras.push(escribir(K.recetas, SEED_RECETAS)), SEED_RECETAS);
-      // Actualización a hoja oficial VYMISA 18/08/2026 — solo si sigue la versión anterior sin editar
       const v651 = rc.formulas?.["651 Impulsor VYMISA"];
       if (v651 && v651.items?.MP007 > 46.2 && v651.items?.MP007 < 46.3) {
         rc = { ...rc, formulas: { ...rc.formulas, "651 Impulsor VYMISA": JSON.parse(JSON.stringify(SEED_RECETAS.formulas["651 Impulsor VYMISA"])) } };
@@ -525,6 +514,7 @@ export default function App() {
       setCfgAdmins(adm0 || []);
       setFavoritos(fav0 || []);
       setMpInvHist(ordenarPorFecha(mih0 || []));
+      setAdvAjustes(adv0 || []);
       {
         const emailSesion = (typeof window !== "undefined" && window.__usuarioEmail || "").toLowerCase();
         if ((adm0 || []).length > 0 && emailSesion) setEsAdmin(adm0.map(x => x.toLowerCase()).includes(emailSesion));
@@ -535,15 +525,13 @@ export default function App() {
         if (movHoy.repartos) setRepartos(movHoy.repartos);
         setObsInv(movHoy.obs || "");
       }
-      // Sincronizar el formulario de captura con lo que llegó de otros dispositivos,
-      // SIN tocar los gallineros que este usuario está editando (marcados "sucios")
       {
         const dmy = (fechaCapturaRef.current || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
         const rsOrd = ordenarPorFecha(rs);
         setCapturas(prev => {
           const nuevas = { ...prev };
           ls.forEach(l => {
-            if (suciosRef.current[l.id]) return; // en edición local — no tocar
+            if (suciosRef.current[l.id]) return;
             const c2 = construirCaptura(l, dmy, rsOrd, ms, fs);
             nuevas[l.id] = c2 || prev[l.id] || capturaVacia();
           });
@@ -554,15 +542,11 @@ export default function App() {
           setNotaDia(nota2 ? nota2.texto : "");
         }
       }
-      setCargandoFondo(false); // no-op si silencioso (ya estaba en false)
+      setCargandoFondo(false);
     } catch { if (!silencioso) { setErrorCarga(true); setCargando(false); setCargandoFondo(false); } }
   };
   useEffect(() => { cargarTodo(true); }, []);
 
-  // ── Actualización en vivo: si otra persona guarda algo en cualquier tabla
-  // de la granja, esta pantalla se refresca sola EN SILENCIO (sin tapar la
-  // pantalla ni bloquear tu propio botón Guardar) — así nadie necesita
-  // acordarse de tocar ⟳ para ver los cambios de los demás.
   useEffect(() => {
     const tablasEnVivo = [
       "lotes", "registros", "pesajes", "medicaciones", "fumigaciones", "bodega_movs",
@@ -584,9 +568,6 @@ export default function App() {
   }, []);
 
   const avisar = (m) => { setGuardado(m); setTimeout(() => setGuardado(""), 3000); };
-
-  // iPhone: el teclado decimal solo trae "," — la convertimos a "." en el instante en que se teclea,
-  // antes de que React lea el valor, para que TODOS los campos numéricos acepten decimales
   useEffect(() => {
     const setterNativo = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
     const normalizar = (e) => {
@@ -599,7 +580,6 @@ export default function App() {
     return () => document.removeEventListener("input", normalizar, true);
   }, []);
 
-  // Navegación de captura: Enter → siguiente casilla · flechas ↑/↓ → anterior/siguiente (en campos de texto)
   useEffect(() => {
     const alTeclear = (e) => {
       const el = e.target;
@@ -619,7 +599,6 @@ export default function App() {
     return () => document.removeEventListener("keydown", alTeclear, true);
   }, []);
 
-  // ── Totales captura ──
   const totalesGalpon = (c) => {
     if (!c) return { cartones: 0, huevos: 0, pesoKg: 0 };
     const cartones = c.tiquetes.reduce((s, t) => s + Number(t.cartones || 0), 0);
@@ -627,14 +606,11 @@ export default function App() {
     return { cartones, huevos: cartones * HXC, pesoKg };
   };
 
-  // ── Guardar control diario ──
   const guardarDia = async (soloLoteId = null) => {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
     const soloLote = soloLoteId ? lotes.find(x => x.id === soloLoteId) : null;
     setGuardando(true);
     const fecha = (fechaCaptura || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
-    // Validación de tiquetes: duplicado en el MISMO formulario = error (bloquea);
-    // coincidencia con el historial = advertencia con detalle, y el usuario decide si guarda igual
     {
       const enFormulario = [];
       lotes.forEach(l => {
@@ -662,7 +638,6 @@ export default function App() {
     }
     const nuevos = [];
     const reemplazados = [];
-    // Edición sin duplicar: lo del día se reemplaza por lo que trae el formulario
     let nMeds = medicaciones.filter(m2 => m2.fecha !== fecha || (soloLote && m2.galpon !== soloLote.galpon));
     let nFums = fumigaciones.filter(f2 => f2.fecha !== fecha || (soloLote && f2.galpon !== soloLote.galpon));
     const esDelGalpon = (m2) => !soloLote || String(m2.detalle || "").endsWith(`G${soloLote.galpon}`);
@@ -679,7 +654,6 @@ export default function App() {
       const t = totalesGalpon(c);
       const alimTotal = Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0);
       if (t.huevos === 0 && !c?.muertas && !alimTotal) return l;
-      // Edición: si ya existe registro de esa fecha para este lote, revertir sus efectos acumulados
       const previo = registros.find(r => r.fecha === fecha && r.lote === l.id);
       if (previo) {
         reemplazados.push(previo);
@@ -722,7 +696,6 @@ export default function App() {
       };
     });
     if (!nuevos.length && !notaDia) { setGuardando(false); return; }
-    // Descuento automático de insumos: medicamentos, vitaminas y fumigaciones del día
     let insumosDia = insumosBase;
     const movsAuto = [];
     const descontarInsumo = (producto, dosis, origen) => {
@@ -759,8 +732,6 @@ export default function App() {
 
     if (ok1 && ok2) {
       setRegistros(ordenarPorFecha(nuevosRegistros)); setLotes(nuevosLotes); setMedicaciones(ordenarPorFecha(nMeds)); setFumigaciones(ordenarPorFecha(nFums)); setBitacora(nBitacora);
-      // El formulario no se reconstruye tras guardar (lo que ves es lo guardado).
-      // Los gallineros recién guardados quedan "limpios": el refresco en vivo ya puede sincronizarlos.
       if (soloLoteId) delete suciosRef.current[soloLoteId];
       else suciosRef.current = {};
       if (!soloLoteId || notaDia.trim()) notaSuciaRef.current = false;
@@ -780,7 +751,6 @@ export default function App() {
   }));
   const producidoHoyCart = producidoPorGalpon.reduce((s, g) => s + g.cartones, 0);
   const rutaNeta = repartos.reduce((s, r) => s + Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0), 0);
-  // Saldo base: el saldo final del día ANTERIOR más cercano a la fecha elegida
   const aperturaB = bodegaCfg.inicialFecha ? aDate(bodegaCfg.inicialFecha.split("-").reverse().join("/")) : null;
   const saldoBase = (() => {
     const previos = bodegaMovs.filter(m => aDate(m.fecha) < aDate(fechaB) && (!aperturaB || aDate(m.fecha) >= aperturaB));
@@ -820,25 +790,23 @@ export default function App() {
       obs: obsInv, saldoFinal: +saldoFinal.toFixed(1),
       ajusteConteo: hayAjuste ? Number(ajusteBodega) : null, difAjuste: hayAjuste ? difAjuste : null,
     };
-    // Reemplazar el de esa fecha y RECALCULAR EN CADENA todos los saldos (por si se editó un día pasado)
     let nuevos = [nuevoMov, ...bodegaMovs.filter(m => m.fecha !== fechaB)]
       .sort((a, b) => aDate(a.fecha) - aDate(b.fecha));
     let saldoCorrido = Number(bodegaCfg.inicialCart || 0);
     nuevos = nuevos.map(m => {
-      if (aperturaB && aDate(m.fecha) < aperturaB) return m; // histórico previo a la apertura: no afecta la cadena
+      if (aperturaB && aDate(m.fecha) < aperturaB) return m;
       const calc = saldoCorrido + Number(m.producido || 0) + Number(m.comprado || 0)
         - Number(m.rutaNeta || 0) - Number(m.vendGranja || 0) - Number(m.destruido || 0) - Number(m.regalado || 0);
       const fin = m.ajusteConteo != null ? Number(m.ajusteConteo) : +calc.toFixed(1);
       saldoCorrido = fin;
       return { ...m, saldoFinal: fin, difAjuste: m.ajusteConteo != null ? +(Number(m.ajusteConteo) - calc).toFixed(1) : null };
-    }).reverse(); // más reciente primero, como siempre
+    }).reverse();
     if (await escribir(K.movs, nuevos)) { setBodegaMovs(nuevos); setAjusteBodega(""); avisar(hayAjuste ? `✓ Bodega ajustada por conteo: ${Number(ajusteBodega)} cartones (${difAjuste > 0 ? "+" : ""}${difAjuste} vs calculado)` : "✓ Bodega actualizada"); }
     else avisar("⚠ No se pudo guardar la bodega");
     setGuardando(false);
   };
 
-  // ── Planta de concentrado: dos categorías (Aves / Ganado) ──
-  // inicial + entradas (baches) − salidas (servido) ± ajustes = inventario final
+  // ── Planta de concentrado ──
   const usoFormula = (f) => recetas.formulas[f]?.uso || "Aves";
   const movsPlanta = plantaMovs.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) });
   const entregadoHoyKg = regsHoy.reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
@@ -850,7 +818,7 @@ export default function App() {
   const sumaMovs = (cat, tipo) => movsPlanta.filter(m => m.categoria === cat && m.tipo === tipo && desdeApertura(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0);
   const saldoAves = Number(plantaCfg.inicialAves || 0) + sumaMovs("Aves", "bache") + sumaMovs("Aves", "ajuste") - servidoAvesTotal;
   const saldoGanado = Number(plantaCfg.inicialGanado || 0) + sumaMovs("Ganado", "bache") + sumaMovs("Ganado", "ajuste") - sumaMovs("Ganado", "servido");
-  const saldoPlanta = saldoAves; // compatibilidad con alertas existentes
+  const saldoPlanta = saldoAves;
 
   const kgNucleoDe = (formula) => {
     const f = recetas.formulas[formula];
@@ -865,7 +833,6 @@ export default function App() {
     const fechaBache = (fBache.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
     const nuevo = [{ fecha: fechaBache, tipo: "bache", categoria: usoFormula(fBache.formula), formula: fBache.formula, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) {
-      // Descuento automático de porciones de núcleo (si la fórmula tiene micros)
       if (nBaches > 0) {
         const f2 = recetas.formulas[fBache.formula];
         if (f2) {
@@ -917,7 +884,6 @@ export default function App() {
     setGuardando(false);
   };
 
-  // Eliminar un movimiento de planta revirtiendo sus efectos (kardex, inventario de núcleo)
   const eliminarMovPlanta = async (m) => {
     const clave = `delplanta:${m.id}`;
     if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para ELIMINAR este movimiento — sus efectos se revierten"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
@@ -1018,11 +984,9 @@ export default function App() {
   const guardarPesaje = async () => {
     if (guardando || importandoPesajes) return;
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
-    // Normalizar: comas de miles (1,850 → 1850) y comas decimales (1,85 → 1.85)
     const txt = fPeso.pesos.replace(/(\d),(?=\d{3}(?:\D|$))/g, "$1");
     const nums = txt.split(/[\s;]+/).map(t => Number(t.replace(",", "."))).filter(n => !isNaN(n) && n > 0);
     if (!nums.length) { avisar("⚠ Digita los pesos en gramos separados por espacio o enter"); return; }
-    // Detección de unidad: si el promedio es pequeño, vienen en kg → convertir a gramos
     const prom = nums.reduce((a, b) => a + b, 0) / nums.length;
     const enKg = prom < 10;
     const lista = enKg ? nums.map(n => Math.round(n * 1000)) : nums;
@@ -1109,8 +1073,7 @@ export default function App() {
   };
 
   const guardarCostos = async (nuevos) => { setCostos(nuevos); await escribir(K.costos, nuevos); };
-
-  // ── Editor de fórmulas (recetas por bache) ──
+  // ── Editor de fórmulas ──
   const persistirRecetas = async (nuevo) => { setRecetas(nuevo); await escribir(K.recetas, nuevo); };
   const setKgIngrediente = (formula, mpc, kg) => {
     const f = recetas.formulas[formula];
@@ -1142,7 +1105,8 @@ export default function App() {
     persistirRecetas({ ...recetas, formulas: fs });
     if (recActiva === nombre) setRecActiva(Object.keys(fs)[0] || "");
   };
-  // ── Inventario de insumos y medicinas ──
+
+  // ── Insumos y medicinas ──
   const buscarInsumo = (lista, texto) => {
     const t = (texto || "").toLowerCase().trim();
     if (!t) return null;
@@ -1291,7 +1255,7 @@ export default function App() {
     const ok2 = await escribir(K.mpInvHist, nuevoHist);
     if (ok1 && ok2) {
       setMpFechaConteo(fecha); setMpInvHist(ordenarPorFecha(nuevoHist)); setMpInvUltimo(items);
-      setMpInv({}); // ← el apartado queda limpio, listo para el próximo conteo
+      setMpInv({});
       avisar(`✓ Conteo del ${fecha.slice(0, 5)} guardado en el historial — listo para generar el pedido`);
     } else avisar("⚠ No se pudo guardar el inventario");
     setGuardando(false);
@@ -1427,14 +1391,13 @@ export default function App() {
     else avisar("⚠ No se pudo guardar");
   };
 
-  // Estado de una vacuna del programa para un lote dado
   const estadoVacunaLote = (l, pv) => {
     const { date, str } = fechaVacuna(l.nac, pv.dia);
     const reg = vacunas.find(v => v.lote === l.id && (v.planId === pv.id || (v.vacuna.toLowerCase().includes(pv.vacuna.toLowerCase().slice(0, 6)) && aDate(v.fecha) >= new Date(date.getTime() - 10 * 86400000))));
     const aplicada = !!reg;
     const dias = Math.round((date - hoyD) / 86400000);
     if (aplicada) return { estado: "aplicada", fecha: str, dias, fechaAplicada: reg.fecha };
-    if (dias < -14) return { estado: "cubierta", fecha: str, dias };   // levante — aplicada por proveedor
+    if (dias < -14) return { estado: "cubierta", fecha: str, dias };
     if (dias < 0) return { estado: "atrasada", fecha: str, dias };
     if (dias <= 7) return { estado: "próxima", fecha: str, dias };
     return { estado: "pendiente", fecha: str, dias };
@@ -1445,7 +1408,6 @@ export default function App() {
     if (await escribir(K.planVac, nuevo)) { setPlanVac(nuevo); avisar("✓ Quitada del plan"); }
   };
 
-  // Retiros de medicamento activos (huevo no comercializable)
   const hoyD = aDate(hoyStr());
   const retirosActivos = medicaciones.filter(m => m.retiroHasta && aDate(m.retiroHasta) >= hoyD);
 
@@ -1476,8 +1438,6 @@ export default function App() {
     const diaObjetivo = Math.min(dd, new Date(py, pm, 0).getDate());
     fechaObjetivo = `${String(diaObjetivo).padStart(2, "0")}/${String(pm).padStart(2, "0")}/${py}`;
     const objetivo = aDate(fechaObjetivo).getTime();
-    // Se busca en los controles reales, incluso a ambos lados del cambio de mes.
-    // En empate se prefiere la fecha anterior al día objetivo.
     const candidatas = fechas.filter(f => aDate(f).getTime() < aDate(fHoy).getTime()).filter(f => {
       const rs = registros.filter(r => r.fecha === f);
       const avesRegistradas = [...new Set(rs.map(r => r.lote))].reduce((s, id) => {
@@ -1502,7 +1462,6 @@ export default function App() {
   }
   const metaGenetica = totalAves ? activos.reduce((s, l) => s + l.posturaIdeal * l.aves, 0) / totalAves : 0;
   const decisiones = [];
-  // Peso corporal vs tabla genética (crítico) — último pesaje por lote
   activos.forEach(l => {
     const pes = pesajes.find(p2 => p2.lote === l.id);
     if (!pes || !pes.pesos?.length) return;
@@ -1539,7 +1498,6 @@ export default function App() {
     if (dHoy.pctQueb > 3) decisiones.push({ nivel: "amarillo", texto: `Huevo quebrado en ${dHoy.pctQueb.toFixed(1)}% — sobre el 3%. Revisar calcio, recolección y manejo de cartones.` });
     if (dHoy.conv > 2.3) decisiones.push({ nivel: "amarillo", texto: `Conversión del día en ${dHoy.conv.toFixed(2)} kg/kg — el alimento está rindiendo poco.` });
     if (dAyer && dHoy.postura - dAyer.postura < -3) decisiones.push({ nivel: "rojo", texto: `La postura cayó ${(dAyer.postura - dHoy.postura).toFixed(1)} pts en un día. Verificar registro, agua, alimento y estrés.` });
-    // Consumo de agua: caída >15% vs día anterior por gallinero
     activos.forEach(l => {
       const rH = registros.find(x => x.fecha === fHoy && x.lote === l.id);
       const rA = fAyer ? registros.find(x => x.fecha === fAyer && x.lote === l.id) : null;
@@ -1548,7 +1506,6 @@ export default function App() {
         if (caida > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon}: el consumo de agua cayó ${caida.toFixed(0)}% (${rH.aguaL} L vs ${rA.aguaL} L ayer). Las aves dejan de beber antes de dejar de comer — revisar salud y sistema de agua HOY.` });
       }
     });
-    // Chequeo sanitario del día: hallazgos anormales agrupados por gallinero
     activos.forEach(l => {
       const rH = registros.find(x => x.fecha === fHoy && x.lote === l.id);
       const ch = rH?.chequeo;
@@ -1571,11 +1528,9 @@ export default function App() {
       if (ph > 0 && (ph < 5.5 || ph > 7.8)) hallazgos.push(`pH del agua ${ph} (fuera de rango)`);
       if (hallazgos.length) decisiones.push({ nivel, texto: `Chequeo Gallinero ${l.galpon}: ${hallazgos.join(" · ")}.` });
     });
-    // Retiros de medicamento activos
     retirosActivos.forEach(m => {
       decisiones.push({ nivel: "rojo", texto: `Retiro activo en Gallinero ${m.galpon}: ${m.producto} — NO comercializar huevo de este gallinero hasta el ${m.retiroHasta}.` });
     });
-    // Vacunas del programa: próximas (≤7 días) o atrasadas (≤14 días sin aplicar)
     activos.forEach(l => {
       planVac.forEach(p2 => {
         const ev = estadoVacunaLote(l, p2);
@@ -1616,7 +1571,6 @@ export default function App() {
     </div>
   );
 
-  // ── Documento imprimible (pantalla limpia + window.print) ──
   // ── Cuentas por pagar ──
   const pagadoDe = (fid) => cxp.pagos.filter(pg => pg.facturaId === fid).reduce((a, pg) => a + Number(pg.monto || 0), 0);
   const notasDe = (fid) => (cxp.notas || []).filter(n2 => n2.facturaId === fid);
@@ -1629,7 +1583,7 @@ export default function App() {
   const cxpProx7 = facturasAbiertas.filter(f => diasVence(f) >= 0 && diasVence(f) <= 7).reduce((a, f) => a + saldoDe(f), 0);
   const agingBucket = (f) => { const d = -diasVence(f); return d <= 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : 3; };
   const colones = (n) => "₡" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // ── Kardex de materias primas (entradas por compra, salidas por producción, ajustes) ──
+
   const registrarKardex = async (movs) => {
     if (!movs.length) return true;
     const actual = await leer(K.kardex, []);
@@ -1662,8 +1616,6 @@ export default function App() {
   const retiroSugerido = (nombre) => favoritos.find(f2 => f2.tipo === "med" && f2.nombre === nombre)?.retiro || "";
   const kardexSaldo = (codigo) => kardex.reduce((a, m) => a + (m.mp === codigo ? (m.tipo === "salida" ? -1 : 1) * Number(m.kg || 0) : 0), 0);
 
-  // Transaccional: SIEMPRE lee el valor real del storage antes de escribir (imposible pisar datos),
-  // y respalda el estado anterior en cxpBak (deshacer de 1 nivel)
   const guardarCxp = async (delta) => {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — espera unos segundos e intenta de nuevo"); return false; }
     const actual = { facturas: [], pagos: [], notas: [], ...(await leer(K.cxp, {})) };
@@ -1676,7 +1628,6 @@ export default function App() {
   // ── Auditoría de gestión: lo que NO está pasando ──
   const auditoria = [];
   const diasDesde = (dmy) => Math.round((hoyD - aDate(dmy)) / 86400000);
-  // A. Trabajos diarios sin realizar (bioseguridad y mantenimiento)
   TRABAJOS.forEach((t, i) => {
     let peor = null;
     activos.forEach(l => {
@@ -1694,7 +1645,6 @@ export default function App() {
       });
     }
   });
-  // B. Fumigación (protección biológica) por gallinero
   activos.forEach(l => {
     const ult = fumigaciones.find(m => m.galpon === l.galpon);
     if (!ult) { auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: sin fumigaciones registradas aún.` }); return; }
@@ -1702,7 +1652,6 @@ export default function App() {
     if (dias >= 15) auditoria.push({ nivel: "rojo", texto: `Protección biológica: Gallinero ${l.galpon} lleva ${dias} días sin fumigación registrada (última: ${ult.fecha.slice(0, 5)}, ${ult.producto}).` });
     else if (dias >= 8) auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: ${dias} días desde la última fumigación (${ult.producto}).` });
   });
-  // C. Devoluciones de ruta anormales (huevo que regresa quebrado)
   {
     const mov = bodegaMovs[0];
     if (mov?.repartos?.length) {
@@ -1715,7 +1664,6 @@ export default function App() {
       });
     }
   }
-  // D. Gallineros sin captura reciente
   activos.forEach(l => {
     const ult = registros.find(r => r.lote === l.id);
     if (!ult) return;
@@ -1723,7 +1671,6 @@ export default function App() {
     if (dias >= 4) auditoria.push({ nivel: "rojo", texto: `Gallinero ${l.galpon}: ${dias} días SIN control diario registrado (último: ${ult.fecha.slice(0, 5)}). Sin datos no hay gestión.` });
     else if (dias >= 2) auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: ${dias} días sin control diario (último: ${ult.fecha.slice(0, 5)}).` });
   });
-  // E. Conteos físicos vencidos
   {
     const ultConteo = bodegaMovs.find(m => m.ajusteConteo != null);
     if (bodegaMovs.length > 5 && (!ultConteo || diasDesde(ultConteo.fecha) > 14)) {
@@ -1733,13 +1680,11 @@ export default function App() {
       auditoria.push({ nivel: "amarillo", texto: `Materias primas: el inventario tiene ${diasDesde(mpFechaConteo)} días (conteo del ${mpFechaConteo.slice(0, 5)}). El pedido del jueves necesita conteo fresco.` });
     }
   }
-  // F0. Cuentas por pagar: vencidas y por vencer
   facturasAbiertas.forEach(f => {
     const d = diasVence(f);
     if (d < 0) auditoria.push({ nivel: "rojo", texto: `Factura VENCIDA hace ${-d} día(s): ${f.proveedor} #${f.numero || "s/n"} — saldo ${colones(saldoDe(f))} (vencía ${f.vence.slice(0, 5)}).` });
     else if (d <= 3) auditoria.push({ nivel: "amarillo", texto: `Factura por vencer en ${d === 0 ? "HOY" : d + " día(s)"}: ${f.proveedor} #${f.numero || "s/n"} — saldo ${colones(saldoDe(f))}.` });
   });
-  // F. Quebrado estructural (promedio 7 días > 3%)
   {
     const rs7 = registros.slice(0, activos.length * 7);
     const h7 = rs7.reduce((a, r) => a + r.cartones * HXC, 0);
@@ -1749,6 +1694,77 @@ export default function App() {
     }
   }
 
+  // ── Gestión de advertencias (eliminar / modificar con trazabilidad) ──
+  const abrirModalAjusteAdv = (item, seccion, accion) => {
+    const advId = `${seccion}:${(item.texto || "").slice(0, 70)}`;
+    const ajExistente = advAjustes.find(a => a.advId === advId);
+    setModalAdv({
+      advId,
+      seccion,
+      accion,
+      item,
+      nuevoTexto: ajExistente?.nuevoTexto || item.texto,
+      responsable: ajExistente?.responsable || completadoPor || "Roxana",
+      fecha: ajExistente?.fechaISO || new Date().toISOString().slice(0, 10),
+      razon: ajExistente?.razon || "",
+    });
+  };
+
+  const guardarAjusteAdvertencia = async () => {
+    if (!modalAdv.razon.trim()) {
+      avisar("⚠ La razón o justificación es obligatoria");
+      return;
+    }
+    const dmy = modalAdv.fecha.split("-").reverse().join("/");
+    const nuevoAjuste = {
+      id: Date.now(),
+      advId: modalAdv.advId,
+      seccion: modalAdv.seccion,
+      accion: modalAdv.accion,
+      textoOriginal: modalAdv.item.texto,
+      nuevoTexto: modalAdv.accion === "modificar" ? modalAdv.nuevoTexto.trim() : null,
+      responsable: modalAdv.responsable,
+      fecha: dmy,
+      fechaISO: modalAdv.fecha,
+      razon: modalAdv.razon.trim(),
+    };
+    const nuevos = [nuevoAjuste, ...advAjustes.filter(a => a.advId !== modalAdv.advId)];
+    if (await escribir(K.advAjustes, nuevos)) {
+      setAdvAjustes(nuevos);
+      setModalAdv(null);
+      avisar(modalAdv.accion === "eliminar" ? "✓ Advertencia descartada con registro de auditoría" : "✓ Advertencia modificada");
+    } else {
+      avisar("⚠ No se pudo guardar el ajuste");
+    }
+  };
+
+  const revertirAjusteAdv = async (ajusteId) => {
+    const nuevos = advAjustes.filter(a => a.id !== ajusteId);
+    if (await escribir(K.advAjustes, nuevos)) {
+      setAdvAjustes(nuevos);
+      avisar("✓ Advertencia reactivada");
+    } else {
+      avisar("⚠ No se pudo reactivar");
+    }
+  };
+
+  const procesarAdvertencias = (lista, seccion) => {
+    return lista.map(item => {
+      const advId = `${seccion}:${(item.texto || "").slice(0, 70)}`;
+      const aj = advAjustes.find(a => a.advId === advId);
+      if (aj && aj.accion === "eliminar") return null;
+      return {
+        ...item,
+        advId,
+        textoAjustado: aj?.accion === "modificar" && aj.nuevoTexto ? aj.nuevoTexto : item.texto,
+        ajuste: aj,
+      };
+    }).filter(Boolean);
+  };
+
+  const decisionesVisibles = procesarAdvertencias(decisiones, "decisiones");
+  const auditoriaVisibles = procesarAdvertencias(auditoria, "auditoria");
+  const ajustesAuditoria = advAjustes;
   if (printDoc) {
     const l = printDoc.lote ? lotes.find(x => x.id === printDoc.lote) : null;
     const celda = { padding: "7px 6px", borderBottom: "1px solid #ccc", fontSize: 12.5, textAlign: "left", verticalAlign: "top" };
@@ -1811,7 +1827,7 @@ export default function App() {
           const abiertas = cxp.facturas.filter(f => (Number(f.monto || 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0)) > 0.005)
             .sort((a, b) => aDate(a.vence) - aDate(b.vence));
           const saldoF = (f) => Number(f.monto || 0) + (cxp.notas || []).filter(n2 => n2.facturaId === f.id).reduce((a, n2) => a + (n2.tipo === "ND" ? 1 : -1) * Number(n2.monto || 0), 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0);
-      const col = (n) => "₡" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const col = (n) => "₡" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
           const buck = (f) => { const d = Math.round((hoyD - aDate(f.vence)) / 86400000); return d <= 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : 3; };
           const porProv2 = {};
           abiertas.forEach(f => { if (!porProv2[f.proveedor]) porProv2[f.proveedor] = [0, 0, 0, 0]; porProv2[f.proveedor][buck(f)] += saldoF(f); });
@@ -2071,18 +2087,20 @@ export default function App() {
                   })}
                 </tbody>
               </table>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Auditoría de gestión ({auditoria.length} hallazgo{auditoria.length === 1 ? "" : "s"})</div>
-              {auditoria.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 12 }}>✓ Sin hallazgos — tareas y controles al día.</div>}
-              {auditoria.map((a, i) => (
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Auditoría de gestión ({auditoriaVisibles.length} hallazgo{auditoriaVisibles.length === 1 ? "" : "s"})</div>
+              {auditoriaVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 12 }}>✓ Sin hallazgos — tareas y controles al día.</div>}
+              {auditoriaVisibles.map((a, i) => (
                 <div key={"au" + i} style={{ fontSize: 12, padding: "5px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
-                  <b style={{ color: colorNivel[a.nivel] || "#333" }}>{a.nivel === "rojo" ? "🔴" : "🟡"}</b> {a.texto}
+                  <b style={{ color: colorNivel[a.nivel] || "#333" }}>{a.nivel === "rojo" ? "🔴" : "🟡"}</b> {a.textoAjustado || a.texto}
+                  {a.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {a.ajuste.responsable}: {a.ajuste.razon}]</span>}
                 </div>
               ))}
-              <div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Para decidir hoy ({decisiones.length} punto{decisiones.length === 1 ? "" : "s"})</div>
-              {decisiones.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 14 }}>✓ Sin alertas — operación dentro de parámetros.</div>}
-              {decisiones.map((d, i) => (
+              <div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Para decidir hoy ({decisionesVisibles.length} punto{decisionesVisibles.length === 1 ? "" : "s"})</div>
+              {decisionesVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 14 }}>✓ Sin alertas — operación dentro de parámetros.</div>}
+              {decisionesVisibles.map((d, i) => (
                 <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
-                  <b style={{ color: colorNivel[d.nivel] || "#333" }}>{d.nivel === "rojo" ? "🔴" : "🟡"}</b> {d.texto}
+                  <b style={{ color: colorNivel[d.nivel] || "#333" }}>{d.nivel === "rojo" ? "🔴" : "🟡"}</b> {d.textoAjustado || d.texto}
+                  {d.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {d.ajuste.responsable}: {d.ajuste.razon}]</span>}
                 </div>
               ))}
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
@@ -2395,10 +2413,59 @@ export default function App() {
   const setCap = (cambios) => { suciosRef.current[galponActivo] = true; setCapturas({ ...capturas, [galponActivo]: { ...cap, ...cambios } }); };
   const tGal = totalesGalpon(cap);
   const loteActivo = lotes.find(l => l.id === galponActivo);
-
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
       <style>{fuentes}</style>
+      {modalAdv && (
+        <div onClick={() => setModalAdv(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 99, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: modalAdv.accion === "eliminar" ? C.alerta : C.verde, marginBottom: 4 }}>
+              {modalAdv.accion === "eliminar" ? "🗑 Descartar / Eliminar Advertencia" : "✏️ Modificar Advertencia"}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 12, lineHeight: 1.4, background: C.fondo, padding: "8px 10px", borderRadius: 8 }}>
+              {modalAdv.item.texto}
+            </div>
+
+            {modalAdv.accion === "modificar" && (
+              <label style={{ display: "block", marginBottom: 12 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Texto o nota de la advertencia</span>
+                <textarea rows={3} value={modalAdv.nuevoTexto} onChange={e => setModalAdv({ ...modalAdv, nuevoTexto: e.target.value })} style={{ ...inputStyle, resize: "vertical" }} />
+              </label>
+            )}
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              <label style={{ flex: "1 1 45%", minWidth: 140 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Responsable</span>
+                <select value={modalAdv.responsable} onChange={e => setModalAdv({ ...modalAdv, responsable: e.target.value })} style={inputStyle}>
+                  <option value="Roxana">Roxana</option>
+                  <option value="Ivannia Lizano">Ivannia Lizano</option>
+                  <option value="Jose Daniel Quesada">Jose Daniel Quesada</option>
+                  <option value="Otro">Otro / Personal de granja</option>
+                </select>
+              </label>
+              <label style={{ flex: "1 1 45%", minWidth: 140 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del ajuste</span>
+                <input type="date" value={modalAdv.fecha} onChange={e => setModalAdv({ ...modalAdv, fecha: e.target.value })} style={inputStyle} />
+              </label>
+            </div>
+
+            <label style={{ display: "block", marginBottom: 14 }}>
+              <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Razón o justificación de la modificación <span style={{ color: C.alerta }}>*</span></span>
+              <textarea rows={2} placeholder="ej. Galpón en muda forzada programada, sin producción esperada." value={modalAdv.razon} onChange={e => setModalAdv({ ...modalAdv, razon: e.target.value })} style={{ ...inputStyle, resize: "vertical" }} />
+            </label>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={guardarAjusteAdvertencia} style={{ ...btnStyle, flex: 1, background: modalAdv.accion === "eliminar" ? C.alerta : C.verde }}>
+                {modalAdv.accion === "eliminar" ? "Confirmar eliminación" : "Guardar modificación"}
+              </button>
+              <button onClick={() => setModalAdv(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalFav && (
         <div onClick={() => setModalFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
@@ -2480,7 +2547,6 @@ export default function App() {
 
       <main style={{ maxWidth: 880, margin: "0 auto", padding: 16 }}>
         {guardado && <div style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
-
         {/* ══ CONTROL DIARIO ══ */}
         {vista === "captura" && (
           <>
@@ -2846,12 +2912,25 @@ export default function App() {
                 })}
               </Seccion>
 
-              <Seccion titulo="Para decidir hoy" sub={decisiones.length ? "Generado automáticamente con los datos del día" : ""}>
-                {decisiones.length === 0 && <div style={{ fontSize: 14, color: C.verde, fontWeight: 500 }}>✓ Sin alertas — el día se comportó dentro de los rangos esperados.</div>}
-                {decisiones.map((d, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, padding: "10px 12px", background: d.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5 }}>
-                    <span>{d.nivel === "rojo" ? "🔴" : "🟡"}</span>
-                    <span>{d.texto}</span>
+              <Seccion titulo="Para decidir hoy" sub={decisiones.length ? "Generado automáticamente con los datos del día — puedes modificar o descartar cada punto" : ""}>
+                {decisionesVisibles.length === 0 && <div style={{ fontSize: 14, color: C.verde, fontWeight: 500 }}>✓ Sin alertas — el día se comportó dentro de los rangos esperados.</div>}
+                {decisionesVisibles.map((d, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: d.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5 }}>
+                    <div style={{ display: "flex", gap: 8, flex: 1 }}>
+                      <span>{d.nivel === "rojo" ? "🔴" : "🟡"}</span>
+                      <div>
+                        <span>{d.textoAjustado || d.texto}</span>
+                        {d.ajuste && (
+                          <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>
+                            ✏️ Modificado por <b>{d.ajuste.responsable}</b> ({d.ajuste.fecha}): <i>"{d.ajuste.razon}"</i>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "modificar")} title="Modificar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
+                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "eliminar")} title="Descartar / eliminar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
+                    </div>
                   </div>
                 ))}
               </Seccion>
@@ -2873,7 +2952,6 @@ export default function App() {
             <div style={{ fontSize: 14, color: C.textoSuave }}>Aún no hay registros. Captura el control diario y el reporte se genera solo.</div>
           </Seccion>
         )}
-
         {/* ══ BODEGA ══ */}
         {vista === "bodega" && (
           <>
@@ -2933,7 +3011,6 @@ export default function App() {
                       }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
                     </div>
                     {(() => {
-                      // Buscar cada número de tiquete en la producción registrada (Control diario)
                       const nums = String(r.tiq || "").trim().split(/[\s,;]+/).filter(Boolean);
                       const buscarTiquete = (num) => {
                         for (const reg of registros) {
@@ -3049,7 +3126,6 @@ export default function App() {
             )}
           </>
         )}
-
         {/* ══ PLANTA DE CONCENTRADO ══ */}
         {vista === "planta" && (
           <>
@@ -3194,7 +3270,6 @@ export default function App() {
             </Seccion>
           </>
         )}
-
         {/* ══ PEDIDO MATERIA PRIMA ══ */}
         {vista === "pedidomp" && (
           <>
@@ -3440,7 +3515,6 @@ export default function App() {
             </Seccion>
           </>
         )}
-
         {/* ══ FÓRMULAS ══ */}
         {vista === "formulas" && (() => {
           const f = recetas.formulas[recActiva];
@@ -3684,10 +3758,8 @@ export default function App() {
             </>
           );
         })()}
-
         {/* ══ KPIs ══ */}
         {vista === "reporte" && (() => {
-          // KPIs avícolas del día que faltaban: masa de huevo y ratio agua:alimento
           const avesTot = activos.reduce((a, l) => a + l.aves, 0);
           const kgHuevoHoy = regsHoy.reduce((a, r) => a + Number(r.pesoKg || 0), 0);
           const masaHuevo = avesTot > 0 && kgHuevoHoy > 0 ? (kgHuevoHoy * 1000) / avesTot : null;
@@ -3699,12 +3771,52 @@ export default function App() {
           return (
             <>
               <Seccion titulo="🔍 Auditoría de gestión" sub="Tareas sin realizar, patrones anómalos y controles vencidos — lo que NO está pasando">
-                {auditoria.length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>✓ Gestión al día — sin hallazgos de auditoría.</div>}
-                {auditoria.map((a, i) => (
-                  <div key={i} style={{ display: "flex", gap: 9, padding: "9px 12px", background: a.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 6, fontSize: 13, lineHeight: 1.5 }}>
-                    <span>{a.nivel === "rojo" ? "🔴" : "🟡"}</span><span>{a.texto}</span>
+                {auditoriaVisibles.length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>✓ Gestión al día — sin hallazgos de auditoría.</div>}
+                {auditoriaVisibles.map((a, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 9, padding: "9px 12px", background: a.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 6, fontSize: 13, lineHeight: 1.5 }}>
+                    <div style={{ display: "flex", gap: 8, flex: 1 }}>
+                      <span>{a.nivel === "rojo" ? "🔴" : "🟡"}</span>
+                      <div>
+                        <span>{a.textoAjustado || a.texto}</span>
+                        {a.ajuste && (
+                          <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>
+                            ✏️ Modificado por <b>{a.ajuste.responsable}</b> ({a.ajuste.fecha}): <i>"{a.ajuste.razon}"</i>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => abrirModalAjusteAdv(a, "auditoria", "modificar")} title="Modificar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
+                      <button onClick={() => abrirModalAjusteAdv(a, "auditoria", "eliminar")} title="Descartar / eliminar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
+                    </div>
                   </div>
                 ))}
+                {ajustesAuditoria.length > 0 && (
+                  <details style={{ marginTop: 12, padding: "8px 10px", background: C.fondo, borderRadius: 10 }}>
+                    <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: C.texto }}>
+                      📋 Historial de advertencias gestionadas / descartadas ({ajustesAuditoria.length})
+                    </summary>
+                    <div style={{ marginTop: 8 }}>
+                      {ajustesAuditoria.map((aj, idx) => (
+                        <div key={aj.id || idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
+                          <div>
+                            <div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}:</b> {aj.textoOriginal}</div>
+                            <div style={{ color: C.textoSuave, marginTop: 2 }}>
+                              <span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : "#9A6605" }}>{aj.accion === "eliminar" ? "Descartada" : "Modificada"}</span> por <b>{aj.responsable}</b> el {aj.fecha}
+                              {aj.razon ? ` — Razón: "${aj.razon}"` : ""}
+                            </div>
+                            {aj.accion === "modificar" && aj.nuevoTexto && (
+                              <div style={{ color: C.verde, marginTop: 2 }}><b>Texto ajustado:</b> {aj.nuevoTexto}</div>
+                            )}
+                          </div>
+                          <button onClick={() => revertirAjusteAdv(aj.id)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.verde, fontWeight: 600, whiteSpace: "nowrap" }}>
+                            Reactivar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </Seccion>
 
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, color: C.verde, margin: "18px 0 10px", borderTop: `2px solid ${C.borde}`, paddingTop: 16 }}>📊 KPIs técnicos de la granja</div>
@@ -3815,7 +3927,6 @@ export default function App() {
                       const convLote = l.acumMasaKg > 0 ? l.acumAlimentoKg / l.acumMasaKg : 0;
                       const costoKg = Number(costos[l.formula] || 0);
                       const costoCarton = costoKg > 0 && l.acumHuevos > 0 ? (l.acumAlimentoKg * costoKg) / (l.acumHuevos / HXC) : 0;
-                      // Pico: máximo de la media móvil 7d de postura en el histórico del lote
                       const regsL = registros.filter(r => r.lote === l.id);
                       let pico = null, picoIdx = -1;
                       for (let i = 0; i + 7 <= regsL.length || (i === 0 && regsL.length > 0); i++) {
@@ -3895,8 +4006,7 @@ export default function App() {
             </Seccion>
           </>
         )}
-
-        {/* ══ HISTORIAL ══ */}
+        {/* ══ POR PAGAR ══ */}
         {vista === "cxp" && (() => {
           const provsConocidos = [...new Set([...mpCat.map(m => m.prov).filter(Boolean), ...insumos.map(i2 => i2.proveedor).filter(Boolean), ...cxp.facturas.map(f => f.proveedor)])];
           const porProv = {};
@@ -4137,6 +4247,7 @@ export default function App() {
           );
         })()}
 
+        {/* ══ HISTORIAL ══ */}
         {vista === "historial" && (() => {
           const aDMY = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
           const fSel = aDMY(histFecha);
@@ -4313,7 +4424,6 @@ export default function App() {
                           avisar(`⏳ 2/3 Importando ${i2 + 1}/${entradas.length}…`);
                           if (await escribir(k, v)) ok++; else mal.push(k.replace("granja2:", ""));
                         }
-                        // Verificación: releer una clave testigo de la nube y comparar
                         avisar("⏳ 3/3 Verificando en la nube…");
                         let verificado = true;
                         if (entradas.length) {
@@ -4516,7 +4626,6 @@ export default function App() {
                         const rUlt = regsLote[0];
                         const mDia = rUlt ? Number(rUlt.muertas || 0) : null;
                         const pDia = mDia != null && l.aves > 0 ? (mDia / l.aves) * 100 : null;
-                        // Semana: últimos 7 registros (7 días de captura)
                         const uls7 = regsLote.slice(0, 7);
                         const mSem = uls7.reduce((a, r) => a + Number(r.muertas || 0), 0);
                         const pSem = uls7.length && l.aves > 0 ? (mSem / l.aves) * 100 : null;
@@ -4668,7 +4777,7 @@ export default function App() {
             })}
 
             <Seccion titulo="Vacunación — programa y aplicación" sub="Plan del Dr. Heiner Hernández Ávila (C.M.V #666) por día de edad. Marca cada vacuna aplicada con su fecha.">
-              <button onClick={() => setPrintDoc({ tipo: "vacunas", lote: fVac.lote })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir reporte de vacunación</button>
+              <button onClick={() => setPrintDoc({ tipo: "vacunas", lote: fVac.lote })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de vacunación</button>
               <select value={fVac.lote} onChange={e => setFVac({ ...fVac, lote: e.target.value })} style={selectStyle}>
                 {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza} ({semanasDe(l.nac).toFixed(0)} sem · {Math.floor(semanasDe(l.nac) * 7)} días)</option>)}
               </select>
@@ -4815,7 +4924,7 @@ export default function App() {
 
       <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
         Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
-        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 04/09/2026
+        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 25/09/2026
       </footer>
     </div>
   );
