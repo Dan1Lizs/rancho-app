@@ -8,6 +8,8 @@ import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
 import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgramada, eliminarTareaProgramada } from "./tareasProgramadas";
+import { actividadesDelDia, trabajosDelDia } from "./reporteActividades";
+import { planServidoGanado } from "./servidoGanado";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -19,7 +21,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.1";
+const VERSION_APP = "8.2";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -389,7 +391,7 @@ export default function App() {
   const [plantaCfg, setPlantaCfg] = useState({ inicialAves: SEED_PLANTA.saldoKg, inicialGanado: 0 });
   const [bodegaCfg, setBodegaCfg] = useState({ inicialCart: 128 });
   const [aperturaIns, setAperturaIns] = useState({});
-  const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: new Date().toISOString().slice(0, 10) });
   const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", saldoReal: "", fecha: new Date().toISOString().slice(0, 10) });
   const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: new Date().toISOString().slice(0, 10) });
 
@@ -454,6 +456,8 @@ export default function App() {
   const [fNecFotos, setFNecFotos] = useState([]);
   const [fotosVista, setFotosVista] = useState({});
   const [printDoc, setPrintDoc] = useState(null);
+  const [elegirReporteActividades, setElegirReporteActividades] = useState(false);
+  const [alcanceReporteActividades, setAlcanceReporteActividades] = useState("");
   const [mpInv, setMpInv] = useState({});
   const [mpInvUltimo, setMpInvUltimo] = useState({});
   const [mpFechaInput, setMpFechaInput] = useState(new Date().toISOString().slice(0, 10));
@@ -963,12 +967,34 @@ export default function App() {
   };
 
   const guardarServidoGanado = async () => {
-    if (!fServGan.kg) return;
+    if (!Number.isFinite(Number(fServGan.kg)) || Number(fServGan.kg) <= 0 || !fechaPesajeISO(fServGan.fecha) || fServGan.fecha > hoyISO()) { avisar("⚠ Revisa los kilos y la fecha del servido"); return; }
     setGuardando(true);
-    const nuevo = [{ fecha: (fServGan.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/"), tipo: "servido", categoria: "Ganado", kg: Number(fServGan.kg), formula: fServGan.formula || "", detalle: fServGan.detalle || "", por: completadoPor }, ...plantaMovs];
-    if (await escribir(K.planta, nuevo)) { setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "", fecha: new Date().toISOString().slice(0, 10) }); avisar("✓ Servido a ganado registrado"); }
-    else avisar("⚠ No se pudo guardar");
-    setGuardando(false);
+    try {
+      const actuales = await leer(K.planta, null);
+      if (!actuales) throw new Error("No se pudo consultar el inventario actual");
+      const nuevo = [{ id: crypto.randomUUID(), fecha: fServGan.fecha.split("-").reverse().join("/"), tipo: "servido", categoria: "Ganado", kg: Number(fServGan.kg), formula: fServGan.formula || "", detalle: fServGan.detalle || "", ...(fServGan.grupoKey !== "" ? { grupoKey: fServGan.grupoKey } : {}), por: completadoPor }, ...actuales];
+      if (!(await escribir(K.planta, nuevo))) throw new Error("No se pudo guardar");
+      setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() }); avisar("✓ Servido a ganado registrado");
+    } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
+    finally { setGuardando(false); }
+  };
+
+  const registrarServidoCalculado = async () => {
+    if (guardando || cargandoFondo) return;
+    setGuardando(true);
+    try {
+      const actuales = await leer(K.planta, null);
+      if (!actuales) throw new Error("No se pudo consultar el servido actual");
+      const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), actuales);
+      if (plan.sinGrupo.length) throw new Error("Ya hay servido manual de hoy sin corral asignado. Revisa esos movimientos antes del registro calculado para evitar descontarlo dos veces.");
+      if (!plan.pendientes.length) { avisar("✓ Todos los corrales configurados ya tienen servido registrado hoy"); return; }
+      const nuevos = plan.pendientes.map(g => ({ id: `ganado:auto:${hoyISO()}:${g.key}`, fecha: plan.fecha, tipo: "servido", categoria: "Ganado", kg: g.kg, formula: g.formula, detalle: g.nombre, grupoKey: g.key, calculado: true, por: completadoPor }));
+      const lista = [...nuevos, ...actuales];
+      if (!(await escribir(K.planta, lista))) throw new Error("No se pudo guardar el servido calculado");
+      setPlantaMovs(lista);
+      avisar(`✓ Servido calculado registrado: ${nuevos.length} corrales, ${nuevos.reduce((s, m) => s + m.kg, 0).toFixed(1)} kg`);
+    } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
+    finally { setGuardando(false); }
   };
 
   const eliminarMovPlanta = async (m) => {
@@ -2001,8 +2027,35 @@ export default function App() {
           {printDoc.tipo === "nucleo" && `Checklist de producción de NÚCLEO — ${printDoc.formula}`}
           {printDoc.tipo === "enfermedades" && "Expediente de enfermedades y tratamientos"}
           {printDoc.tipo === "necropsias" && "Registro de necropsias y resultados de laboratorio"}
+          {printDoc.tipo === "actividades" && `Actividades del día — ${l ? `Galera ${l.galpon} · ${l.raza}` : "Generales de la granja"}`}
           {" · Emitido: "}{hoyStr()}
         </div>
+
+        {printDoc.tipo === "actividades" && (() => {
+          const programadas = actividadesDelDia(tareasProgramadas, printDoc.fecha, printDoc.lote || "");
+          const fecha = printDoc.fecha.split("-").reverse().join("/");
+          const registro = l ? registros.find(r => r.lote === l.id && r.fecha === fecha) : null;
+          const diarios = l ? trabajosDelDia(TRABAJOS, registro).filter(t => !t.realizado) : [];
+          return <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, padding: "12px 0", borderTop: "2px solid #222", borderBottom: "1px solid #aaa" }}>
+              <b>Fecha de trabajo: {fecha}</b><b>{l ? `GALERA ${l.galpon} · LOTE ${l.lote || ""}` : "ACTIVIDADES GENERALES"}</b>
+            </div>
+            <div style={{ marginTop: 16, fontWeight: 700, fontSize: 17 }}>Actividades programadas pendientes ({programadas.length})</div>
+            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Incluye actividades programadas para hoy y las atrasadas. Marca cada casilla al terminar.</p>
+            {programadas.map((t, i) => <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 13, padding: "11px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}>
+              <span style={{ fontSize: 22, lineHeight: 1 }}>☐</span><div><b>{i + 1}. {t.nombre}</b><div style={{ color: t.programada < printDoc.fecha ? "#9a3d20" : "#555", fontSize: 12 }}>{t.programada < printDoc.fecha ? `Atrasada · programada ${t.programada.split("-").reverse().join("/")}` : "Para hoy"}</div></div>
+            </div>)}
+            {!programadas.length && <p>No hay actividades programadas pendientes para este ámbito.</p>}
+            {l && <>
+              <div style={{ marginTop: 20, fontWeight: 700, fontSize: 17 }}>Trabajos diarios pendientes ({diarios.length})</div>
+              <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Según el último control guardado para esta fecha. Registra lo realizado en la app al terminar.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 18px" }}>{diarios.map(t => <div key={t.indice} style={{ padding: "6px 4px", borderBottom: "1px solid #ddd", breakInside: "avoid" }}>☐ {t.nombre}</div>)}</div>
+              {!diarios.length && <p>Los trabajos diarios ya constan como realizados.</p>}
+            </>}
+            <div style={{ display: "flex", gap: 30, marginTop: 50, fontSize: 12 }}><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Nombre y firma de quien realizó</span><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Revisado por</span></div>
+            <div style={{ marginTop: 30, fontSize: 12 }}>Observaciones: ________________________________________________________________</div>
+          </div>;
+        })()}
 
         {printDoc.tipo === "vacunas" && l && (
           <>
@@ -2721,6 +2774,24 @@ export default function App() {
         </div>
       )}
 
+      {elegirReporteActividades && <div role="dialog" aria-modal="true" aria-label="Elegir reporte de actividades" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
+        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(430px, 100%)" }}>
+          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Reporte de actividades de hoy</h2>
+          <p style={{ fontSize: 13, color: C.textoSuave }}>Selecciona las labores generales o la galera que recibirá el trabajador.</p>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>¿Qué actividades quieres imprimir?
+            <select value={alcanceReporteActividades} onChange={e => setAlcanceReporteActividades(e.target.value)} style={{ ...inputStyle, marginTop: 6 }}>
+              <option value="">Actividades generales de la granja</option>
+              {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.raza} · lote {l.lote || ""}</option>)}
+            </select>
+          </label>
+          <div style={{ padding: "10px 0", fontSize: 13, color: C.textoSuave }}>{actividadesDelDia(tareasProgramadas, hoyISO(), alcanceReporteActividades).length} actividades programadas pendientes{alcanceReporteActividades ? ` · ${TRABAJOS.length} trabajos diarios como máximo` : ""}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { setPrintDoc({ tipo: "actividades", fecha: hoyISO(), lote: alcanceReporteActividades }); setElegirReporteActividades(false); }} style={{ ...btnStyle, flex: 1 }}>Ver reporte para imprimir</button>
+            <button onClick={() => setElegirReporteActividades(false)} style={{ padding: "10px 12px" }}>Cancelar</button>
+          </div>
+        </div>
+      </div>}
+
       <header style={{ background: C.verde, padding: "16px 16px 0", color: "#fff", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ maxWidth: 880, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2957,6 +3028,7 @@ export default function App() {
             </Seccion>
 
             <Seccion titulo="Actividades programadas" sub="Avisos dentro de la app para labores de la granja o de una galera. Marca Realizada para calcular el siguiente aviso.">
+              <button onClick={() => { setAlcanceReporteActividades(""); setElegirReporteActividades(true); }} style={{ ...btnStyle, marginBottom: 14 }}>🖨 Reporte de actividades de hoy</button>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 <Campo mitad etiqueta="Actividad" placeholder="ej. Mantenimiento del zacate" value={formTarea.nombre} onChange={e => setFormTarea({ ...formTarea, nombre: e.target.value })} />
                 <label style={{ flex: "1 1 190px", fontSize: 12.5 }}>Ámbito
@@ -3444,10 +3516,36 @@ export default function App() {
               </div>
             </Seccion>
 
-            <Seccion titulo="B. Servido a ganado" sub="El consumo del ganado se digita aquí (el de aves sale solo del Control diario)">
+            <Seccion titulo="B. Servido a ganado" sub="Calcula el servido de hoy desde animales × kg por animal configurados en Materias primas, o registra el peso real manualmente.">
+              {(() => {
+                const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), plantaMovs);
+                return <div style={{ background: C.verdeSuave, borderRadius: 12, padding: 13, marginBottom: 16 }}>
+                  <b style={{ color: C.verde, fontSize: 14 }}>Servido calculado de hoy · {hoyStr()}</b>
+                  <div style={{ fontSize: 12, color: C.textoSuave, margin: "4px 0 9px" }}>Confirma el servido real antes de registrarlo. Se descontará del inventario de ganado una sola vez por corral.</div>
+                  {plan.filas.map(g => <div key={g.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, borderTop: "1px solid #c7d8c9", padding: "7px 0", fontSize: 13 }}>
+                    <span><b>{g.nombre}</b> · {g.formula}<br /><small>{g.animales} animales × {g.kgAnimal} kg</small></span>
+                    <b style={{ color: g.registrado ? C.textoSuave : C.verde, whiteSpace: "nowrap" }}>{g.kg.toFixed(1)} kg {g.registrado ? "✓ registrado" : ""}</b>
+                  </div>)}
+                  {!plan.filas.length && <div style={{ fontSize: 12.5 }}>Configura animales, ración y fórmula para cada corral en Materias primas → Consumo proyectado.</div>}
+                  {plan.sinGrupo.length > 0 && <div style={{ color: C.alerta, fontSize: 12, marginBottom: 8 }}>Hay {plan.sinGrupo.length} servido(s) manual(es) de hoy sin corral. El registro calculado se detiene para evitar duplicarlos.</div>}
+                  <div style={{ fontWeight: 700, fontSize: 13, margin: "8px 0" }}>Pendiente: {plan.pendientes.reduce((s, g) => s + g.kg, 0).toFixed(1)} kg en {plan.pendientes.length} corral(es) · inventario actual: {saldoGanado.toFixed(1)} kg</div>
+                  <button onClick={registrarServidoCalculado} disabled={guardando || cargandoFondo || !plan.pendientes.length || !!plan.sinGrupo.length} style={btnStyle}>Registrar servido calculado de hoy</button>
+                </div>;
+              })()}
+              <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 9 }}>Registrar servido real manualmente</div>
               <label style={{ display: "block", marginBottom: 12, maxWidth: 220 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del servido</span>
                 <input type="date" value={fServGan.fecha} onChange={e => setFServGan({ ...fServGan, fecha: e.target.value })} style={inputStyle} />
+              </label>
+              <label style={{ display: "block", fontSize: 12.5 }}>Corral / grupo
+                <select value={fServGan.grupoKey} onChange={e => {
+                  const key = e.target.value;
+                  const g = key === "" ? null : (mpConfig.ganado || [])[Number(key)];
+                  setFServGan({ ...fServGan, grupoKey: key, detalle: g?.nombre || fServGan.detalle, formula: g?.formula || fServGan.formula, kg: g ? String(+(Number(g.animales || 0) * Number(g.kgAnimal || 0)).toFixed(2)) : fServGan.kg });
+                }} style={selectStyle}>
+                  <option value="">Otro / sin corral</option>
+                  {(mpConfig.ganado || []).map((g, i) => <option key={i} value={String(i)}>{g.nombre}</option>)}
+                </select>
               </label>
               <select value={fServGan.formula} onChange={e => setFServGan({ ...fServGan, formula: e.target.value })} style={selectStyle}>
                 <option value="">Tipo de concentrado (opcional)</option>
