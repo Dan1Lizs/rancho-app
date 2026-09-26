@@ -315,6 +315,14 @@ export async function actualizarPesajePorId(id, nuevo) {
   ultimaVersion.delete("granja2:pesajes");
 }
 
+export async function eliminarPesajePorId(id) {
+  const { data, error } = await supabase.from("pesajes").delete().eq("id", String(id)).select("id");
+  if (error) { revisarError(error); throw error; }
+  if (!data?.length) throw new Error("El pesaje ya no existe o no se pudo eliminar");
+  const anterior = ultimaVersion.get("granja2:pesajes");
+  if (anterior) ultimaVersion.set("granja2:pesajes", anterior.filter(p => String(p.id) !== String(id)));
+}
+
 // Un respaldo nunca utiliza escribirColeccion: esa función interpreta los
 // registros ausentes del archivo como borrados y puede actualizar filas vivas.
 export async function agregarRespaldoFaltante(datos) {

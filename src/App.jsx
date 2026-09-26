@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
-import { leer, escribir, agregarPesajesFaltantes, actualizarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
+import { leer, escribir, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
+import { cargarBaseConReintentos } from "./cargaInicial";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
@@ -385,6 +386,7 @@ export default function App() {
   const [filtroConfPesajes, setFiltroConfPesajes] = useState(filtroVacio);
   const [filtroConfRespaldo, setFiltroConfRespaldo] = useState(filtroVacio);
   const [editarPesaje, setEditarPesaje] = useState(null);
+  const [pesajeEliminar, setPesajeEliminar] = useState(null);
   const [tareasProgramadas, setTareasProgramadas] = useState([]);
   const [formTarea, setFormTarea] = useState({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] });
   const [guardandoTarea, setGuardandoTarea] = useState(false);
@@ -513,20 +515,22 @@ export default function App() {
   // ── Carga inicial ──
   const cargarTodo = async (primera, silencioso = false) => {
     if (!silencioso) setCargando(true);
+    let baseLista = false;
     try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
-      const [ls0, rs0] = await Promise.race([timeout, Promise.all([leer(K.lotes, null), leer(K.registros, null)])]);
-      if (ls0 === null || rs0 === null) throw new Error("No se pudieron leer los lotes o registros");
+      const [ls0, rs0, ps0] = await cargarBaseConReintentos(() => Promise.all([
+        leer(K.lotes, null), leer(K.registros, null), leer(K.pesajes, null),
+      ]));
       const siembras = [];
       const ls = ls0;
       const rs = rs0;
-      setLotes(ls); setRegistros(ordenarPorFecha(rs));
+      setLotes(ls); setRegistros(ordenarPorFecha(rs)); setPesajes(ordenarPorFecha(ps0));
       if (primera) setCapturas(Object.fromEntries(ls.map(l => [l.id, capturaVacia()])));
       setErrorCarga(false);
+      baseLista = true;
       if (!silencioso) { setCargando(false); setCargandoFondo(true); }
 
-      const [ps0, ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0, adv0] = await Promise.all([
-        leer(K.pesajes, null), leer(K.meds, []), leer(K.fums, []), leer(K.movs, []), leer(K.planta, []),
+      const [ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0, adv0] = await Promise.all([
+        leer(K.meds, []), leer(K.fums, []), leer(K.movs, []), leer(K.planta, []),
         leer(K.plantaCfg, null), leer(K.bodegaCfg, null), leer(K.facturas, []), leer(K.vacunas, []),
         leer(K.enfermedades, []), leer(K.necropsias, []), leer(K.planVac, null), leer(K.bitacora, []),
         leer(K.costos, SEED_COSTOS), leer(K.mpInv, null), leer(K.mpConfig, null), leer(K.mpPedidos, []),
@@ -534,7 +538,6 @@ export default function App() {
         leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []), leer(K.mpInvHist, []),
         leer(K.advAjustes, []),
       ]);
-      if (ps0 === null) throw new Error("No se pudieron leer los pesajes");
       const ps = ps0;
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
       let rc = rc0 ?? (siembras.push(escribir(K.recetas, SEED_RECETAS)), SEED_RECETAS);
@@ -596,7 +599,11 @@ export default function App() {
         }
       }
       setCargandoFondo(false);
-    } catch { if (!silencioso) { setErrorCarga(true); setCargando(false); setCargandoFondo(false); } }
+    } catch (e) {
+      console.error("Carga de datos:", e);
+      setCargandoFondo(false);
+      if (!baseLista && !silencioso) { setErrorCarga(true); setCargando(false); }
+    }
   };
   useEffect(() => { cargarTodo(true); }, []);
 
@@ -1179,6 +1186,19 @@ export default function App() {
       setEditarPesaje(null);
       avisar("✓ Pesaje corregido");
     } catch (e) { console.error(e); avisar(`⚠ No se guardó: ${e.message}`); }
+    finally { setGuardando(false); }
+  };
+
+  const confirmarEliminarPesaje = async () => {
+    if (!pesajeEliminar || guardando) return;
+    const id = pesajeEliminar.id;
+    setGuardando(true);
+    try {
+      await eliminarPesajePorId(id);
+      setPesajes(prev => prev.filter(p => String(p.id) !== String(id)));
+      setPesajeEliminar(null);
+      avisar("✓ Pesaje eliminado");
+    } catch (e) { console.error(e); avisar(`⚠ No se pudo eliminar: ${e.message}`); }
     finally { setGuardando(false); }
   };
 
@@ -4979,7 +4999,7 @@ export default function App() {
               );
             })}
 
-            <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige un registro sin tocar los demás.">
+            <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
               {(() => {
                 const filas = pesajes.map(p => {
                   const l = lotes.find(x => x.id === p.lote);
@@ -4996,6 +5016,7 @@ export default function App() {
                       return <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
                         <span style={{ flex: "1 1 230px" }}><b>{p.fecha} · G{l?.galpon ?? p.lote}</b> · {p.pesos?.length || 0} aves · {prom} g {p.estado === "Fecha futura" && <b style={{ color: C.alerta }}>⚠ Fecha futura</b>}</span>
                         <button onClick={() => abrirEdicionPesaje(p)}>Revisar / corregir</button>
+                        <button onClick={() => setPesajeEliminar(p)} style={{ color: C.alerta }}>Eliminar</button>
                       </div>;
                     })}
                     {!visibles.length && <div style={{ fontSize: 13, color: C.textoSuave }}>No hay pesajes para estos filtros.</div>}
@@ -5209,6 +5230,18 @@ export default function App() {
           </label>
           <button disabled={guardando} onClick={guardarEdicionPesaje} style={btnStyle}>Guardar corrección</button>
           <button disabled={guardando} onClick={() => setEditarPesaje(null)} style={{ marginLeft: 8 }}>Cancelar</button>
+        </div>
+      </div>}
+
+      {pesajeEliminar && <div role="dialog" aria-modal="true" aria-label="Confirmar eliminación de pesaje" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
+        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(440px, 100%)" }}>
+          <h2 style={{ margin: "0 0 12px", color: C.alerta }}>Eliminar pesaje</h2>
+          <p>¿Eliminar definitivamente el pesaje del {pesajeEliminar.fecha} de la galera {lotes.find(l => l.id === pesajeEliminar.lote)?.galpon ?? pesajeEliminar.lote} ({pesajeEliminar.pesos?.length || 0} aves)?</p>
+          <p style={{ fontSize: 13, color: C.textoSuave }}>Se borrará solo este registro.</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button disabled={guardando} onClick={confirmarEliminarPesaje} style={{ ...btnStyle, background: C.alerta }}>{guardando ? "Eliminando…" : "Eliminar este pesaje"}</button>
+            <button disabled={guardando} onClick={() => setPesajeEliminar(null)}>Cancelar</button>
+          </div>
         </div>
       </div>}
 
