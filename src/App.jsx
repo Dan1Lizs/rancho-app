@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import * as XLSX from "xlsx";
 import { leer, escribir, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
+import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
@@ -18,7 +19,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.0";
+const VERSION_APP = "8.1";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -72,6 +73,23 @@ const comprimirImagen = (file) => new Promise((res, rej) => {
 const semanasDe = (fechaNac) => {
   const [y, m, d] = fechaNac.split("-").map(Number);
   return Math.max(0, (Date.now() - new Date(y, m - 1, d).getTime()) / (7 * 24 * 3600 * 1000));
+};
+
+const semanaEnFecha = (nac, fecha = hoyISO()) => {
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? fecha : fechaPesajeISO(fecha);
+  if (!iso || !nac) return NaN;
+  const inicio = Date.parse(`${nac}T00:00:00Z`);
+  const fin = Date.parse(`${iso}T00:00:00Z`);
+  return fin >= inicio ? (fin - inicio) / (7 * 86400000) : NaN;
+};
+const fichaLote = (l, fecha) => referenciaRaza(l.raza, semanaEnFecha(l.nac, fecha));
+const metaPosturaLote = (l, fecha) => {
+  const ficha = fichaLote(l, fecha);
+  return claveRaza(l.raza) ? valorCentral(ficha?.postura) : Number(l.posturaIdeal) || null;
+};
+const metaPesoLote = (l, fecha, pesaje) => {
+  const ficha = fichaLote(l, fecha);
+  return claveRaza(l.raza) ? valorCentral(ficha?.peso) : Number(l.pesoMeta) || Number(pesaje?.meta) || null;
 };
 
 const SEED_COSTOS = { "Postura F1": "", "Ponedora 18+": "", "Impulsor": "" };
@@ -235,16 +253,16 @@ function KPI({ etiqueta, valor, unidad, tono, sub }) {
 
 function BarraPostura({ actual, meta }) {
   const pct = Math.min(actual, 100);
-  const brecha = (meta - actual).toFixed(1);
+  const brecha = meta == null ? null : +(meta - actual).toFixed(1);
   return (
     <div style={{ marginTop: 10 }}>
       <div style={{ position: "relative", height: 12, background: C.verdeSuave, borderRadius: 6 }}>
         <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${C.yema}, #F5B845)`, borderRadius: 6 }} />
-        <div style={{ position: "absolute", left: `${Math.min(meta, 99)}%`, top: -3, height: 18, width: 2.5, background: C.verde, borderRadius: 2 }} />
+        {meta != null && <div style={{ position: "absolute", left: `${Math.min(meta, 99)}%`, top: -3, height: 18, width: 2.5, background: C.verde, borderRadius: 2 }} />}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 11.5, color: C.textoSuave }}>
         <span><b style={{ color: C.texto }}>{actual.toFixed(1)}%</b> postura</span>
-        <span style={{ color: brecha > 0 ? C.alerta : C.verde, fontWeight: 500 }}>{brecha > 0 ? `−${brecha}` : `+${Math.abs(brecha)}`} pts vs tabla</span>
+        <span style={{ color: brecha == null ? C.textoSuave : brecha > 0 ? C.alerta : C.verde, fontWeight: 500 }}>{brecha == null ? "sin dato de postura para esta semana" : `${brecha > 0 ? `−${brecha}` : `+${Math.abs(brecha)}`} pts vs tabla`}</span>
       </div>
     </div>
   );
@@ -460,6 +478,8 @@ export default function App() {
   const [histFecha, setHistFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [histMes, setHistMes] = useState(() => new Date().toISOString().slice(0, 7));
   const [formLote, setFormLote] = useState(null);
+  const [razaReferencia, setRazaReferencia] = useState("isa");
+  const [semanaReferencia, setSemanaReferencia] = useState(26);
 
   const guardarLote = async () => {
     if (!formLote.galpon || !formLote.raza || !formLote.nac) { avisar("⚠ Galpón, raza y fecha de nacimiento son obligatorios"); return; }
@@ -1076,7 +1096,7 @@ export default function App() {
     const [py, pm, pd] = fISO.split("-").map(Number);
     const semanaPesaje = Math.floor((new Date(py, pm - 1, pd) - new Date(ny, nm - 1, nd)) / (7 * 86400000));
     try {
-      const resultado = await agregarPesajesFaltantes([{ lote: fPeso.lote, semana: semanaPesaje, fecha: fechaDMY, pesos: validos, meta: Number(lote.pesoMeta) || 2000 }]);
+      const resultado = await agregarPesajesFaltantes([{ lote: fPeso.lote, semana: semanaPesaje, fecha: fechaDMY, pesos: validos, meta: metaPesoLote(lote, fechaDMY) || 0 }]);
       const actual = await leer(K.pesajes, null);
       if (actual) setPesajes(ordenarPorFecha(actual));
       if (resultado.agregados) {
@@ -1129,7 +1149,7 @@ export default function App() {
       clavesArchivo.add(k);
       const [ny, nm, nd] = lote.nac.split("-").map(Number);
       const [py, pm, pd] = p.fecha.split("-").map(Number);
-      const nuevo = { lote: p.lote, fecha: `${pd}/${pm}/${py}`, semana: Math.floor((new Date(py, pm - 1, pd) - new Date(ny, nm - 1, nd)) / (7 * 86400000)), pesos: p.pesos.map(pesoEnGramos), meta: Number(lote.pesoMeta) || 2000 };
+      const nuevo = { lote: p.lote, fecha: `${pd}/${pm}/${py}`, semana: Math.floor((new Date(py, pm - 1, pd) - new Date(ny, nm - 1, nd)) / (7 * 86400000)), pesos: p.pesos.map(pesoEnGramos), meta: metaPesoLote(lote, p.fecha) || 0 };
       if (existentes.has(k)) conflictos.push({ clave: k, nuevo, actual: existentes.get(k), galpon: lote.galpon });
       else seleccion.push(nuevo);
     }
@@ -1637,13 +1657,15 @@ export default function App() {
       dFechaCercana = resumenDia(fechaComparacion);
     }
   }
-  const metaGenetica = totalAves ? activos.reduce((s, l) => s + l.posturaIdeal * l.aves, 0) / totalAves : 0;
+  const avesConMeta = activos.filter(l => metaPosturaLote(l, fHoy) != null);
+  const totalConMeta = avesConMeta.reduce((s, l) => s + l.aves, 0);
+  const metaGenetica = totalConMeta ? avesConMeta.reduce((s, l) => s + metaPosturaLote(l, fHoy) * l.aves, 0) / totalConMeta : null;
   const decisiones = [];
   activos.forEach(l => {
     const pes = pesajes.find(p2 => p2.lote === l.id);
     if (!pes || !pes.pesos?.length) return;
     const prom = pes.pesos.reduce((a, b) => a + b, 0) / pes.pesos.length;
-    const meta = Number(l.pesoMeta) || Number(pes.meta) || 0;
+    const meta = metaPesoLote(l, pes.fecha, pes);
     if (meta > 0) {
       const brechaG = prom - meta;
       const brechaP = (brechaG / meta) * 100;
@@ -1660,9 +1682,10 @@ export default function App() {
       const r = registros.find(x => x.fecha === fHoy && x.lote === l.id);
       if (r) {
         const p = (r.cartones * HXC / l.aves) * 100;
-        const brecha = l.posturaIdeal - p;
+        const metaPost = metaPosturaLote(l, r.fecha);
+        const brecha = metaPost == null ? 0 : metaPost - p;
         if (brecha > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon} (${l.raza}): postura ${p.toFixed(1)}% — ${brecha.toFixed(0)} pts bajo la tabla. Revisar consumo, agua, sanidad y peso corporal.` });
-        else if (brecha > 8) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: brecha de ${brecha.toFixed(0)} pts vs genética (${p.toFixed(1)}% vs ${l.posturaIdeal}%).` });
+        else if (brecha > 8) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: brecha de ${brecha.toFixed(0)} pts vs genética (${p.toFixed(1)}% vs ${metaPost.toFixed(1)}%).` });
         const gAve = l.aves ? (Number(r.alimentoKg || 0) * 1000) / l.aves : 0;
         const espKg = Number(r.alimentoEsperadoKg || 0) || (l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0);
         if (espKg > 0 && r.alimentoKg > 0) {
@@ -2246,7 +2269,8 @@ export default function App() {
                     const regsL = registros.filter(r => r.lote === l2.id).slice(0, 7);
                     const rU = regsL[0];
                     const post = rU && l2.aves ? ((rU.cartones * HXC) / l2.aves) * 100 : null;
-                    const dPost = post != null && l2.posturaIdeal ? post - l2.posturaIdeal : null;
+                    const metaPost = metaPosturaLote(l2, rU?.fecha);
+                    const dPost = post != null && metaPost != null ? post - metaPost : null;
                     const gReal = rU && Number(rU.alimentoKg || 0) > 0 && l2.aves ? (rU.alimentoKg * 1000) / l2.aves : null;
                     const dCons = gReal != null && l2.racionGAve > 0 ? ((gReal - l2.racionGAve) / l2.racionGAve) * 100 : null;
                     const ratio = rU && Number(rU.aguaL || 0) > 0 && Number(rU.alimentoKg || 0) > 0 ? rU.aguaL / rU.alimentoKg : null;
@@ -2254,7 +2278,7 @@ export default function App() {
                     const pM7 = l2.aves ? (m7 / l2.aves) * 100 : null;
                     const pes = pesajes.find(p2 => p2.lote === l2.id);
                     const stP = pes ? statsPesaje(pes) : null;
-                    const metaP = Number(l2.pesoMeta) || (pes ? Number(pes.meta) : 0) || 0;
+                    const metaP = pes ? metaPesoLote(l2, pes.fecha, pes) : null;
                     const dPeso = stP && metaP ? ((stP.prom - metaP) / metaP) * 100 : null;
                     return (
                       <tr key={l2.id}>
@@ -2407,7 +2431,7 @@ export default function App() {
                       <tr key={l2.id}>
                         <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
                         <td style={{ ...celda, fontWeight: 600 }}>{post != null ? `${post.toFixed(1)}%` : "—"}</td>
-                        <td style={celda}>{l2.posturaIdeal ? `${l2.posturaIdeal}%` : "—"}</td>
+                        <td style={celda}>{metaPosturaLote(l2, ult?.fecha) != null ? `${metaPosturaLote(l2, ult?.fecha).toFixed(1)}%` : "—"}</td>
                         <td style={celda}>{l2.formula || "—"}</td>
                         <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "—"}</td>
                         <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "—"}</td>
@@ -2439,7 +2463,7 @@ export default function App() {
             if (!ult) return null;
             const st = statsPesaje(ult);
             const stAnt = ant ? statsPesaje(ant) : null;
-            const meta = Number(l2.pesoMeta) || Number(ult.meta) || 0;
+            const meta = metaPesoLote(l2, ult.fecha, ult);
             const rReal = registros.find(r => r.lote === l2.id && Number(r.alimentoKg || 0) > 0);
             const gAveReal = rReal && l2.aves ? (Number(rReal.alimentoKg) * 1000) / l2.aves : null;
             return { l2, ult, ant, st, stAnt, meta, gAveReal };
@@ -2507,14 +2531,14 @@ export default function App() {
             ["Genética", l.raza, ""],
             ["Aves vivas", l.aves.toLocaleString(), ""],
             ["Mortalidad del día", reg.muertas ?? "—", "0–2 aves/1000"],
-            ["% de postura", huevos > 0 ? `${((huevos / l.aves) * 100).toFixed(1)}%` : "—", l.metaPostura ? `${l.metaPostura}% (tabla)` : "Según tabla"],
+            ["% de postura", huevos > 0 ? `${((huevos / l.aves) * 100).toFixed(1)}%` : "—", metaPosturaLote(l, reg.fecha) != null ? `${metaPosturaLote(l, reg.fecha).toFixed(1)}% (tabla)` : "—"],
             ["Huevos buenos", huevos > 0 ? (huevos - (reg.quebrados || 0)).toFixed(0) : "—", ""],
             ["Huevos quebrados", reg.quebrados ?? "—", "<3%"],
             ["Peso promedio del huevo (g)", pesoHuevo ? pesoHuevo.toFixed(1) : "—", "Según edad"],
             ["Consumo alimento (g/ave/día)", gAve ? gAve.toFixed(0) : "—", l.racionGAve ? `${l.racionGAve} g (ración)` : "Según tabla"],
             ["Consumo total alimento (kg)", reg.alimentoKg ?? "—", ""],
             ["Consumo de agua (ml/ave/día)", mlAve ? mlAve.toFixed(0) : "—", gAve ? `${(gAve * 1.8).toFixed(0)}–${(gAve * 2.2).toFixed(0)} (1.8–2.2× alimento)` : "1.8–2.2× alimento"],
-            ["Peso corporal promedio (g)", promP ? promP.toFixed(0) : "—", "Según guía genética"],
+            ["Peso corporal promedio (g)", promP ? promP.toFixed(0) : "—", pesUlt && metaPesoLote(l, pesUlt.fecha, pesUlt) ? `${metaPesoLote(l, pesUlt.fecha, pesUlt).toFixed(0)} g` : "—"],
             ["Uniformidad del lote (%)", unif ? unif.toFixed(1) : "—", ">85%"],
             ["Calidad de cáscara", ch.cascara || "—", "Buena"],
             ["Color de cresta", ch.cresta || "—", "Roja intensa"],
@@ -3055,7 +3079,7 @@ export default function App() {
             { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: dFechaCercana?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
             { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dFechaCercana?.pesoH, hoy: dHoy.pesoH, u: " g" },
           ];
-          const brechaGen = metaGenetica - dHoy.postura;
+          const brechaGen = metaGenetica == null ? null : metaGenetica - dHoy.postura;
           const notasHoy = bitacora.filter(b => b.fecha === fHoy);
           return (
             <>
@@ -3064,7 +3088,7 @@ export default function App() {
                 <div style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.6, opacity: 0.95 }}>
                   Se produjeron <b>{dHoy.cartones.toFixed(1)} cartones</b> con postura de <b>{dHoy.postura.toFixed(1)}%</b>
                   {dAyer && <> ({dHoy.postura >= dAyer.postura ? "▲" : "▼"} {Math.abs(dHoy.postura - dAyer.postura).toFixed(1)} pts vs ayer)</>},
-                  a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta genética ({metaGenetica.toFixed(1)}%).
+                  {brechaGen != null && <> a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta genética ({metaGenetica.toFixed(1)}%).</>}
                   Mortalidad: <b>{dHoy.muertas}</b>. Quebrado: <b>{dHoy.pctQueb.toFixed(1)}%</b>. Concentrado en planta: <b>{saldoPlanta.toFixed(0)} kg</b>.
                 </div>
               </div>
@@ -3104,7 +3128,7 @@ export default function App() {
                         <b>Gallinero {l.galpon} · {l.raza} ({semanasDe(l.nac).toFixed(0)} sem){l.estadoProd && l.estadoProd !== "Producción normal" ? <span style={{ color: "#9A6605", fontWeight: 700 }}> · {l.estadoProd}</span> : null}</b>
                         {p == null && <span style={{ color: C.textoSuave }}>sin registro hoy</span>}
                       </div>
-                      {p != null && <BarraPostura actual={p} meta={l.posturaIdeal} />}
+                      {p != null && <BarraPostura actual={p} meta={metaPosturaLote(l, fHoy)} />}
                     </div>
                   );
                 })}
@@ -3119,7 +3143,7 @@ export default function App() {
                     </div>
                   );
                   const prom = pes.pesos.reduce((a, b) => a + b, 0) / pes.pesos.length;
-                  const meta = Number(l.pesoMeta) || Number(pes.meta) || 0;
+                  const meta = metaPesoLote(l, pes.fecha, pes);
                   const brechaG = meta ? prom - meta : null;
                   const brechaP = meta ? (brechaG / meta) * 100 : null;
                   const color = brechaP == null ? C.textoSuave : brechaP <= -10 ? C.alerta : brechaP <= -4 ? "#9A6605" : brechaP >= 8 ? "#9A6605" : C.verde;
@@ -4075,7 +4099,8 @@ export default function App() {
                         const regsL = registros.filter(r => r.lote === l.id).slice(0, 7);
                         const rU = regsL[0];
                         const post = rU && l.aves ? ((rU.cartones * HXC) / l.aves) * 100 : null;
-                        const dPost = post != null && l.posturaIdeal ? post - l.posturaIdeal : null;
+                        const metaPost = metaPosturaLote(l, rU?.fecha);
+                        const dPost = post != null && metaPost != null ? post - metaPost : null;
                         const cPost = dPost == null ? C.textoSuave : dPost <= -15 ? C.alerta : dPost <= -8 ? "#9A6605" : C.verde;
                         const gReal = rU && Number(rU.alimentoKg || 0) > 0 && l.aves ? (rU.alimentoKg * 1000) / l.aves : null;
                         const dCons = gReal != null && l.racionGAve > 0 ? ((gReal - l.racionGAve) / l.racionGAve) * 100 : null;
@@ -4087,7 +4112,7 @@ export default function App() {
                         const cM7 = pM7 == null ? C.textoSuave : pM7 > 0.7 ? C.alerta : pM7 > 0.35 ? "#9A6605" : C.verde;
                         const pes = pesajes.find(p2 => p2.lote === l.id);
                         const stP = pes ? statsPesaje(pes) : null;
-                        const metaP = Number(l.pesoMeta) || (pes ? Number(pes.meta) : 0) || 0;
+                        const metaP = pes ? metaPesoLote(l, pes.fecha, pes) : null;
                         const dPeso = stP && metaP ? ((stP.prom - metaP) / metaP) * 100 : null;
                         const cPeso = dPeso == null ? C.textoSuave : dPeso <= -10 ? C.alerta : dPeso <= -4 || dPeso >= 8 ? "#9A6605" : C.verde;
                         const cUnif = !stP ? C.textoSuave : stP.unif < 80 ? C.alerta : stP.unif < 85 ? "#9A6605" : C.verde;
@@ -4129,7 +4154,7 @@ export default function App() {
                     <XAxis dataKey="dia" tick={{ fontSize: 10.5, fill: C.textoSuave }} tickLine={false} axisLine={{ stroke: C.borde }} interval={2} />
                     <YAxis domain={[50, 100]} tick={{ fontSize: 10.5, fill: C.textoSuave }} tickLine={false} axisLine={false} />
                     <Tooltip formatter={(v) => [`${v}%`, "Postura"]} contentStyle={{ borderRadius: 10, border: `1px solid ${C.borde}`, fontSize: 13 }} />
-                    <ReferenceLine y={metaGenetica} stroke={C.verde} strokeDasharray="5 4" strokeWidth={1.5} />
+                    {metaGenetica != null && <ReferenceLine y={metaGenetica} stroke={C.verde} strokeDasharray="5 4" strokeWidth={1.5} />}
                     <Line type="monotone" dataKey="postura" stroke={C.yema} strokeWidth={2.5} dot={{ r: 2.5, fill: C.yema }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -4174,7 +4199,7 @@ export default function App() {
                       return (
                         <tr key={l.id} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
                           <td style={{ textAlign: "left", padding: "9px 4px", fontWeight: 600 }}>G{l.galpon}<div style={{ fontSize: 11, color: C.textoSuave, fontWeight: 400 }}>{l.raza} · {semanasDe(l.nac).toFixed(0)} sem</div></td>
-                          <td style={{ padding: "9px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{haa.toFixed(1)}</td>
+                          <td style={{ padding: "9px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{haa.toFixed(1)}<div style={{ fontSize: 10.5, color: C.textoSuave, fontWeight: 400 }}>tabla: {(() => { const v = fichaLote(l)?.haa; return Array.isArray(v) ? `${v[0]}–${v[1]}` : v ?? "—"; })()}</div></td>
                           <td style={{ padding: "9px 4px", color: viab < 94 ? (viab < 88 ? C.alerta : "#9A6605") : C.verde, fontWeight: 600 }}>{viab.toFixed(1)}%</td>
                           <td style={{ padding: "9px 4px", color: !convLote ? C.textoSuave : convLote > 2.2 ? C.alerta : C.verde, fontWeight: 600 }}>{convLote ? convLote.toFixed(2) : "—"}</td>
                           <td style={{ padding: "9px 4px", color: cPico, fontWeight: 700 }}>{pico != null ? `${pico.toFixed(1)}%` : "—"}</td>
@@ -4745,7 +4770,10 @@ export default function App() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <Campo tercio etiqueta="Gallinero #" type="text" inputMode="numeric" placeholder="ej. 1" value={formLote.galpon} onChange={e => setFormLote({ ...formLote, galpon: e.target.value })} />
                   <Campo tercio etiqueta="Lote #" type="text" placeholder="ej. 03" value={formLote.lote} onChange={e => setFormLote({ ...formLote, lote: e.target.value })} />
-                  <Campo tercio etiqueta="Raza / línea" type="text" placeholder="ej. ISA Brown" value={formLote.raza} onChange={e => setFormLote({ ...formLote, raza: e.target.value })} />
+                  <div style={{ flex: "1 1 30%", minWidth: 150 }}>
+                    <Campo etiqueta="Raza / línea" type="text" list="razasConManual" placeholder="ej. ISA Brown" value={formLote.raza} onChange={e => setFormLote({ ...formLote, raza: e.target.value })} />
+                    <datalist id="razasConManual">{Object.values(REFERENCIAS_RAZAS).map(x => <option key={x.nombre} value={x.nombre} />)}</datalist>
+                  </div>
                   <Campo mitad etiqueta="Fecha de nacimiento" type="date" value={formLote.nac} onChange={e => setFormLote({ ...formLote, nac: e.target.value })} />
                   <Campo mitad etiqueta="Aves alojadas (iniciales)" type="text" inputMode="numeric" placeholder="ej. 2400" value={formLote.avesIniciales} onChange={e => setFormLote({ ...formLote, avesIniciales: e.target.value })} />
                   {formLote.id && <Campo mitad etiqueta="Aves actuales (corrección)" type="text" inputMode="numeric" value={formLote.aves} onChange={e => setFormLote({ ...formLote, aves: e.target.value })} />}
@@ -4784,10 +4812,17 @@ export default function App() {
                 })()}
 
                 <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Metas de la tabla genética</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Campo mitad etiqueta="% postura ideal (semana actual)" type="text" inputMode="decimal" placeholder="ej. 92" value={formLote.posturaIdeal} onChange={e => setFormLote({ ...formLote, posturaIdeal: e.target.value })} />
-                  <Campo mitad etiqueta="Peso corporal meta (g)" type="text" inputMode="numeric" placeholder="ej. 2050" value={formLote.pesoMeta} onChange={e => setFormLote({ ...formLote, pesoMeta: e.target.value })} />
-                </div>
+                {claveRaza(formLote.raza) ? (() => {
+                  const ficha = formLote.nac ? fichaLote(formLote) : null;
+                  return <div style={{ background: C.verdeSuave, padding: 12, borderRadius: 10, fontSize: 13, marginBottom: 12 }}>
+                    <b>{REFERENCIAS_RAZAS[claveRaza(formLote.raza)].nombre}</b> · {ficha ? `semana ${ficha.semana}` : "elige la fecha de nacimiento"}<br />
+                    Postura: {ficha?.postura ? `${ficha.postura.join("–")}%` : "sin dato para esta semana"} · Peso: {ficha?.peso ? `${ficha.peso.join("–")} g` : "sin dato"} · Alimento de referencia: {ficha?.feed ? `${ficha.feed.join("–")} g/ave/día` : "sin dato semanal"}
+                    <div style={{ color: C.textoSuave, marginTop: 4 }}>Las comparaciones se actualizan con la edad del lote; la ración a servir sigue siendo la indicada arriba.</div>
+                  </div>;
+                })() : <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <Campo mitad etiqueta="% postura ideal (sin manual)" type="text" inputMode="decimal" placeholder="ej. 92" value={formLote.posturaIdeal} onChange={e => setFormLote({ ...formLote, posturaIdeal: e.target.value })} />
+                  <Campo mitad etiqueta="Peso corporal meta (g, sin manual)" type="text" inputMode="numeric" placeholder="ej. 2050" value={formLote.pesoMeta} onChange={e => setFormLote({ ...formLote, pesoMeta: e.target.value })} />
+                </div>}
 
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={guardarLote} disabled={guardando} style={{ ...btnStyle, flex: 1 }}>{formLote.id ? "Guardar cambios" : "Crear lote"}</button>
@@ -4795,6 +4830,43 @@ export default function App() {
                 </div>
               </Seccion>
             )}
+
+            <div id="tablasRazas"><Seccion titulo="Tablas genéticas por raza" sub="Selecciona una línea y una semana. Los indicadores del lote usan automáticamente la fila de su edad; los rangos se muestran tal como aparecen en la guía.">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                <label style={{ flex: "2 1 220px", fontSize: 13 }}>Raza / línea
+                  <select value={razaReferencia} onChange={e => { setRazaReferencia(e.target.value); setSemanaReferencia(26); }} style={inputStyle}>
+                    {Object.entries(REFERENCIAS_RAZAS).map(([id, ficha]) => <option key={id} value={id}>{ficha.nombre}</option>)}
+                  </select>
+                </label>
+                <label style={{ flex: "1 1 130px", fontSize: 13 }}>Semana de consulta
+                  <input type="number" min="1" max={Object.keys(REFERENCIAS_RAZAS[razaReferencia].semanas).length} value={semanaReferencia} onChange={e => setSemanaReferencia(e.target.value)} style={inputStyle} />
+                </label>
+              </div>
+              {(() => {
+                const ficha = REFERENCIAS_RAZAS[razaReferencia];
+                const fila = ficha.semanas[Number(semanaReferencia)];
+                const rango = (r, unidad) => r ? `${r[0]}${r[0] === r[1] ? "" : `–${r[1]}`} ${unidad}` : "—";
+                return <>
+                  <div style={{ color: C.textoSuave, fontSize: 12, marginBottom: 10 }}>{ficha.tipo} · Fuente: {ficha.fuente}</div>
+                  {razaReferencia === "w36" && <div style={{ background: C.yemaSuave, padding: 10, borderRadius: 9, fontSize: 12.5, marginBottom: 10 }}>Esta guía es de reproductoras W-36. El lote Hy-Line Brown utiliza su propia guía comercial.</div>}
+                  {fila ? <div style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 12 }}>
+                    <KPI etiqueta={`Postura · sem. ${semanaReferencia}`} valor={rango(fila.postura, "%")} />
+                    <KPI etiqueta="Peso corporal" valor={rango(fila.peso, "g")} />
+                    <KPI etiqueta="Alimento de referencia" valor={rango(fila.feed, "g/ave/día")} />
+                  </div> : <div style={{ color: C.textoSuave, marginBottom: 12 }}>Esta guía no incluye la semana indicada.</div>}
+                  <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 8 }}>La postura y el peso se comparan con el punto medio cuando la guía da un rango. La ración real se programa por lote y no cambia automáticamente.</div>
+                  <div style={{ maxHeight: 340, overflow: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 500 }}>
+                      <thead><tr style={{ textAlign: "right", color: C.textoSuave }}><th style={{ textAlign: "left" }}>Semana</th><th>Postura ave/día</th><th>Peso corporal</th><th>Alimento / día</th><th>Peso del huevo</th><th>HAA acum.</th></tr></thead>
+                      <tbody>{Object.entries(ficha.semanas).map(([sem, datos]) => <tr key={sem} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right", background: Number(sem) === Number(semanaReferencia) ? C.verdeSuave : "transparent" }}>
+                        <td style={{ textAlign: "left", padding: "6px 4px" }}><button onClick={() => setSemanaReferencia(Number(sem))} style={{ border: 0, background: "transparent", color: C.verde, fontWeight: 700, cursor: "pointer" }}>{sem}</button></td>
+                        <td>{rango(datos.postura, "%")}</td><td>{rango(datos.peso, "g")}</td><td>{rango(datos.feed, "g")}</td><td>{datos.huevo != null ? `${datos.huevo} g` : "—"}</td><td>{Array.isArray(datos.haa) ? rango(datos.haa, "") : datos.haa ?? "—"}</td>
+                      </tr>)}</tbody>
+                    </table>
+                  </div>
+                </>;
+              })()}
+            </Seccion></div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
               {activos.map(l => {
@@ -4807,6 +4879,7 @@ export default function App() {
                       <div>
                         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>Gallinero {l.galpon} · Lote {l.lote || ""}</div>
                         <div style={{ fontSize: 12, color: C.textoSuave }}>{l.raza} · nac. {l.nac.split("-").reverse().join("/")} · <b>{semanasDe(l.nac).toFixed(1)} sem</b></div>
+                        {claveRaza(l.raza) && <button onClick={() => { setRazaReferencia(claveRaza(l.raza)); setSemanaReferencia(fichaLote(l)?.semana || 1); document.getElementById("tablasRazas")?.scrollIntoView({ behavior: "smooth" }); }} style={{ fontSize: 11, border: 0, background: "transparent", color: C.verde, padding: "4px 0", textDecoration: "underline", cursor: "pointer" }}>Ver tabla de {REFERENCIAS_RAZAS[claveRaza(l.raza)].nombre} · semana {fichaLote(l)?.semana || "—"}</button>}
                         {l.estadoProd && l.estadoProd !== "Producción normal" && <div style={{ display: "inline-block", marginTop: 4, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 12, background: C.yemaSuave, color: "#9A6605" }}>⚠ {l.estadoProd}</div>}
                         {l.proveedor && <div style={{ fontSize: 11.5, color: C.textoSuave }}>Pollonas: {l.proveedor}</div>}
                       </div>
@@ -4815,7 +4888,7 @@ export default function App() {
                         <div style={{ fontSize: 11, color: C.textoSuave }}>aves</div>
                       </div>
                     </div>
-                    <BarraPostura actual={postura} meta={l.posturaIdeal} />
+                    <BarraPostura actual={postura} meta={metaPosturaLote(l, ult?.fecha)} />
                     <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 20, background: C.yemaSuave, color: "#9A6605", fontWeight: 500 }}>
                         {l.formula || "sin fórmula"}{l.racionGAve ? ` · ${l.racionGAve} g/ave` : ""}
@@ -4964,7 +5037,7 @@ export default function App() {
               if (!ult) return null;
               const ant = delLote[1];
               const st = statsPesaje(ult);
-              const meta = Number(l.pesoMeta) || Number(ult.meta) || 0;
+              const meta = metaPesoLote(l, ult.fecha, ult);
               const brechaG = meta > 0 ? st.prom - meta : null;
               const brechaP = meta > 0 ? (brechaG / meta) * 100 : null;
               const colorMeta = brechaP == null ? C.textoSuave : brechaP <= -10 ? C.alerta : brechaP <= -4 ? "#9A6605" : brechaP >= 8 ? "#9A6605" : C.verde;
@@ -5247,7 +5320,7 @@ export default function App() {
 
       <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
         Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
-        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 25/09/2026
+        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 26/09/2026
       </footer>
     </div>
   );
