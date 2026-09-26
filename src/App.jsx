@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
-import { leer, escribir, agregarPesajesFaltantes, eliminarLotePorId } from "./storage";
+import { leer, escribir, agregarPesajesFaltantes, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
 import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
+import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgramada, eliminarTareaProgramada } from "./tareasProgramadas";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -34,6 +35,10 @@ const K = {
 const hoyStr = () => {
   const d = new Date();
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+};
+const hoyISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 const sumarDias = (dmy, dias) => {
   const [d, m, y] = dmy.split("/").map(Number);
@@ -336,6 +341,11 @@ export default function App() {
   const [excelPesajes, setExcelPesajes] = useState([]);
   const [excelAbierto, setExcelAbierto] = useState(-1);
   const [importandoPesajes, setImportandoPesajes] = useState(false);
+  const [conflictosPesaje, setConflictosPesaje] = useState(null);
+  const [conflictosRespaldo, setConflictosRespaldo] = useState(null);
+  const [tareasProgramadas, setTareasProgramadas] = useState([]);
+  const [formTarea, setFormTarea] = useState({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] });
+  const [guardandoTarea, setGuardandoTarea] = useState(false);
   const [fVac, setFVac] = useState({ lote: "G1", vacuna: "", cepa: "", via: "", proveedor: "" });
   const [fechasAplicar, setFechasAplicar] = useState({});
   const [fechaCaptura, setFechaCaptura] = useState(new Date().toISOString().slice(0, 10));
@@ -515,6 +525,7 @@ export default function App() {
       setFavoritos(fav0 || []);
       setMpInvHist(ordenarPorFecha(mih0 || []));
       setAdvAjustes(adv0 || []);
+      leerTareasProgramadas().then(setTareasProgramadas).catch(e => console.error("Tareas programadas:", e));
       {
         const emailSesion = (typeof window !== "undefined" && window.__usuarioEmail || "").toLowerCase();
         if ((adm0 || []).length > 0 && emailSesion) setEsAdmin(adm0.map(x => x.toLowerCase()).includes(emailSesion));
@@ -961,6 +972,7 @@ export default function App() {
       const claves = Object.values(K);
       const datos = {};
       for (const k of claves) datos[k] = await leer(k, null);
+      for (const tarea of await leerTareasProgramadas()) datos[`granja2:tarea:${tarea.id}`] = tarea;
       for (const n2 of necropsias) {
         if (n2.numFotos > 0) datos[`granja2:necfoto:${n2.id}`] = await leer(`granja2:necfoto:${n2.id}`, []);
       }
@@ -1025,7 +1037,6 @@ export default function App() {
       const asignados = datos.map(p => {
         if (p.lote) return p;
         const posibles = lotes.filter(l => String(l.galpon) === p.galpon && p.fecha >= l.nac &&
-          (!p.nacimiento || p.nacimiento === l.nac) &&
           (!p.codigo || !l.lote || String(l.lote).padStart(2, "0") === p.codigo));
         return { ...p, lote: posibles.length === 1 ? posibles[0].id : "", incluir: posibles.length === 1 };
       });
@@ -1037,8 +1048,10 @@ export default function App() {
 
   const confirmarExcelPesajes = async () => {
     if (importandoPesajes || guardando || cargandoFondo) return;
-    const claves = new Set(pesajes.map(p => clavePesaje(p.lote, p.fecha)));
+    const existentes = new Map(pesajes.map(p => [clavePesaje(p.lote, p.fecha), p]));
+    const clavesArchivo = new Set();
     const seleccion = [];
+    const conflictos = [];
     const incluidos = excelPesajes.filter(x => x.incluir);
     if (!incluidos.length) { avisar("⚠ Selecciona al menos una fecha para importar"); return; }
     for (const p of incluidos) {
@@ -1046,30 +1059,97 @@ export default function App() {
       if (!p.fecha || fechaPesajeISO(p.fecha) !== p.fecha) { avisar(`⚠ Revisa la fecha en ${p.hoja}, columna ${p.columna}`); return; }
       const lote = lotes.find(l => l.id === p.lote);
       if (!lote) { avisar("⚠ El lote elegido ya no existe; revisa la selección"); return; }
-      if (p.nacimiento && p.nacimiento !== lote.nac) { avisar(`⚠ La fecha de nacimiento en ${p.hoja} no coincide con el lote elegido`); return; }
-      if (p.fecha < lote.nac) { avisar(`⚠ ${p.fecha} es anterior al nacimiento del lote elegido`); return; }
+      // El Excel de G3 declara 13/01/2025, mientras el lote actual nació
+      // 13/01/2026. La fecha de la hoja es una pista, no la identidad del lote:
+      // solo la fecha del pesaje frente al nacimiento real puede bloquearlo.
+      if (p.fecha < lote.nac) { avisar(`⚠ El pesaje ${p.fecha} precede al nacimiento del lote (${lote.nac}). Corrige la fecha o elige el lote histórico de ${p.hoja}.`); return; }
       const k = clavePesaje(p.lote, p.fecha);
-      if (claves.has(k)) continue;
+      if (clavesArchivo.has(k)) continue;
       if (p.pesos.some(v => pesoEnGramos(v) == null)) { avisar(`⚠ Revisa pesos inválidos en ${p.hoja}, ${p.fecha}`); return; }
-      claves.add(k);
+      clavesArchivo.add(k);
       const [ny, nm, nd] = lote.nac.split("-").map(Number);
       const [py, pm, pd] = p.fecha.split("-").map(Number);
-      seleccion.push({ lote: p.lote, fecha: `${pd}/${pm}/${py}`, semana: Math.floor((new Date(py, pm - 1, pd) - new Date(ny, nm - 1, nd)) / (7 * 86400000)), pesos: p.pesos.map(pesoEnGramos), meta: Number(lote.pesoMeta) || 2000 });
+      const nuevo = { lote: p.lote, fecha: `${pd}/${pm}/${py}`, semana: Math.floor((new Date(py, pm - 1, pd) - new Date(ny, nm - 1, nd)) / (7 * 86400000)), pesos: p.pesos.map(pesoEnGramos), meta: Number(lote.pesoMeta) || 2000 };
+      if (existentes.has(k)) conflictos.push({ clave: k, nuevo, actual: existentes.get(k), galpon: lote.galpon });
+      else seleccion.push(nuevo);
     }
-    if (!seleccion.length) { avisar("ℹ Las fechas seleccionadas ya están registradas"); return; }
+    if (!seleccion.length && !conflictos.length) { avisar("ℹ No hay fechas para importar"); return; }
     setImportandoPesajes(true);
     try {
-      const resultado = await agregarPesajesFaltantes(seleccion);
+      const resultado = seleccion.length ? await agregarPesajesFaltantes(seleccion) : { agregados: 0, omitidos: 0 };
       const actual = await leer(K.pesajes, null);
       if (actual) setPesajes(ordenarPorFecha(actual));
-      setExcelPesajes([]);
-      avisar(`✓ ${resultado.agregados} pesajes nuevos; ${resultado.omitidos + incluidos.length - seleccion.length} existentes omitidos`);
+      if (conflictos.length) setConflictosPesaje({ items: conflictos, elegidos: [] });
+      else setExcelPesajes([]);
+      avisar(`✓ ${resultado.agregados} pesajes nuevos agregados${conflictos.length ? ` · ${conflictos.length} fechas existentes para revisar` : ""}`);
     } catch (e) {
       console.error(e);
       const actual = await leer(K.pesajes, null);
       if (actual) setPesajes(ordenarPorFecha(actual));
       avisar("⚠ Importación interrumpida. Revisa la conexión y vuelve a cargar el Excel; lo ya registrado se omitirá.");
     } finally { setImportandoPesajes(false); }
+  };
+
+  const aplicarConflictosPesaje = async () => {
+    if (!conflictosPesaje || importandoPesajes) return;
+    const elegidos = conflictosPesaje.items.filter(x => conflictosPesaje.elegidos.includes(x.clave));
+    if (!elegidos.length) { setConflictosPesaje(null); setExcelPesajes([]); return; }
+    setImportandoPesajes(true);
+    try {
+      const r = await agregarPesajesFaltantes(elegidos.map(x => x.nuevo), { reemplazar: elegidos.map(x => x.clave) });
+      const actual = await leer(K.pesajes, null);
+      if (actual) setPesajes(ordenarPorFecha(actual));
+      setConflictosPesaje(null); setExcelPesajes([]);
+      avisar(`✓ ${r.actualizados} pesajes reemplazados; ${conflictosPesaje.items.length - r.actualizados} conservados`);
+    } catch (e) { console.error(e); avisar(`⚠ No se completó el reemplazo: ${e.message}`); }
+    finally { setImportandoPesajes(false); }
+  };
+
+  const guardarActividad = async () => {
+    const nombre = formTarea.nombre.trim();
+    if (!nombre || !fechaPesajeISO(formTarea.inicio)) { avisar("⚠ Indica una actividad y una fecha de inicio válida"); return; }
+    if (formTarea.repeticion === "dias" && (!Number.isInteger(Number(formTarea.cadaDias)) || +formTarea.cadaDias < 1 || +formTarea.cadaDias > 3650)) { avisar("⚠ El intervalo debe ser entre 1 y 3650 días"); return; }
+    if (formTarea.repeticion === "semanal" && !formTarea.diasSemana.length) { avisar("⚠ Elige al menos un día de la semana"); return; }
+    setGuardandoTarea(true);
+    try {
+      const tarea = { ...formTarea, nombre, id: formTarea.id || crypto.randomUUID(), cadaDias: Number(formTarea.cadaDias), ultima: formTarea.ultima || "" };
+      await guardarTareaProgramada(tarea);
+      setTareasProgramadas(await leerTareasProgramadas());
+      setFormTarea({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] });
+      avisar("✓ Actividad programada");
+    } catch (e) { console.error(e); avisar("⚠ No se pudo guardar la actividad"); }
+    finally { setGuardandoTarea(false); }
+  };
+
+  const completarActividad = async (tarea) => {
+    setGuardandoTarea(true);
+    try {
+      await guardarTareaProgramada({ ...tarea, ultima: hoyISO() });
+      setTareasProgramadas(await leerTareasProgramadas());
+      avisar("✓ Actividad realizada; se calculó el próximo aviso");
+    } catch (e) { console.error(e); avisar("⚠ No se pudo marcar como realizada"); }
+    finally { setGuardandoTarea(false); }
+  };
+
+  const borrarActividad = async (tarea) => {
+    if (!pideConfirm(`borrarTarea-${tarea.id}`, `⚠ Toca eliminar otra vez para borrar “${tarea.nombre}”`)) return;
+    setGuardandoTarea(true);
+    try { await eliminarTareaProgramada(tarea.id); setTareasProgramadas(await leerTareasProgramadas()); avisar("✓ Actividad eliminada"); }
+    catch (e) { console.error(e); avisar("⚠ No se pudo eliminar la actividad"); }
+    finally { setGuardandoTarea(false); }
+  };
+
+  const resolverConflictosRespaldo = async () => {
+    if (!conflictosRespaldo || guardando) return;
+    setGuardando(true);
+    try {
+      const elegidos = conflictosRespaldo.items.filter(x => conflictosRespaldo.elegidos.includes(x.token));
+      const cantidad = await reemplazarFechasRespaldo(elegidos);
+      setConflictosRespaldo(null);
+      avisar(`✓ ${cantidad} fechas reemplazadas; las demás se conservaron. Recargando…`);
+      setTimeout(() => location.reload(), 1600);
+    } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
+    finally { setGuardando(false); }
   };
 
   const guardarCostos = async (nuevos) => { setCostos(nuevos); await escribir(K.costos, nuevos); };
@@ -1627,6 +1707,12 @@ export default function App() {
 
   // ── Auditoría de gestión: lo que NO está pasando ──
   const auditoria = [];
+  tareasProgramadas.forEach(t => {
+    const proxima = proximaTarea(t);
+    if (!proxima) return;
+    const dias = diasHastaTarea(proxima, hoyISO());
+    if (dias <= 0) auditoria.push({ nivel: dias < 0 ? "rojo" : "amarillo", texto: `Actividad ${dias < 0 ? "atrasada" : "para hoy"}: ${t.nombre}${t.lote ? ` (G${lotes.find(l => l.id === t.lote)?.galpon || "?"})` : " (toda la granja)"} · programada ${proxima}. Marca Realizada en Trabajos diarios.` });
+  });
   const diasDesde = (dmy) => Math.round((hoyD - aDate(dmy)) / 86400000);
   TRABAJOS.forEach((t, i) => {
     let peor = null;
@@ -2746,6 +2832,53 @@ export default function App() {
                     <span style={{ fontSize: 13.5, textDecoration: cap.trabajos[i] ? "line-through" : "none", color: cap.trabajos[i] ? C.textoSuave : C.texto }}>{tr}</span>
                   </label>
                 ))}
+              </div>
+            </Seccion>
+
+            <Seccion titulo="Actividades programadas" sub="Avisos dentro de la app para labores de la granja o de una galera. Marca Realizada para calcular el siguiente aviso.">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                <Campo mitad etiqueta="Actividad" placeholder="ej. Mantenimiento del zacate" value={formTarea.nombre} onChange={e => setFormTarea({ ...formTarea, nombre: e.target.value })} />
+                <label style={{ flex: "1 1 190px", fontSize: 12.5 }}>Ámbito
+                  <select value={formTarea.lote} onChange={e => setFormTarea({ ...formTarea, lote: e.target.value })} style={selectStyle}>
+                    <option value="">Toda la granja</option>
+                    {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.raza}</option>)}
+                  </select>
+                </label>
+                <label style={{ flex: "1 1 160px", fontSize: 12.5 }}>Primera fecha
+                  <input type="date" value={formTarea.inicio} onChange={e => setFormTarea({ ...formTarea, inicio: e.target.value })} style={inputStyle} />
+                </label>
+                <label style={{ flex: "1 1 160px", fontSize: 12.5 }}>Repetición
+                  <select value={formTarea.repeticion} onChange={e => setFormTarea({ ...formTarea, repeticion: e.target.value })} style={selectStyle}>
+                    <option value="dias">Cada cierto número de días</option><option value="semanal">Días de la semana</option><option value="una">Una sola vez</option>
+                  </select>
+                </label>
+                {formTarea.repeticion === "dias" && <Campo tercio etiqueta="Cada cuántos días" type="number" min="1" max="3650" value={formTarea.cadaDias} onChange={e => setFormTarea({ ...formTarea, cadaDias: e.target.value })} />}
+              </div>
+              {formTarea.repeticion === "semanal" && <div style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "8px 0" }}>
+                {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((dia, i) => <label key={dia} style={{ fontSize: 13 }}>
+                  <input type="checkbox" checked={formTarea.diasSemana.includes(i)} onChange={e => setFormTarea(t => ({ ...t, diasSemana: e.target.checked ? [...t.diasSemana, i] : t.diasSemana.filter(x => x !== i) }))} /> {dia}
+                </label>)}
+              </div>}
+              <button onClick={guardarActividad} disabled={guardandoTarea || cargandoFondo} style={btnStyle}>{formTarea.id ? "Guardar cambios" : "Agregar actividad"}</button>
+              {formTarea.id && <button onClick={() => setFormTarea({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] })} style={{ marginLeft: 8 }}>Cancelar edición</button>}
+              <div style={{ marginTop: 14 }}>
+                {tareasProgramadas.map(t => {
+                  const prox = proximaTarea(t);
+                  const dias = prox ? diasHastaTarea(prox, hoyISO()) : null;
+                  const alcance = t.lote ? `Galera ${lotes.find(l => l.id === t.lote)?.galpon || t.lote}` : "Toda la granja";
+                  return <div key={t.id} style={{ borderTop: `1px solid ${C.borde}`, padding: "11px 0", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ flex: "1 1 240px", fontSize: 13 }}><b>{t.nombre}</b> · {alcance}<br />
+                      <small style={{ color: dias != null && dias <= 0 ? C.alerta : C.textoSuave }}>
+                        {prox ? `${dias < 0 ? `Atrasada ${-dias} día(s)` : dias === 0 ? "Para hoy" : `En ${dias} día(s)`} · ${prox}` : "Finalizada"}
+                        {t.repeticion === "dias" ? ` · cada ${t.cadaDias} días` : t.repeticion === "semanal" ? " · semanal" : " · una vez"}
+                      </small>
+                    </span>
+                    {prox && <button disabled={guardandoTarea} onClick={() => completarActividad(t)}>✓ Realizada</button>}
+                    <button disabled={guardandoTarea} onClick={() => setFormTarea({ ...t })}>Editar</button>
+                    <button disabled={guardandoTarea} onClick={() => borrarActividad(t)}>Eliminar</button>
+                  </div>;
+                })}
+                {!tareasProgramadas.length && <span style={{ fontSize: 13, color: C.textoSuave }}>Todavía no hay actividades programadas.</span>}
               </div>
             </Seccion>
 
@@ -4404,40 +4537,25 @@ export default function App() {
                 </button>
                 <label style={{ display: "block", marginTop: 8 }}>
                   <span style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, display: "block", textAlign: "center", cursor: "pointer" }}>📥 Importar respaldo JSON</span>
+                  <small style={{ color: C.textoSuave }}>Solo agrega registros faltantes; conserva los registros y ajustes que ya existen. Selecciona dos veces el mismo archivo para confirmar.</small>
                   <input type="file" accept="application/json" style={{ display: "none" }}
                     onChange={async e => {
                       const file = e.target.files?.[0]; e.target.value = "";
                       if (!file) return;
-                      if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; }
-                      if (confirmar !== "importar") { setConfirmar("importar"); avisar("⚠ Esto SOBREESCRIBE los datos actuales con el respaldo — vuelve a elegir el archivo para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
-                      setConfirmar(null); setGuardando(true); avisar("⏳ 1/3 Respaldando lo actual…");
+                      if (cargandoFondo || guardando) { avisar("⏳ Espera a que termine la operación actual"); return; }
+                      if (confirmar !== "importar") { setConfirmar("importar"); avisar("Revisa el archivo: se agregarán solo registros faltantes. Los existentes conservarán sus valores. Selecciona el archivo otra vez para confirmar."); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
+                      setConfirmar(null); setGuardando(true); avisar("⏳ Leyendo el respaldo…");
                       try {
-                        const previo = {};
-                        for (const k of Object.values(K)) previo[k] = await leer(k, null);
-                        await escribir("granja2:preImport", { fecha: new Date().toISOString(), datos: previo });
                         const doc = JSON.parse(await file.text());
                         const datos = doc.datos || doc;
-                        const entradas = Object.entries(datos).filter(([, v]) => v !== null && v !== undefined);
-                        let ok = 0, mal = [];
-                        for (let i2 = 0; i2 < entradas.length; i2++) {
-                          const [k, v] = entradas[i2];
-                          avisar(`⏳ 2/3 Importando ${i2 + 1}/${entradas.length}…`);
-                          if (await escribir(k, v)) ok++; else mal.push(k.replace("granja2:", ""));
-                        }
-                        avisar("⏳ 3/3 Verificando en la nube…");
-                        let verificado = true;
-                        if (entradas.length) {
-                          const [kT, vT] = entradas[0];
-                          const enNube = await leer(kT, null);
-                          verificado = JSON.stringify(enNube) === JSON.stringify(vT);
-                        }
-                        if (mal.length || !verificado) {
-                          avisar(`⚠ Importación INCOMPLETA: ${ok}/${entradas.length} guardados${mal.length ? ` — fallaron: ${mal.slice(0, 4).join(", ")}` : ""}${!verificado ? " — la verificación en la nube no coincide" : ""}. NO recargues: intenta de nuevo o avisa a Claude.`);
-                        } else {
-                          avisar(`✓ ${ok} conjuntos importados y verificados en la nube — recargando…`);
-                          setTimeout(() => { try { location.reload(); } catch {} }, 1600);
-                        }
-                      } catch { avisar("⚠ Archivo inválido — usa el JSON exportado por la app"); }
+                        if (!datos || typeof datos !== "object" || Array.isArray(datos)) throw new Error("Formato de respaldo inválido");
+                        const respaldo = Object.fromEntries(Object.entries(datos).filter(([, v]) => v !== null && v !== undefined));
+                        const conflictos = await detectarFechasRespaldo(respaldo);
+                        const r = await agregarRespaldoFaltante(respaldo);
+                        if (conflictos.length) setConflictosRespaldo({ items: conflictos, elegidos: [] });
+                        avisar(`✓ ${r.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar.`);
+                        if (!conflictos.length) setTimeout(() => { try { location.reload(); } catch {} }, 1600);
+                      } catch (error) { console.error(error); avisar(`⚠ Importación interrumpida: ${error.message}. Lo ya agregado permanece; al reintentar se omite.`); }
                       setGuardando(false);
                     }} />
                 </label>
@@ -4705,6 +4823,8 @@ export default function App() {
                         <label><input type="checkbox" checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
                         <span>{p.hoja} · {p.columna} · <b>{p.fecha || "Sin fecha"}</b> · {p.lote ? `Galera ${lotes.find(l => l.id === p.lote)?.galpon || "?"}` : "Sin galera"} · {p.pesos.length} aves</span>
                         <span style={{ color: duplicado || invalidos ? C.alerta : C.verde }}>{!p.incluir ? "Excluido" : duplicado ? "Ya existe: omitir" : invalidos ? `${invalidos} inválido(s)` : "Nuevo"}</span>
+                        {p.nacimiento && p.lote && p.nacimiento !== lotes.find(l => l.id === p.lote)?.nac && <span style={{ color: C.alerta }}>⚠ Excel: nacimiento {p.nacimiento}; lote: {lotes.find(l => l.id === p.lote)?.nac}. Revisa la galera y la fecha.</span>}
+                        {p.lote && p.fecha < (lotes.find(l => l.id === p.lote)?.nac || "") && <span style={{ color: C.alerta }}>⚠ Pesaje anterior al nacimiento del lote: corrige la fecha o elige el lote histórico.</span>}
                         {p.incluir && !duplicado && !invalidos && <span style={{ color: C.textoSuave }}>Prom. {(p.pesos.reduce((a, v) => a + pesoEnGramos(v), 0) / p.pesos.length).toFixed(0)} g</span>}
                         <button type="button" onClick={() => setExcelAbierto(excelAbierto === i ? -1 : i)} style={{ cursor: "pointer" }}>{excelAbierto === i ? "Cerrar" : "Revisar / editar"}</button>
                       </div>
@@ -4921,6 +5041,42 @@ export default function App() {
           </>
         )}
       </main>
+
+      {conflictosPesaje && <div role="dialog" aria-modal="true" aria-label="Pesajes ya registrados" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
+        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(680px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
+          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Fechas con pesajes existentes</h2>
+          <p style={{ fontSize: 13 }}>Los pesajes nuevos ya se agregaron. Los actuales se conservarán, salvo los que selecciones para reemplazar. Revisa cantidad de aves y promedio antes de decidir.</p>
+          {conflictosPesaje.items.map(x => {
+            const promedio = a => a?.pesos?.length ? Math.round(a.pesos.reduce((s, v) => s + Number(v), 0) / a.pesos.length) : 0;
+            return <label key={x.clave} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}`, alignItems: "flex-start" }}>
+              <input type="checkbox" checked={conflictosPesaje.elegidos.includes(x.clave)} onChange={e => setConflictosPesaje(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.clave] : c.elegidos.filter(k => k !== x.clave) }))} />
+              <span><b>G{x.galpon} · {x.nuevo.fecha}</b><br /><small>Actual: {x.actual.pesos?.length || 0} aves · {promedio(x.actual)} g. Excel: {x.nuevo.pesos.length} aves · {promedio(x.nuevo)} g.</small><br /><small>Marcar para reemplazar el pesaje actual.</small></span>
+            </label>;
+          })}
+          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+            <button disabled={importandoPesajes} onClick={aplicarConflictosPesaje} style={btnStyle}>{conflictosPesaje.elegidos.length ? `Reemplazar ${conflictosPesaje.elegidos.length} seleccionados` : "Conservar todos"}</button>
+            <button disabled={importandoPesajes} onClick={() => { setConflictosPesaje(null); setExcelPesajes([]); }}>Cerrar y conservar</button>
+          </div>
+        </div>
+      </div>}
+
+      {conflictosRespaldo && <div role="dialog" aria-modal="true" aria-label="Fechas existentes del respaldo" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
+        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(700px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
+          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Fechas que ya tienen datos</h2>
+          <p style={{ fontSize: 13 }}>Los registros faltantes del respaldo ya se agregaron. Las fechas existentes conservan los datos actuales, a menos que marques cada reemplazo.</p>
+          {conflictosRespaldo.items.map(x => <label key={x.token} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}` }}>
+            <input type="checkbox" disabled={x.duplicados !== 1} checked={conflictosRespaldo.elegidos.includes(x.token)} onChange={e => setConflictosRespaldo(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.token] : c.elegidos.filter(k => k !== x.token) }))} />
+            <span style={{ fontSize: 13 }}><b>{x.tabla === "pesajes" ? "Pesaje" : "Control diario"} · {x.lote} · {x.fecha}</b><br />
+              {x.tabla === "pesajes" ? `Actual: ${x.actual.data.pesos?.length || 0} aves · Respaldo: ${x.nuevo.pesos?.length || 0} aves` : `Actual: ${x.actual.data.cartones ?? "—"} cartones · Respaldo: ${x.nuevo.cartones ?? "—"} cartones`}
+              {x.duplicados !== 1 && <span style={{ color: C.alerta }}> · Hay {x.duplicados} registros actuales: revisar manualmente</span>}
+            </span>
+          </label>)}
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button disabled={guardando} onClick={resolverConflictosRespaldo} style={btnStyle}>{conflictosRespaldo.elegidos.length ? `Reemplazar ${conflictosRespaldo.elegidos.length} fechas` : "Conservar todas"}</button>
+            <button disabled={guardando} onClick={() => { setConflictosRespaldo(null); location.reload(); }}>Cerrar y conservar</button>
+          </div>
+        </div>
+      </div>}
 
       <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
         Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
