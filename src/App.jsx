@@ -11,7 +11,9 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "./historial";
+import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
+import { nombreVisible } from "./nombresUsuarios";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -23,7 +25,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.5";
+const VERSION_APP = "8.6";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -36,6 +38,7 @@ const K = {
   plantaCfg: "granja2:plantaCfg", bodegaCfg: "granja2:bodegaCfg",
   costos: "granja2:costos",
   advAjustes: "granja2:advertenciasAjustes",
+  nombresUsuarios: "granja2:nombresUsuarios",
 };
 
 const hoyStr = () => {
@@ -374,6 +377,9 @@ export default function App() {
   const [kardex, setKardex] = useState([]);
   const [esAdmin, setEsAdmin] = useState(true);
   const [cfgAdmins, setCfgAdmins] = useState([]);
+  const [nombresUsuarios, setNombresUsuarios] = useState({});
+  const [correoNombre, setCorreoNombre] = useState("");
+  const [nombreNuevo, setNombreNuevo] = useState("");
   const [nuevoAdmin, setNuevoAdmin] = useState("");
   const [favoritos, setFavoritos] = useState([]);
   const [mpInvHist, setMpInvHist] = useState([]);
@@ -549,14 +555,14 @@ export default function App() {
       baseLista = true;
       if (!silencioso) { setCargando(false); setCargandoFondo(true); }
 
-      const [ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0, adv0] = await Promise.all([
+      const [ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0, adv0, nombres0] = await Promise.all([
         leer(K.meds, []), leer(K.fums, []), leer(K.movs, []), leer(K.planta, []),
         leer(K.plantaCfg, null), leer(K.bodegaCfg, null), leer(K.facturas, []), leer(K.vacunas, []),
         leer(K.enfermedades, []), leer(K.necropsias, []), leer(K.planVac, null), leer(K.bitacora, []),
         leer(K.costos, SEED_COSTOS), leer(K.mpInv, null), leer(K.mpConfig, null), leer(K.mpPedidos, []),
         leer(K.recetas, null), leer(K.mpCat, null), leer(K.insumos, null), leer(K.insumosMovs, []),
         leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []), leer(K.mpInvHist, []),
-        leer(K.advAjustes, []),
+        leer(K.advAjustes, []), leer(K.nombresUsuarios, {}),
       ]);
       const ps = ps0;
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
@@ -587,6 +593,7 @@ export default function App() {
       if (cxp0) setCxp({ facturas: [], pagos: [], notas: [], ...cxp0 });
       setKardex(ordenarPorFecha(kdx0 || []));
       setCfgAdmins(adm0 || []);
+      setNombresUsuarios(nombres0 || {});
       setFavoritos(fav0 || []);
       setMpInvHist(ordenarPorFecha(mih0 || []));
       setAdvAjustes(adv0 || []);
@@ -899,7 +906,7 @@ export default function App() {
     };
     if (elegido) {
       nuevoMov.historialEdiciones = [...(elegido.historialEdiciones || []), {
-        fechaHora: new Date().toISOString(), por: completadoPor || window.__usuarioEmail || "Sin indicar",
+        fechaHora: new Date().toISOString(), por: window.__usuarioEmail || completadoPor || "Sin indicar",
         motivo: motivoEdicionBodega.trim(), anterior: snapshotBodega(elegido),
         duplicadosRetirados: delDia.filter(m => m.id !== elegido.id).map(snapshotBodega),
         nuevo: snapshotBodega(nuevoMov),
@@ -915,7 +922,7 @@ export default function App() {
       const previo = actuales.find(x => String(x.id) === String(m.id));
       if (!previo || Number(previo.saldoFinal) === Number(m.saldoFinal)) return m;
       return { ...m, historialEdiciones: [...(m.historialEdiciones || []), {
-        fechaHora: new Date().toISOString(), por: completadoPor || window.__usuarioEmail || "Sin indicar",
+        fechaHora: new Date().toISOString(), por: window.__usuarioEmail || completadoPor || "Sin indicar",
         motivo: `Saldo recalculado al editar la bodega del ${fechaB}: ${motivoEdicionBodega.trim()}`,
         anterior: snapshotBodega(previo), nuevo: snapshotBodega(m), duplicadosRetirados: [],
       }] };
@@ -2046,6 +2053,21 @@ export default function App() {
   const decisionesVisibles = procesarAdvertencias(decisiones, "decisiones");
   const auditoriaVisibles = procesarAdvertencias(auditoria, "auditoria");
   const ajustesAuditoria = advAjustes.filter(a => a.accion !== "eliminar_definitivo");
+  const mostrarNombre = (valor) => nombreVisible(valor, nombresUsuarios);
+  const guardarNombreVisible = async (correo, nombre) => {
+    const email = correo.trim().toLowerCase();
+    const visible = nombre.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !visible) { avisar("⚠ Escribe un correo válido y un nombre visible"); return; }
+    const nuevos = { ...nombresUsuarios, [email]: visible };
+    if (await escribir(K.nombresUsuarios, nuevos)) {
+      setNombresUsuarios(nuevos); setCorreoNombre(""); setNombreNuevo(""); avisar("✓ Nombre visible guardado");
+    } else avisar("⚠ No se pudo guardar el nombre");
+  };
+  const borrarNombreVisible = async (correo) => {
+    const nuevos = { ...nombresUsuarios }; delete nuevos[correo];
+    if (await escribir(K.nombresUsuarios, nuevos)) { setNombresUsuarios(nuevos); avisar("✓ Nombre visible quitado"); }
+    else avisar("⚠ No se pudo quitar el nombre");
+  };
   const pendientesReporte = (id, fecha) => pendientesDeAuditoria({
     lote: id ? lotes.find(x => x.id === id) : null,
     registros, fumigaciones, trabajos: TRABAJOS, bodegaMovs, mpFechaConteo,
@@ -2079,7 +2101,7 @@ export default function App() {
           {printDoc.tipo === "medidas" && `Medidas de Producción — Gallinero ${l?.galpon} · ${l?.raza}`}
           {printDoc.tipo === "pesajes" && "Reporte de pesaje corporal — todos los gallineros"}
           {printDoc.tipo === "lotes" && "Estado de lotes — inventario y desempeño de parvadas"}
-          {printDoc.tipo === "bodega" && "Movimiento de bodega de huevo"}
+          {printDoc.tipo === "bodega" && (printDoc.movimientoId ? "Historial de bodega de huevo" : "Movimiento de bodega de huevo")}
           {printDoc.tipo === "reporte" && `Reporte gerencial diario — ${hoyStr()}`}
           {printDoc.tipo === "bache" && `Checklist de producción de concentrado — ${printDoc.formula}`}
           {printDoc.tipo === "controldiario" && `Reporte diario de operación — ${printDoc.fecha}`}
@@ -2216,7 +2238,7 @@ export default function App() {
                 return (
                   <div key={ri} style={{ marginBottom: 22, pageBreakInside: "avoid" }}>
                     <div style={{ fontSize: 14, fontWeight: 700, background: "#eee", padding: "6px 10px", borderRadius: 6, marginBottom: 8 }}>
-                      GALLINERO {l2.galpon} · {l2.raza} · {semanasDe(l2.nac).toFixed(1)} sem · {l2.aves.toLocaleString()} aves {r.por ? ` · Capturó: ${r.por}` : ""}
+                      GALLINERO {l2.galpon} · {l2.raza} · {semanasDe(l2.nac).toFixed(1)} sem · {l2.aves.toLocaleString()} aves {r.por ? ` · Capturó: ${mostrarNombre(r.por)}` : ""}
                     </div>
                     <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 8 }}>
                       <tbody>
@@ -2261,7 +2283,7 @@ export default function App() {
                   </div>
                 );
               })}
-              {notaDia2 && <div style={{ fontSize: 12, marginBottom: 14 }}><b>Bitácora:</b> {notaDia2.texto} {notaDia2.por ? `(${notaDia2.por})` : ""}</div>}
+              {notaDia2 && <div style={{ fontSize: 12, marginBottom: 14 }}><b>Bitácora:</b> {notaDia2.texto} {notaDia2.por ? `(${mostrarNombre(notaDia2.por)})` : ""}</div>}
               <div style={{ marginTop: 36, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span>_______________________________<br />Encargado de granja</span>
                 <span>_______________________________<br />Supervisión / Gerencia</span>
@@ -2412,7 +2434,7 @@ export default function App() {
               {auditoriaVisibles.map((a, i) => (
                 <div key={"au" + i} style={{ fontSize: 12, padding: "5px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
                   <b style={{ color: colorNivel[a.nivel] || "#333" }}>{a.nivel === "rojo" ? "🔴" : "🟡"}</b> {a.textoAjustado || a.texto}
-                  {a.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {a.ajuste.responsable}: {a.ajuste.razon}]</span>}
+                  {a.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(a.ajuste.responsable)}: {a.ajuste.razon}]</span>}
                 </div>
               ))}
               <div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Para decidir hoy ({decisionesVisibles.length} punto{decisionesVisibles.length === 1 ? "" : "s"})</div>
@@ -2420,7 +2442,7 @@ export default function App() {
               {decisionesVisibles.map((d, i) => (
                 <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
                   <b style={{ color: colorNivel[d.nivel] || "#333" }}>{d.nivel === "rojo" ? "🔴" : "🟡"}</b> {d.textoAjustado || d.texto}
-                  {d.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {d.ajuste.responsable}: {d.ajuste.razon}]</span>}
+                  {d.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(d.ajuste.responsable)}: {d.ajuste.razon}]</span>}
                 </div>
               ))}
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
@@ -2432,7 +2454,7 @@ export default function App() {
         })()}
 
         {printDoc.tipo === "bodega" && (() => {
-          const mov = bodegaMovs[0];
+          const mov = movimientoBodegaParaReporte(bodegaMovs, printDoc.movimientoId);
           const saldoPrevio = mov ? +(mov.saldoFinal - (mov.producido || 0) - (mov.comprado || 0) + (mov.rutaNeta || 0) + (mov.vendGranja || 0) + (mov.destruido || 0) + (mov.regalado || 0) - (mov.difAjuste || 0)).toFixed(1) : null;
           const fila = (nombre, val, signo) => (val != null && val !== 0) || signo === "=" ? (
             <tr><td style={celda}>{nombre} ({signo})</td><td style={{ ...celda, fontWeight: signo === "=" ? 700 : 600, textAlign: "right" }}>{Number(val).toFixed(1)}</td></tr>
@@ -2476,11 +2498,11 @@ export default function App() {
                     </>
                   )}
                   {mov.obs && <div style={{ fontSize: 12.5, marginBottom: 14 }}><b>Observaciones:</b> {mov.obs}</div>}
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Últimos 7 días</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Movimientos hasta esta fecha</div>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead><tr><th style={th}>Fecha</th><th style={th}>Producido</th><th style={th}>Ruta neta</th><th style={th}>Saldo final</th></tr></thead>
                     <tbody>
-                      {bodegaMovs.slice(0, 7).map((m2, i) => (
+                      {bodegaMovs.filter(m2 => fechaHistorialISO(m2.fecha) <= fechaHistorialISO(mov.fecha)).slice(0, 7).map((m2, i) => (
                         <tr key={i}>
                           <td style={celda}>{m2.fecha}</td>
                           <td style={celda}>{m2.producido ?? "—"}</td>
@@ -2863,7 +2885,7 @@ export default function App() {
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <MarcaRancho />
               </div>
-              <div style={{ fontSize: 11.5, opacity: 0.75 }}>{totalAves.toLocaleString()} aves · 4 gallineros · último registro: {ultDia.slice(0, 5)} · v{VERSION_APP}</div>
+              <div style={{ fontSize: 11.5, opacity: 0.75 }}>{totalAves.toLocaleString()} aves · 4 gallineros · último registro: {ultDia.slice(0, 5)} · {mostrarNombre(window.__usuarioEmail)} · v{VERSION_APP}</div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button onClick={() => cargarTodo(false)} title="Actualizar" style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, color: "#fff", padding: "9px 12px", fontSize: 16, cursor: "pointer", opacity: cargandoFondo ? 0.5 : 1 }}>{cargandoFondo ? "…" : "⟳"}</button>
@@ -3311,7 +3333,7 @@ export default function App() {
                         <span>{d.textoAjustado || d.texto}</span>
                         {d.ajuste && (
                           <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>
-                            ✏️ Modificado por <b>{d.ajuste.responsable}</b> ({d.ajuste.fecha}): <i>"{d.ajuste.razon}"</i>
+                            ✏️ Modificado por <b>{mostrarNombre(d.ajuste.responsable)}</b> ({d.ajuste.fecha}): <i>"{d.ajuste.razon}"</i>
                           </div>
                         )}
                       </div>
@@ -3328,7 +3350,7 @@ export default function App() {
                 <Seccion titulo="Bitácora del día">
                   {notasHoy.map((n, i) => (
                     <div key={i} style={{ fontSize: 13.5, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
-                      {n.texto}{n.por && <span style={{ color: C.textoSuave }}> — {n.por}</span>}
+                      {n.texto}{n.por && <span style={{ color: C.textoSuave }}> — {mostrarNombre(n.por)}</span>}
                     </div>
                   ))}
                 </Seccion>
@@ -3517,13 +3539,16 @@ export default function App() {
                       <span><b>{m.fecha}</b> · +{m.producido} prod · −{Number(m.rutaNeta || 0).toFixed(1)} ruta{duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}</span>
                       <b style={{ color: C.verde }}>= {m.saldoFinal} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
                     </div>
-                    <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ marginTop: 7, padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
+                      <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
+                      <button onClick={() => setPrintDoc({ tipo: "bodega", movimientoId: m.id })} style={{ padding: "5px 9px", fontSize: 11.5, background: "#fff", color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>🖨 Imprimir</button>
+                    </div>
                     {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
                       {m.historialEdiciones.map((c, i) => <div key={i} style={{ padding: "7px 0", borderTop: `1px solid ${C.borde}`, fontSize: 11.5 }}>
-                        <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> · {c.por} · {c.motivo}<br />
+                        <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> · {mostrarNombre(c.por)} · {c.motivo}<br />
                         Antes: {c.anterior?.saldoFinal ?? "—"} cart → después: {c.nuevo?.saldoFinal ?? "—"} cart.
-                        {!!c.duplicadosRetirados?.length && <details><summary>Registros duplicados retirados ({c.duplicadosRetirados.length})</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(c.duplicadosRetirados, null, 2)}</pre></details>}
-                        <details><summary>Valores antes y después</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify({ antes: c.anterior, despues: c.nuevo }, null, 2)}</pre></details>
+                        {!!c.duplicadosRetirados?.length && <details><summary>Registros duplicados retirados ({c.duplicadosRetirados.length})</summary>{c.duplicadosRetirados.map((retirado, j) => <ResumenMovimientoBodega key={j} movimiento={retirado} />)}</details>}
+                        <details><summary>Ver datos modificados</summary><CambiosBodega anterior={c.anterior} nuevo={c.nuevo} /></details>
                       </div>)}
                     </details>}
                   </div>;
@@ -3830,7 +3855,7 @@ export default function App() {
                   {selectorHistorial("conteos")}
                   {historialVisible(mpInvHist, "conteos").map(h => (
                     <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 2px", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
-                      <span><b>{String(h.fecha).slice(0, 5)}</b> · {h.responsable || "sin responsable"} · {Object.keys(h.items || {}).length} materias primas contadas</span>
+                      <span><b>{String(h.fecha).slice(0, 5)}</b> · {mostrarNombre(h.responsable || "sin responsable")} · {Object.keys(h.items || {}).length} materias primas contadas</span>
                       <span style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => { setMpInv(h.items || {}); setMpResponsable(h.responsable || ""); avisar(`✓ Conteo del ${String(h.fecha).slice(0, 5)} cargado en el formulario — puedes editarlo y guardar de nuevo`); }}
                           style={{ fontSize: 11.5, padding: "4px 10px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Ver / reusar</button>
@@ -4219,7 +4244,7 @@ export default function App() {
                         <span>{a.textoAjustado || a.texto}</span>
                         {a.ajuste && (
                           <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>
-                            ✏️ Modificado por <b>{a.ajuste.responsable}</b> ({a.ajuste.fecha}): <i>"{a.ajuste.razon}"</i>
+                            ✏️ Modificado por <b>{mostrarNombre(a.ajuste.responsable)}</b> ({a.ajuste.fecha}): <i>"{a.ajuste.razon}"</i>
                           </div>
                         )}
                       </div>
@@ -4242,7 +4267,7 @@ export default function App() {
                           <div>
                             <div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}:</b> {aj.textoOriginal}</div>
                             <div style={{ color: C.textoSuave, marginTop: 2 }}>
-                              <span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : "#9A6605" }}>{aj.accion === "eliminar" ? "Descartada" : "Modificada"}</span> por <b>{aj.responsable}</b> el {aj.fecha}
+                              <span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : "#9A6605" }}>{aj.accion === "eliminar" ? "Descartada" : "Modificada"}</span> por <b>{mostrarNombre(aj.responsable)}</b> el {aj.fecha}
                               {aj.razon ? ` — Razón: "${aj.razon}"` : ""}
                             </div>
                             {aj.accion === "modificar" && aj.nuevoTexto && (
@@ -4733,7 +4758,7 @@ export default function App() {
                 Fecha: r.fecha, Gallinero: r.lote, Cartones: r.cartones, Huevos: r.cartones * HXC,
                 "Peso (kg)": r.pesoKg, Quebrados: r.quebrados, Muertas: r.muertas, Diagnóstico: r.dx,
                 "Alimento 6am (kg)": r.alimento6am ?? "", "Alimento 1pm (kg)": r.alimento1pm ?? "",
-                "Alimento total (kg)": r.alimentoKg, "Capturado por": r.por,
+                "Alimento total (kg)": r.alimentoKg, "Capturado por": mostrarNombre(r.por),
               }));
               XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasProd), "Produccion");
               const filasBod = bodegaMovs.filter(m => !rsMes.length || mesDe(m.fecha) === claveMes).map(m => ({
@@ -4745,7 +4770,7 @@ export default function App() {
                 Fecha: m.fecha, Tipo: m.tipo || "Medicamento", Gallinero: m.galpon, Producto: m.producto, Dosis: m.dosis, "Enfermedad tratada": m.enfermedad || "",
               }));
               if (filasMed.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasMed), "Medicacion");
-              const filasVac = vacunas.map(v => { const lv = lotes.find(x => x.id === v.lote); return { Fecha: v.fecha, Gallinero: lv ? `G${lv.galpon}` : v.lote, Vacuna: v.vacuna, Cepa: v.cepa || "", Vía: v.via || "", Proveedor: v.proveedor || "", "Registrado por": v.por || "" }; });
+              const filasVac = vacunas.map(v => { const lv = lotes.find(x => x.id === v.lote); return { Fecha: v.fecha, Gallinero: lv ? `G${lv.galpon}` : v.lote, Vacuna: v.vacuna, Cepa: v.cepa || "", Vía: v.via || "", Proveedor: v.proveedor || "", "Registrado por": mostrarNombre(v.por) }; });
               if (filasVac.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasVac), "Vacunacion");
               const filasEnf = enfermedades.map(e2 => { const le = lotes.find(x => x.id === e2.lote); return { Fecha: e2.fecha, Gallinero: le ? `G${le.galpon}` : e2.lote, Enfermedad: e2.enfermedad, Tratamiento: e2.tratamiento || "", Estado: e2.estado, "Fecha alta": e2.fechaAlta || "" }; });
               if (filasEnf.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasEnf), "Enfermedades");
@@ -4899,6 +4924,25 @@ export default function App() {
                     }} disabled={guardando} style={{ ...btnStyle, background: C.yema, color: "#fff" }}>
                       🔧 Migrar datos a la base de datos v6
                     </button>
+                  </div>
+                )}
+                {esAdmin && (
+                  <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Nombres visibles de usuarios</div>
+                    <p style={{ fontSize: 11.5, color: C.textoSuave, margin: "0 0 10px" }}>El correo se conserva para identificar cada cambio, pero en la app y los reportes se muestra el nombre que asignes aquí.</p>
+                    {Object.entries(nombresUsuarios).sort(([a], [b]) => a.localeCompare(b)).map(([correo, nombre]) => <div key={correo} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
+                      <span><b>{nombre}</b> · {correo}</span>
+                      <span style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => { setCorreoNombre(correo); setNombreNuevo(nombre); }} style={{ fontSize: 11, padding: "4px 8px" }}>Editar</button>
+                        <button onClick={() => borrarNombreVisible(correo)} style={{ fontSize: 11, padding: "4px 8px", color: C.alerta }}>Quitar</button>
+                      </span>
+                    </div>)}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                      <input type="email" aria-label="Correo del usuario" placeholder="correo exacto del usuario" value={correoNombre} onChange={e => setCorreoNombre(e.target.value)} style={{ ...inputStyle, flex: "1 1 190px", marginBottom: 0 }} />
+                      <input type="text" aria-label="Nombre visible" placeholder="Nombre visible, ej. José Daniel" value={nombreNuevo} onChange={e => setNombreNuevo(e.target.value)} style={{ ...inputStyle, flex: "1 1 160px", marginBottom: 0 }} />
+                      <button onClick={() => guardarNombreVisible(correoNombre, nombreNuevo)} style={{ ...btnStyle, flex: "0 0 auto", margin: 0 }}>Guardar nombre</button>
+                    </div>
+                    <button onClick={() => setCorreoNombre(window.__usuarioEmail || "")} style={{ marginTop: 7, fontSize: 11.5, color: C.verde, background: "none", border: "none", cursor: "pointer" }}>Usar mi correo</button>
                   </div>
                 )}
                 {esAdmin && (

@@ -34,6 +34,10 @@ export function elegirMovimientoBodega(actuales, fechaISO, id = null) {
   return { delDia, elegido, id: elegido?.id ?? `bodega-${fechaISO}` };
 }
 
+export function movimientoBodegaParaReporte(movs, id = null) {
+  return id == null ? movs[0] : movs.find(m => String(m.id) === String(id));
+}
+
 export function reconstruirBodega(movs, inicialCart, apertura) {
   const ordenados = [...movs].sort((a, b) => fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)));
   let saldo = Number(inicialCart || 0);
