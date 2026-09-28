@@ -284,26 +284,36 @@ export async function leer(key, porDefecto) {
   }
 }
 
+let escriturasPendientes = 0;
 export async function escribir(key, valor) {
+  const estado = (valor) => {
+    if (valor === "Guardando…") escriturasPendientes++;
+    else escriturasPendientes = Math.max(0, escriturasPendientes - 1);
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("granja:sync", { detail: valor === "Error al guardar" ? valor : escriturasPendientes ? "Guardando…" : "Sincronizado" }));
+  };
+  estado("Guardando…");
   try {
     if (ES_CXP(key)) {
       const obj = valor || {};
       const ok1 = await escribirColeccion("granja2:cxp:facturas", SUBTABLAS_CXP.facturas, Array.isArray(obj.facturas) ? obj.facturas : []);
       const ok2 = await escribirColeccion("granja2:cxp:pagos", SUBTABLAS_CXP.pagos, Array.isArray(obj.pagos) ? obj.pagos : []);
       const ok3 = await escribirColeccion("granja2:cxp:notas", SUBTABLAS_CXP.notas, Array.isArray(obj.notas) ? obj.notas : []);
+      estado(ok1 && ok2 && ok3 ? "Sincronizado" : "Error al guardar");
       return ok1 && ok2 && ok3;
     }
 
     const tabla = TABLA[key];
     if (tabla) {
-      return await escribirColeccion(key, tabla, Array.isArray(valor) ? valor : []);
+      const ok = await escribirColeccion(key, tabla, Array.isArray(valor) ? valor : []);
+      estado(ok ? "Sincronizado" : "Error al guardar"); return ok;
     }
 
     const { error } = await supabase.from("config").upsert({ key, data: valor, updated_by: emailActual() });
     revisarError(error);
-    return !error;
+    estado(error ? "Error al guardar" : "Sincronizado"); return !error;
   } catch (e) {
     console.error("escribir:", e);
+    estado("Error al guardar");
     return false;
   }
 }

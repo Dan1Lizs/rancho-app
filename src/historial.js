@@ -24,8 +24,8 @@ export function filtrarHistorial(items, periodo, hoy = new Date()) {
 }
 
 export function snapshotBodega(m) {
-  const { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, obs, saldoFinal, ajusteConteo, difAjuste } = m;
-  return { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, obs, saldoFinal, ajusteConteo, difAjuste };
+  const { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado } = m;
+  return { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado };
 }
 
 export function elegirMovimientoBodega(actuales, fechaISO, id = null) {
