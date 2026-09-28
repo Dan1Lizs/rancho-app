@@ -1,0 +1,51 @@
+import { fechaHistorialISO } from "./historial.js";
+
+export function saltosTiquetes(tiquetes) {
+  const nums = [...new Set(tiquetes.map(t => String(t.num || "").trim()).filter(x => /^\d+$/.test(x)).map(Number))].sort((a, b) => a - b);
+  if (nums.length < 2 || nums.at(-1) - nums[0] > 200) return [];
+  const presentes = new Set(nums);
+  return Array.from({ length: nums.at(-1) - nums[0] - 1 }, (_, i) => nums[0] + i + 1).filter(n => !presentes.has(n));
+}
+
+export function observacionesCaptura(capturas, lotes) {
+  const avisos = [];
+  for (const l of lotes) {
+    const c = capturas[l.id]; if (!c) continue;
+    const tiquetes = (c.tiquetes || []).filter(t => t.num || t.cartones || t.peso);
+    const saltos = saltosTiquetes(tiquetes);
+    if (saltos.length) avisos.push(`G${l.galpon}: faltan números de tiquete ${saltos.slice(0, 12).join(", ")}${saltos.length > 12 ? "…" : ""}`);
+    if (tiquetes.some(t => !t.num || !Number(t.cartones) || !Number(t.peso))) avisos.push(`G${l.galpon}: hay tiquetes incompletos`);
+    for (const t of tiquetes) if (Number(t.cartones) > 0 && Number(t.peso) > 0) {
+      const kgCart = Number(t.peso) / Number(t.cartones);
+      if (kgCart < 1 || kgCart > 3) avisos.push(`G${l.galpon}: tiquete #${t.num} (${kgCart.toFixed(2)} kg/cartón), revisa peso y cartones`);
+    }
+  }
+  return avisos;
+}
+
+export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas }) {
+  const hallazgos = [];
+  const grupos = new Map();
+  for (const r of registros) { const k = `${r.fecha}|${r.lote}`; grupos.set(k, (grupos.get(k) || 0) + 1); }
+  for (const [k, n] of grupos) if (n > 1) hallazgos.push({ tipo: "Duplicado", texto: `${k.replace("|", " · ")} tiene ${n} controles` });
+  for (const [nombre, saldo] of [["Aves", saldoAves], ["Ganado", saldoGanado]]) if (saldo < 0) hallazgos.push({ tipo: "Saldo negativo", texto: `Concentrado ${nombre}: ${saldo.toFixed(1)} kg` });
+  for (const [categoria, saldos, total] of [["Aves", saldosAvesFormula, saldoAves], ["Ganado", saldosGanadoFormula, saldoGanado]]) {
+    if (!saldos) continue;
+    for (const [nombre, kg] of Object.entries(saldos)) if (kg != null && kg < 0) hallazgos.push({ tipo: "Saldo negativo", texto: `${categoria} · ${nombre}: ${kg.toFixed(1)} kg` });
+    const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0);
+    if (Math.abs(resto) > 0.11) hallazgos.push({ tipo: "Sin conciliar", texto: `${categoria}: ${resto.toFixed(1)} kg sin distribuir o con diferencia` });
+  }
+  const hoy = new Date(); const iso = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,"0")}-${String(hoy.getDate()).padStart(2,"0")}`;
+  const fecha = `${iso.slice(8)}/${iso.slice(5,7)}/${iso.slice(0,4)}`;
+  for (const l of lotes.filter(x => x.estado !== "cerrado")) if (!registros.some(r => r.fecha === fecha && r.lote === l.id)) hallazgos.push({ tipo: "Pendiente", texto: `G${l.galpon}: falta control de hoy` });
+  for (const m of retirosActivos) hallazgos.push({ tipo: "Retiro", texto: `G${m.galpon}: ${m.producto} hasta ${m.retiroHasta}` });
+  for (const t of tareas) if (t.vence && t.vence < iso) hallazgos.push({ tipo: "Tarea atrasada", texto: t.nombre });
+  const ultimo = bodegaMovs[0];
+  if (ultimo && fechaHistorialISO(ultimo.fecha) < iso) hallazgos.push({ tipo: "Bodega", texto: `Último cierre: ${ultimo.fecha}` });
+  return hallazgos;
+}
+
+export function csvAuditoria(filas) {
+  const celda = v => `"${String(v ?? "").replaceAll('"', '""')}"`;
+  return "Fecha,Área,Acción,Responsable,Motivo,Antes,Después\r\n" + filas.map(f => [f.fecha, f.area, f.accion, f.responsable, f.motivo, f.antes, f.despues].map(celda).join(",")).join("\r\n");
+}
