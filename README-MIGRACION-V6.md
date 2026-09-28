@@ -1,4 +1,6 @@
-# 🐔 Rancho El Soñado — Actualización a base de datos v6
+# 🐔 Rancho El Soñado — Registro histórico de migración a base de datos v6
+
+> Esta migración ya corresponde a una versión anterior. No la ejecutes de nuevo sin revisar el estado actual de la base. El archivo vigente se llama `supabase_v2_actualizado.sql`.
 
 Esto arregla de raíz los problemas de "se pierden datos", "multiusuario" y
 "errores al guardar". Tiempo estimado: 15–20 minutos. No se pierde nada de
@@ -12,7 +14,7 @@ nadie use la app durante estos 20 minutos.
 ## PASO 1 — Crear las tablas nuevas · ~5 min
 
 1. Entra a **supabase.com** → tu proyecto → menú **SQL Editor** → **New query**
-2. Pega TODO el contenido del archivo `supabase_v2.sql` → botón **Run**
+2. Pega TODO el contenido del archivo `supabase_v2_actualizado.sql` → botón **Run**
 3. Debe decir "Success". Esto crea las tablas nuevas SIN tocar ni borrar
    la tabla vieja `kv` — tus datos actuales siguen intactos ahí.
 
