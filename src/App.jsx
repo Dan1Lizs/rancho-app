@@ -14,6 +14,7 @@ import logoOficial from "./assets/logo-oficial.png";
 import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "./historial";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { nombreVisible } from "./nombresUsuarios";
+import { saldosFormulasDesdeConteo } from "./inventarioFormulas";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -25,7 +26,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.7";
+const VERSION_APP = "8.8";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -394,6 +395,7 @@ export default function App() {
   const [aperturaIns, setAperturaIns] = useState({});
   const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() });
   const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", formula: "", saldoReal: "", fecha: hoyISO(), responsable: "" });
+  const [conteosFormula, setConteosFormula] = useState({});
   const [racionesGanado, setRacionesGanado] = useState({});
   const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: hoyISO() });
 
@@ -777,6 +779,8 @@ export default function App() {
       }
       nuevos.push({
         ...(previo?.id ? { id: previo.id } : {}),
+        formulaConcentrado: previo?.formulaConcentrado || (recetas.formulas[l.formula] ? l.formula : mpConfig.formulaLote[l.id]) || "Impulsor",
+        registradoEl: previo?.registradoEl || new Date().toISOString(),
         fecha, lote: l.id, cartones: +t.cartones.toFixed(2), quebrados: Number(c.quebrados || 0),
         pesoKg: +t.pesoKg.toFixed(1), muertas: Number(c.muertas || 0), dx: c.dx || "",
         alimentoKg: alimTotal, alimento6am: Number(c.alimento6am || 0), alimento1pm: Number(c.alimento1pm || 0), obsAlimento: c.obsAlimento || "",
@@ -981,7 +985,7 @@ export default function App() {
     setGuardando(true);
     const nBaches = Number(fBache.baches || 0);
     const fechaBache = (fBache.fecha || hoyISO()).split("-").reverse().join("/");
-    const nuevo = [{ fecha: fechaBache, tipo: "bache", categoria: usoFormula(fBache.formula), formula: fBache.formula, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), por: completadoPor }, ...plantaMovs];
+    const nuevo = [{ fecha: fechaBache, registradoEl: new Date().toISOString(), tipo: "bache", categoria: usoFormula(fBache.formula), formula: fBache.formula, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) {
       if (nBaches > 0) {
         const f2 = recetas.formulas[fBache.formula];
@@ -1027,11 +1031,12 @@ export default function App() {
 
   const guardarServidoGanado = async () => {
     if (!Number.isFinite(Number(fServGan.kg)) || Number(fServGan.kg) <= 0 || !fechaPesajeISO(fServGan.fecha) || fServGan.fecha > hoyISO()) { avisar("⚠ Revisa los kilos y la fecha del servido"); return; }
+    if (!fServGan.formula) { avisar("⚠ Elige el tipo de concentrado para descontarlo del inventario correcto"); return; }
     setGuardando(true);
     try {
       const actuales = await leer(K.planta, null);
       if (!actuales) throw new Error("No se pudo consultar el inventario actual");
-      const nuevo = [{ id: crypto.randomUUID(), fecha: fServGan.fecha.split("-").reverse().join("/"), tipo: "servido", categoria: "Ganado", kg: Number(fServGan.kg), formula: fServGan.formula || "", detalle: fServGan.detalle || "", ...(fServGan.grupoKey !== "" ? { grupoKey: fServGan.grupoKey } : {}), por: completadoPor }, ...actuales];
+      const nuevo = [{ id: crypto.randomUUID(), fecha: fServGan.fecha.split("-").reverse().join("/"), registradoEl: new Date().toISOString(), tipo: "servido", categoria: "Ganado", kg: Number(fServGan.kg), formula: fServGan.formula || "", detalle: fServGan.detalle || "", ...(fServGan.grupoKey !== "" ? { grupoKey: fServGan.grupoKey } : {}), por: completadoPor }, ...actuales];
       if (!(await escribir(K.planta, nuevo))) throw new Error("No se pudo guardar");
       setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() }); avisar("✓ Servido a ganado registrado");
     } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
@@ -1047,7 +1052,7 @@ export default function App() {
       const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), actuales);
       if (plan.sinGrupo.length) throw new Error("Ya hay servido manual de hoy sin corral asignado. Revisa esos movimientos antes del registro calculado para evitar descontarlo dos veces.");
       if (!plan.pendientes.length) { avisar("✓ Todos los corrales configurados ya tienen servido registrado hoy"); return; }
-      const nuevos = plan.pendientes.map(g => ({ id: `ganado:auto:${hoyISO()}:${g.key}`, fecha: plan.fecha, tipo: "servido", categoria: "Ganado", kg: g.kg, formula: g.formula, detalle: g.nombre, grupoKey: g.key, calculado: true, por: completadoPor }));
+      const nuevos = plan.pendientes.map(g => ({ id: `ganado:auto:${hoyISO()}:${g.key}`, fecha: plan.fecha, registradoEl: new Date().toISOString(), tipo: "servido", categoria: "Ganado", kg: g.kg, formula: g.formula, detalle: g.nombre, grupoKey: g.key, calculado: true, por: completadoPor }));
       const lista = [...nuevos, ...actuales];
       if (!(await escribir(K.planta, lista))) throw new Error("No se pudo guardar el servido calculado");
       setPlantaMovs(lista);
@@ -1115,11 +1120,15 @@ export default function App() {
   };
 
   const guardarAjustePlanta = async () => {
-    const real = Number(fAjPlanta.saldoReal);
+    const esConcentrado = fAjPlanta.categoria !== "Núcleo";
+    const formulas = Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria);
+    const conteos = Object.fromEntries(formulas.map(n => [n, Number(conteosFormula[n])]));
+    const real = esConcentrado ? Object.values(conteos).reduce((s, n) => s + n, 0) : Number(fAjPlanta.saldoReal);
     const responsable = fAjPlanta.responsable.trim();
     const esNucleo = fAjPlanta.categoria === "Núcleo";
     const formula = fAjPlanta.formula || Object.keys(recetas.formulas).find(n => kgNucleoDe(n) > 0);
-    if (!responsable || fAjPlanta.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esNucleo && !formula)) { avisar("⚠ Indica un responsable, un conteo válido y una fecha no futura"); return; }
+    if (!responsable || (!esConcentrado && fAjPlanta.saldoReal === "") || !Number.isFinite(real) || real < 0 || (esConcentrado && (!formulas.length || formulas.some(n => conteosFormula[n] === undefined || conteosFormula[n] === "" || !Number.isFinite(conteos[n]) || conteos[n] < 0))) || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esNucleo && !formula)) { avisar("⚠ Indica responsable y cantidad real de cada fórmula, con fecha válida"); return; }
+    if (esConcentrado && fAjPlanta.fecha !== hoyISO()) { avisar("⚠ Para cuadrar el saldo actual por fórmula, realiza el conteo con la fecha de hoy"); return; }
     setGuardando(true);
     try {
       const movimientos = await leer(K.planta, null);
@@ -1130,8 +1139,8 @@ export default function App() {
         + movimientos.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) }).filter(m => (!aperturaP || aDate(m.fecha) >= aperturaP) && m.categoria === fAjPlanta.categoria).reduce((s, m) => s + (m.tipo === "bache" || m.tipo === "ajuste" ? Number(m.kg || 0) : m.tipo === "servido" ? -Number(m.kg || 0) : 0), 0)
         - (fAjPlanta.categoria === "Aves" ? servidoAvesTotal : 0);
       const delta = +(real - actual).toFixed(2);
-      if (!delta) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); return; }
-      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { kg: delta }), saldoAnterior: actual, saldoReal: real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
+      if (!delta && !esConcentrado) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); return; }
+      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { kg: delta, conteosFormula: conteos }), saldoAnterior: actual, saldoReal: real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
       if (!(await escribir(K.planta, [evento, ...movimientos]))) throw new Error("No se pudo registrar el ajuste en el historial");
       setPlantaMovs([evento, ...movimientos]);
       if (esNucleo) {
@@ -1489,6 +1498,8 @@ export default function App() {
 
   const formulasAves = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Aves").map(([n]) => n);
   const formulasGanado = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Ganado").map(([n]) => n);
+  const saldosAvesFormula = saldosFormulasDesdeConteo("Aves", formulasAves, movsPlanta, registros);
+  const saldosGanadoFormula = saldosFormulasDesdeConteo("Ganado", formulasGanado, movsPlanta, registros);
   const sumaBache = (f) => Object.values(f.items).reduce((a, b) => a + Number(b || 0), 0);
 
   // ── Pedido de Materia Prima ──
@@ -3644,6 +3655,13 @@ export default function App() {
             <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 12, padding: "0 2px" }}>
               Esquema por categoría: inventario inicial + baches producidos − servido (aves automático del Control diario · ganado se digita aquí) ± ajustes = inventario final.
             </div>
+            {[["Aves", saldosAvesFormula, saldoAves], ["Ganado", saldosGanadoFormula, saldoGanado]].map(([categoria, saldos, total]) => <div key={categoria} style={{ padding: 12, background: C.superficie, borderRadius: 12, marginBottom: 10, fontSize: 13 }}>
+              <b>Existencias por fórmula · {categoria}</b>
+              {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por fórmula. El total de {total.toFixed(1)} kg aún no tiene distribución verificada.</div> : <>
+                {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg < 0 ? C.alerta : C.verde }}>{kg.toFixed(1)} kg</b></div>)}
+                {Math.abs(Object.values(saldos).reduce((s, n) => s + n, 0) - total) > 0.11 && <div style={{ color: C.alerta, marginTop: 6 }}>⚠ El desglose difiere del total ({total.toFixed(1)} kg). Revisa servidos sin fórmula o movimientos anteriores.</div>}
+              </>}
+            </div>)}
 
             <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
               <select value={fBache.formula} onChange={e => setFBache({ ...fBache, formula: e.target.value })} style={selectStyle}>
@@ -3731,7 +3749,7 @@ export default function App() {
                 </select>
               </label>
               <select value={fServGan.formula} onChange={e => setFServGan({ ...fServGan, formula: e.target.value })} style={selectStyle}>
-                <option value="">Tipo de concentrado (opcional)</option>
+                <option value="">Tipo de concentrado (obligatorio)</option>
                 {Object.keys(recetas.formulas).filter(f => usoFormula(f) === "Ganado").map(f => <option key={f} value={f}>{f}</option>)}
               </select>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -3750,17 +3768,21 @@ export default function App() {
                   </select>
                 </label>
                 {fAjPlanta.categoria === "Núcleo" && <label style={{ flex: "1 1 160px", fontSize: 12 }}>Núcleo / fórmula<select value={fAjPlanta.formula} onChange={e => setFAjPlanta({ ...fAjPlanta, formula: e.target.value, saldoReal: "" })} style={inputStyle}><option value="">Elegir núcleo</option>{[...new Set([...Object.keys(recetas.formulas).filter(n => kgNucleoDe(n) > 0), ...Object.keys(nucleoInv)])].map(n => <option key={n} value={n}>{n}</option>)}</select></label>}
-                <Campo mitad etiqueta={`Saldo real contado (app: ${fAjPlanta.categoria === "Núcleo" ? Number(nucleoInv[fAjPlanta.formula] || 0) : (fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(1)} ${fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"})`} type="text" inputMode="decimal" placeholder={fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"} value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
+                {fAjPlanta.categoria === "Núcleo" && <Campo mitad etiqueta={`Saldo real contado (app: ${Number(nucleoInv[fAjPlanta.formula] || 0).toFixed(1)} porciones)`} type="text" inputMode="decimal" placeholder="porciones" value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />}
                 <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre de quien contó" value={fAjPlanta.responsable} onChange={e => setFAjPlanta({ ...fAjPlanta, responsable: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
                   <input type="date" value={fAjPlanta.fecha} onChange={e => setFAjPlanta({ ...fAjPlanta, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
+              {fAjPlanta.categoria !== "Núcleo" && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                {Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria).map(n => <label key={n} style={{ flex: "1 1 180px", fontSize: 12 }}>{n} · kg reales<input type="number" min="0" step="0.1" value={conteosFormula[n] ?? ""} onChange={e => setConteosFormula(v => ({ ...v, [n]: e.target.value }))} placeholder="Cuenta esta fórmula" style={{ ...inputStyle, width: "100%" }} /></label>)}
+                <div style={{ width: "100%", fontSize: 12 }}>Total del conteo: <b>{Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria).reduce((s, n) => s + Number(conteosFormula[n] || 0), 0).toFixed(1)} kg</b> · saldo actual: {(fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(1)} kg. Anota 0 si no queda de una fórmula.</div>
+              </div>}
               <button onClick={guardarAjustePlanta} disabled={guardando} style={btnStyle}>Registrar ajuste</button>
               <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes físicos</div>
               {selectorHistorial("ajustesPlanta")}
-              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}><b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}</div>)}
+              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}><b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}{m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" · ")}</div>}</div>)}
             </Seccion>
 
             <Seccion titulo="D. Productos y facturas recibidas">
