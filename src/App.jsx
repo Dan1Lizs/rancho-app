@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
-import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
+import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
@@ -25,7 +25,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.6";
+const VERSION_APP = "8.7";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -393,7 +393,8 @@ export default function App() {
   const [bodegaCfg, setBodegaCfg] = useState({ inicialCart: 128 });
   const [aperturaIns, setAperturaIns] = useState({});
   const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() });
-  const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", saldoReal: "", fecha: hoyISO() });
+  const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", formula: "", saldoReal: "", fecha: hoyISO(), responsable: "" });
+  const [racionesGanado, setRacionesGanado] = useState({});
   const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: hoyISO() });
 
   const [fPeso, setFPeso] = useState({ lote: "G1", pesos: "", fecha: hoyISO() });
@@ -483,6 +484,9 @@ export default function App() {
   const [fPlan, setFPlan] = useState({ vacuna: "", cepa: "", via: "", proveedor: "", dia: "" });
   const [histFecha, setHistFecha] = useState(() => hoyISO());
   const [histMes, setHistMes] = useState(() => hoyISO().slice(0, 7));
+  const [correccionesProduccion, setCorreccionesProduccion] = useState([]);
+  const [editarProduccion, setEditarProduccion] = useState(null);
+  const [motivoProduccion, setMotivoProduccion] = useState("");
   const [formLote, setFormLote] = useState(null);
   const [razaReferencia, setRazaReferencia] = useState("isa");
   const [semanaReferencia, setSemanaReferencia] = useState(26);
@@ -550,6 +554,7 @@ export default function App() {
       const ls = ls0;
       const rs = rs0;
       setLotes(ls); setRegistros(ordenarPorFecha(rs)); setPesajes(ordenarPorFecha(ps0));
+      leerCorreccionesProduccion().then(setCorreccionesProduccion).catch(console.error);
       if (primera) setCapturas(Object.fromEntries(ls.map(l => [l.id, capturaVacia()])));
       setErrorCarga(false);
       baseLista = true;
@@ -705,6 +710,17 @@ export default function App() {
     const soloLote = soloLoteId ? lotes.find(x => x.id === soloLoteId) : null;
     setGuardando(true);
     const fecha = (fechaCaptura || hoyISO()).split("-").reverse().join("/");
+    const vigentes = await leer(K.registros, null);
+    if (!vigentes) { avisar("⚠ No se pudo comprobar la producción actual. Intenta de nuevo."); setGuardando(false); return; }
+    const aGuardar = lotes.filter(l => (!soloLoteId || l.id === soloLoteId) && capturas[l.id] && (totalesGalpon(capturas[l.id]).huevos || capturas[l.id].muertas || capturas[l.id].alimento6am || capturas[l.id].alimento1pm));
+    if (aGuardar.some(l => vigentes.filter(r => r.fecha === fecha && r.lote === l.id).length > 1)) {
+      avisar("⚠ Hay controles duplicados para esta fecha. Corrígelos desde Historial antes de guardar."); setGuardando(false); return;
+    }
+    if (aGuardar.some(l => {
+      const actual = vigentes.find(r => r.fecha === fecha && r.lote === l.id);
+      const visto = registros.find(r => r.fecha === fecha && r.lote === l.id);
+      return actual?.id !== visto?.id || (actual && JSON.stringify(actual) !== JSON.stringify(visto));
+    })) { avisar("⚠ Esta fecha cambió en otro dispositivo. Actualiza la app antes de guardar."); setGuardando(false); return; }
     {
       const enFormulario = [];
       lotes.forEach(l => {
@@ -760,6 +776,7 @@ export default function App() {
         };
       }
       nuevos.push({
+        ...(previo?.id ? { id: previo.id } : {}),
         fecha, lote: l.id, cartones: +t.cartones.toFixed(2), quebrados: Number(c.quebrados || 0),
         pesoKg: +t.pesoKg.toFixed(1), muertas: Number(c.muertas || 0), dx: c.dx || "",
         alimentoKg: alimTotal, alimento6am: Number(c.alimento6am || 0), alimento1pm: Number(c.alimento1pm || 0), obsAlimento: c.obsAlimento || "",
@@ -1098,13 +1115,34 @@ export default function App() {
   };
 
   const guardarAjustePlanta = async () => {
-    if (fAjPlanta.saldoReal === "") return;
-    const actual = fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado;
-    const delta = +(Number(fAjPlanta.saldoReal) - actual).toFixed(1);
-    if (delta === 0) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); setFAjPlanta({ ...fAjPlanta, saldoReal: "" }); return; }
-    const nuevo = [{ fecha: (fAjPlanta.fecha || hoyISO()).split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, kg: delta, detalle: `Conteo físico: ${fAjPlanta.saldoReal} kg`, por: completadoPor }, ...plantaMovs];
-    if (await escribir(K.planta, nuevo)) { setPlantaMovs(nuevo); setFAjPlanta({ ...fAjPlanta, saldoReal: "" }); avisar(`✓ Ajuste de ${delta > 0 ? "+" : ""}${delta} kg registrado`); }
-    else avisar("⚠ No se pudo guardar");
+    const real = Number(fAjPlanta.saldoReal);
+    const responsable = fAjPlanta.responsable.trim();
+    const esNucleo = fAjPlanta.categoria === "Núcleo";
+    const formula = fAjPlanta.formula || Object.keys(recetas.formulas).find(n => kgNucleoDe(n) > 0);
+    if (!responsable || fAjPlanta.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esNucleo && !formula)) { avisar("⚠ Indica un responsable, un conteo válido y una fecha no futura"); return; }
+    setGuardando(true);
+    try {
+      const movimientos = await leer(K.planta, null);
+      if (!movimientos) throw new Error("No se pudo consultar el historial actual");
+      const inv = esNucleo ? await leer(K.nucleo, null) : null;
+      if (esNucleo && !inv) throw new Error("No se pudo consultar el inventario de núcleos");
+      const actual = esNucleo ? Number(inv[formula] || 0) : Number(plantaCfg[fAjPlanta.categoria === "Aves" ? "inicialAves" : "inicialGanado"] || 0)
+        + movimientos.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) }).filter(m => (!aperturaP || aDate(m.fecha) >= aperturaP) && m.categoria === fAjPlanta.categoria).reduce((s, m) => s + (m.tipo === "bache" || m.tipo === "ajuste" ? Number(m.kg || 0) : m.tipo === "servido" ? -Number(m.kg || 0) : 0), 0)
+        - (fAjPlanta.categoria === "Aves" ? servidoAvesTotal : 0);
+      const delta = +(real - actual).toFixed(2);
+      if (!delta) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); return; }
+      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { kg: delta }), saldoAnterior: actual, saldoReal: real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
+      if (!(await escribir(K.planta, [evento, ...movimientos]))) throw new Error("No se pudo registrar el ajuste en el historial");
+      setPlantaMovs([evento, ...movimientos]);
+      if (esNucleo) {
+        const actualizado = { ...inv, [formula]: real };
+        if (!(await escribir(K.nucleo, actualizado))) throw new Error("El ajuste quedó anotado, pero el inventario no se actualizó. Revisa el historial antes de repetirlo.");
+        setNucleoInv(actualizado);
+      }
+      setFAjPlanta({ ...fAjPlanta, saldoReal: "" });
+      avisar(`✓ Ajuste ${delta > 0 ? "+" : ""}${delta} ${esNucleo ? "porciones" : "kg"} registrado`);
+    } catch (e) { avisar(`⚠ ${e.message}`); }
+    finally { setGuardando(false); }
   };
 
   const guardarCfgPlanta = async (cfg) => { if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; } setPlantaCfg(cfg); await escribir(K.plantaCfg, cfg); };
@@ -1527,6 +1565,12 @@ export default function App() {
   };
 
   const guardarConfigMP = async (cfg) => { setMpConfig(cfg); await escribir(K.mpConfig, cfg); };
+  const guardarRacionesGanado = async () => {
+    const ganado = (mpConfig.ganado || []).map((g, i) => ({ ...g, kgAnimal: racionesGanado[i] ?? g.kgAnimal }));
+    if (ganado.some(g => !Number.isFinite(Number(g.kgAnimal)) || Number(g.kgAnimal) <= 0)) { avisar("⚠ Cada porción debe ser mayor que cero"); return; }
+    if (await escribir(K.mpConfig, { ...mpConfig, ganado })) { setMpConfig({ ...mpConfig, ganado }); setRacionesGanado({}); avisar("✓ Porciones guardadas para próximos servidos"); }
+    else avisar("⚠ No se pudieron guardar las porciones");
+  };
 
   const textoPedidoProveedor = (prov, items) => {
     const totU = items.reduce((s2, x) => s2 + x.pedido, 0);
@@ -2073,6 +2117,29 @@ export default function App() {
     registros, fumigaciones, trabajos: TRABAJOS, bodegaMovs, mpFechaConteo,
   }, fecha);
   const historialVisible = (items, clave) => filtrarHistorial(items, periodosHistorial[clave] || "30");
+  const guardarCorreccionProduccion = async (eliminar = false) => {
+    if (!editarProduccion || !motivoProduccion.trim()) { avisar("⚠ Escribe el motivo de la corrección."); return; }
+    const original = registros.find(r => String(r.id) === String(editarProduccion.id));
+    if (!original) { avisar("⚠ Actualiza los datos antes de corregir."); return; }
+    const tiquetes = editarProduccion.tiquetes.map(t => ({ num: String(t.num || "").trim(), cartones: String(t.cartones || ""), peso: String(t.peso || "") })).filter(t => t.num || t.cartones || t.peso);
+    if (!eliminar && (!tiquetes.length || tiquetes.some(t => !t.num || !(Number(t.cartones) > 0) || !(Number(t.peso) > 0)))) { avisar("⚠ Revisa los números, cartones y pesos de cada tiquete."); return; }
+    const nuevo = { ...original, ...editarProduccion, tiquetes,
+      cartones: tiquetes.reduce((s, t) => s + Number(t.cartones), 0),
+      pesoKg: +tiquetes.reduce((s, t) => s + Number(t.peso), 0).toFixed(1),
+      muertas: Number(editarProduccion.muertas), quebrados: Number(editarProduccion.quebrados),
+      alimentoKg: Number(editarProduccion.alimento6am) + Number(editarProduccion.alimento1pm),
+      alimento6am: Number(editarProduccion.alimento6am), alimento1pm: Number(editarProduccion.alimento1pm),
+    };
+    if (!eliminar && [nuevo.muertas, nuevo.quebrados, nuevo.alimentoKg].some(n => !Number.isFinite(n) || n < 0)) { avisar("⚠ Los valores deben ser números positivos o cero."); return; }
+    setGuardando(true);
+    try {
+      await corregirProduccion({ id: original.id, nuevo, motivo: motivoProduccion.trim(), eliminar });
+      setEditarProduccion(null); setMotivoProduccion("");
+      await cargarTodo(false);
+      avisar(eliminar ? "✓ Registro retirado; corrección anotada en el historial" : "✓ Registro corregido; cambio anotado en el historial");
+    } catch (e) { avisar(`⚠ ${e.message || "No se pudo corregir"}`); await cargarTodo(false); }
+    finally { setGuardando(false); }
+  };
   const selectorHistorial = (clave) => <label style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", fontSize: 12.5, marginBottom: 10, color: C.textoSuave }}>
     Mostrar
     <select aria-label="Período del historial" value={periodosHistorial[clave] || "30"} onChange={e => setPeriodosHistorial(prev => ({ ...prev, [clave]: e.target.value }))} style={{ ...inputStyle, width: "auto", minWidth: 170, margin: 0, padding: "7px 10px" }}>
@@ -2910,6 +2977,14 @@ export default function App() {
 
       <main style={{ maxWidth: 880, margin: "0 auto", padding: 16 }}>
         {guardado && <div style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
+        {(() => {
+          const conteo = new Map();
+          registros.forEach(r => { const k = `${r.fecha}|${r.lote}`; conteo.set(k, (conteo.get(k) || 0) + 1); });
+          const conflictos = [...conteo].filter(([, n]) => n > 1);
+          return conflictos.length ? <div role="alert" style={{ padding: 12, marginBottom: 12, borderRadius: 10, background: C.alertaSuave, color: C.alerta, fontSize: 13 }}>
+            ⚠ {conflictos.length} fecha(s) con producción duplicada. Los totales pueden estar inflados. <button onClick={() => { const fecha = conflictos[0][0].split("|")[0]; setHistFecha(fechaHistorialISO(fecha)); setVista("historial"); }} style={{ marginLeft: 8 }}>Revisar en Historial</button>
+          </div> : null;
+        })()}
         {/* ══ CONTROL DIARIO ══ */}
         {vista === "captura" && (
           <>
@@ -3628,14 +3703,16 @@ export default function App() {
                 return <div style={{ background: C.verdeSuave, borderRadius: 12, padding: 13, marginBottom: 16 }}>
                   <b style={{ color: C.verde, fontSize: 14 }}>Servido calculado de hoy · {hoyStr()}</b>
                   <div style={{ fontSize: 12, color: C.textoSuave, margin: "4px 0 9px" }}>Confirma el servido real antes de registrarlo. Se descontará del inventario de ganado una sola vez por corral.</div>
-                  {plan.filas.map(g => <div key={g.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, borderTop: "1px solid #c7d8c9", padding: "7px 0", fontSize: 13 }}>
+                  {plan.filas.map(g => <div key={g.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, borderTop: "1px solid #c7d8c9", padding: "7px 0", fontSize: 13, flexWrap: "wrap" }}>
                     <span><b>{g.nombre}</b> · {g.formula}<br /><small>{g.animales} animales × {g.kgAnimal} kg</small></span>
+                    <label style={{ fontSize: 11 }}>Porción kg/animal<input type="number" min="0.01" step="0.01" value={racionesGanado[g.key] ?? (mpConfig.ganado || [])[Number(g.key)]?.kgAnimal ?? ""} onChange={e => setRacionesGanado(v => ({ ...v, [g.key]: e.target.value }))} style={{ ...inputStyle, width: 90, margin: 0 }} /></label>
                     <b style={{ color: g.registrado ? C.textoSuave : C.verde, whiteSpace: "nowrap" }}>{g.kg.toFixed(1)} kg {g.registrado ? "✓ registrado" : ""}</b>
                   </div>)}
+                  {Object.keys(racionesGanado).length > 0 && <button onClick={guardarRacionesGanado} style={{ ...btnStyle, marginTop: 8 }}>Guardar nuevas porciones</button>}
                   {!plan.filas.length && <div style={{ fontSize: 12.5 }}>Configura animales, ración y fórmula para cada corral en Materias primas → Consumo proyectado.</div>}
                   {plan.sinGrupo.length > 0 && <div style={{ color: C.alerta, fontSize: 12, marginBottom: 8 }}>Hay {plan.sinGrupo.length} servido(s) manual(es) de hoy sin corral. El registro calculado se detiene para evitar duplicarlos.</div>}
                   <div style={{ fontWeight: 700, fontSize: 13, margin: "8px 0" }}>Pendiente: {plan.pendientes.reduce((s, g) => s + g.kg, 0).toFixed(1)} kg en {plan.pendientes.length} corral(es) · inventario actual: {saldoGanado.toFixed(1)} kg</div>
-                  <button onClick={registrarServidoCalculado} disabled={guardando || cargandoFondo || !plan.pendientes.length || !!plan.sinGrupo.length} style={btnStyle}>Registrar servido calculado de hoy</button>
+                  <button onClick={registrarServidoCalculado} disabled={guardando || cargandoFondo || !!Object.keys(racionesGanado).length || !plan.pendientes.length || !!plan.sinGrupo.length} style={btnStyle}>Registrar servido calculado de hoy</button>
                 </div>;
               })()}
               <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 9 }}>Registrar servido real manualmente</div>
@@ -3669,16 +3746,21 @@ export default function App() {
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 40%" }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
                   <select value={fAjPlanta.categoria} onChange={e => setFAjPlanta({ ...fAjPlanta, categoria: e.target.value })} style={inputStyle}>
-                    <option>Aves</option><option>Ganado</option>
+                    <option>Aves</option><option>Ganado</option><option>Núcleo</option>
                   </select>
                 </label>
-                <Campo mitad etiqueta={`Saldo real contado (app: ${(fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(0)} kg)`} type="text" inputMode="decimal" placeholder="kg" value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
+                {fAjPlanta.categoria === "Núcleo" && <label style={{ flex: "1 1 160px", fontSize: 12 }}>Núcleo / fórmula<select value={fAjPlanta.formula} onChange={e => setFAjPlanta({ ...fAjPlanta, formula: e.target.value, saldoReal: "" })} style={inputStyle}><option value="">Elegir núcleo</option>{[...new Set([...Object.keys(recetas.formulas).filter(n => kgNucleoDe(n) > 0), ...Object.keys(nucleoInv)])].map(n => <option key={n} value={n}>{n}</option>)}</select></label>}
+                <Campo mitad etiqueta={`Saldo real contado (app: ${fAjPlanta.categoria === "Núcleo" ? Number(nucleoInv[fAjPlanta.formula] || 0) : (fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(1)} ${fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"})`} type="text" inputMode="decimal" placeholder={fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"} value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
+                <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre de quien contó" value={fAjPlanta.responsable} onChange={e => setFAjPlanta({ ...fAjPlanta, responsable: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
                   <input type="date" value={fAjPlanta.fecha} onChange={e => setFAjPlanta({ ...fAjPlanta, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
-              <button onClick={guardarAjustePlanta} style={btnStyle}>Registrar ajuste</button>
+              <button onClick={guardarAjustePlanta} disabled={guardando} style={btnStyle}>Registrar ajuste</button>
+              <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes físicos</div>
+              {selectorHistorial("ajustesPlanta")}
+              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}><b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}</div>)}
             </Seccion>
 
             <Seccion titulo="D. Productos y facturas recibidas">
@@ -3709,9 +3791,9 @@ export default function App() {
                 {selectorHistorial("planta")}
                 {historialVisible(movsPlanta, "planta").map((m, i) => (
                   <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.detalle ? ` (${m.detalle})` : ""}`}</span>
-                    <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" ? `${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
-                    <button onClick={() => eliminarMovPlanta(m)} title="Eliminar (revierte efectos)" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
+                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
+                    <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
+                    {m.tipo !== "ajuste" && <button onClick={() => eliminarMovPlanta(m)} title="Eliminar (revierte efectos)" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>}
                   </div>
                 ))}
               </Seccion>
@@ -4725,6 +4807,7 @@ export default function App() {
           const aDMY = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
           const fSel = aDMY(histFecha);
           const rsDia = registros.filter(r => r.fecha === fSel);
+          const duplicadosDia = rsDia.filter(r => rsDia.filter(x => x.lote === r.lote).length > 1);
           const movDia = bodegaMovs.find(m => m.fecha === fSel);
           const medsDia = medicaciones.filter(m => m.fecha === fSel);
           const fumsDia = fumigaciones.filter(m => m.fecha === fSel);
@@ -4792,6 +4875,7 @@ export default function App() {
                 🖨 Imprimir reporte diario de esta fecha
               </button>
                 {rsDia.length === 0 && <div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin registros para el {fSel}.</div>}
+                {!!duplicadosDia.length && <div role="alert" style={{ padding: 12, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>⚠ Hay {duplicadosDia.length} registros en conflicto. Compara sus tiquetes y corrige o retira la fila incorrecta; no se puede decidir automáticamente cuál es válida.</div>}
                 {rsDia.length > 0 && (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -4802,6 +4886,7 @@ export default function App() {
                           <th style={{ padding: "6px 4px" }}>Quebrados</th>
                           <th style={{ padding: "6px 4px" }}>Muertas</th>
                           <th style={{ padding: "6px 4px" }}>Alimento kg</th>
+                          <th style={{ padding: "6px 4px" }}>Acción</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4812,12 +4897,31 @@ export default function App() {
                             <td style={{ padding: "8px 4px" }}>{r.quebrados}</td>
                             <td style={{ padding: "8px 4px", color: r.muertas > 3 ? C.alerta : C.texto }}>{r.muertas}</td>
                             <td style={{ padding: "8px 4px" }}>{r.alimentoKg}</td>
+                            <td><button onClick={() => { setEditarProduccion({ ...r, tiquetes: (r.tiquetes || []).map(t => ({ ...t })) }); setMotivoProduccion(""); }} style={{ fontSize: 11 }}>Corregir</button></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
+                {editarProduccion && editarProduccion.fecha === fSel && <div style={{ background: C.yemaSuave, padding: 14, borderRadius: 12, marginTop: 12 }}>
+                  <b>Corregir G{lotes.find(l => l.id === editarProduccion.lote)?.galpon || editarProduccion.lote} · {fSel}</b>
+                  <div style={{ fontSize: 12, margin: "6px 0 10px" }}>Registro {String(editarProduccion.id).slice(0, 8)} · los cartones y el peso se calculan a partir de los tiquetes. Revisa cuál fila conservar si hay duplicados.</div>
+                  {editarProduccion.tiquetes.map((t, j) => <div key={j} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {[["num", "Tiquete"], ["cartones", "Cartones"], ["peso", "Peso kg"]].map(([campo, etiqueta]) => <label key={campo} style={{ flex: "1 1 85px", fontSize: 11 }}>{etiqueta}<input value={t[campo] ?? ""} onChange={e => setEditarProduccion(v => ({ ...v, tiquetes: v.tiquetes.map((x, i) => i === j ? { ...x, [campo]: e.target.value } : x) }))} style={{ ...inputStyle, width: "100%" }} /></label>)}
+                    <button onClick={() => setEditarProduccion(v => ({ ...v, tiquetes: v.tiquetes.filter((_, i) => i !== j) }))}>Quitar tiquete</button>
+                  </div>)}
+                  <button onClick={() => setEditarProduccion(v => ({ ...v, tiquetes: [...v.tiquetes, { num: "", cartones: "", peso: "" }] }))}>+ Tiquete</button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                    {[["quebrados", "Quebrados"], ["muertas", "Muertas"], ["alimento6am", "Alimento 6 a. m. kg"], ["alimento1pm", "Alimento 1 p. m. kg"]].map(([campo, etiqueta]) => <label key={campo} style={{ flex: "1 1 120px", fontSize: 11 }}>{etiqueta}<input type="number" min="0" step="any" value={editarProduccion[campo] ?? 0} onChange={e => setEditarProduccion(v => ({ ...v, [campo]: e.target.value }))} style={{ ...inputStyle, width: "100%" }} /></label>)}
+                  </div>
+                  <label style={{ fontSize: 12 }}>Motivo obligatorio<input value={motivoProduccion} onChange={e => setMotivoProduccion(e.target.value)} placeholder="Qué ocurrió y cuál dato se comprobó" style={{ ...inputStyle, width: "100%" }} /></label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button disabled={guardando} onClick={() => guardarCorreccionProduccion(false)} style={btnStyle}>Guardar corrección</button>
+                    <button disabled={guardando} onClick={() => { if (window.confirm("¿Retirar este registro? Se conservará una copia en la auditoría y se ajustarán los acumulados del lote.")) guardarCorreccionProduccion(true); }} style={{ color: C.alerta }}>Retirar registro</button>
+                    <button onClick={() => setEditarProduccion(null)}>Cancelar</button>
+                  </div>
+                </div>}
                 {movDia && <div style={{ fontSize: 13, marginTop: 10, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}>
                   <b>Bodega:</b> +{movDia.producido} producido · −{(movDia.rutaNeta || 0).toFixed(1)} ruta · saldo final <b style={{ color: C.verde }}>{movDia.saldoFinal} cart</b>
                 </div>}
@@ -4825,6 +4929,18 @@ export default function App() {
                 {fumsDia.map((f, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Fumigación G{f.galpon}:</b> {f.producto} · {f.dosis} {f.hora && `· ${f.hora}`}</div>)}
                 {medsDia.map((m, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>{m.tipo || "Medicamento"} G{m.galpon}:</b> {m.producto} · {m.dosis}{m.enfermedad && ` · trata: ${m.enfermedad}`}</div>)}
                 {bitDia.map((b, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.yemaSuave, borderRadius: 10 }}><b>Bitácora:</b> {b.texto}</div>)}
+              </Seccion>
+
+              <Seccion titulo="Correcciones de producción" sub="Cambios conservados con responsable, motivo y valores anteriores">
+                {selectorHistorial("correccionesProduccion")}
+                {historialVisible(correccionesProduccion.map(c => ({ ...c, fecha: c.anterior?.fecha })), "correccionesProduccion").map(c => <details key={c.id} style={{ padding: 9, borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
+                  <summary>{c.anterior?.fecha} · G{lotes.find(l => l.id === c.anterior?.lote)?.galpon || c.anterior?.lote} · {c.accion === "eliminar" ? "Registro retirado" : "Editado"} · {mostrarNombre(c.por)} {c.estado !== "aplicado" && `· ${c.estado}`}</summary>
+                  <div>{new Date(c.instante).toLocaleString()} · Motivo: {c.motivo}</div>
+                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados · {c.anterior?.alimentoKg} kg alimento</div>
+                  {c.nuevo && <div>Después: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados · {c.nuevo.alimentoKg} kg alimento</div>}
+                  <div>Tiquetes anteriores: {(c.anterior?.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ") || "Ninguno"}</div>
+                  {c.nuevo && <div>Tiquetes corregidos: {(c.nuevo.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ")}</div>}
+                </details>)}
               </Seccion>
 
               <Seccion titulo="Resumen mensual" sub="Consolidado del mes por gallinero">

@@ -174,6 +174,63 @@ export async function eliminarLotePorId(id) {
   return true;
 }
 
+// La corrección opera sobre una sola fila vigente, nunca sobre una copia vieja
+// de toda la colección. Cada intento queda registrado antes de cambiar datos.
+export async function leerCorreccionesProduccion() {
+  const { data, error } = await supabase.from("config").select("key,data").like("key", "granja2:correccionProduccion:%");
+  if (error) throw error;
+  return (data || []).map(x => x.data).sort((a, b) => String(b.instante).localeCompare(String(a.instante)));
+}
+
+export async function corregirProduccion({ id, nuevo, motivo, eliminar = false }) {
+  const { data: fila, error: lecturaError } = await supabase.from("registros").select("id,data").eq("id", String(id)).maybeSingle();
+  if (lecturaError) throw lecturaError;
+  if (!fila) throw new Error("Este registro ya no existe. Actualiza la pantalla.");
+  const anterior = { ...fila.data, id: fila.id };
+  if (!eliminar && (nuevo.fecha !== anterior.fecha || nuevo.lote !== anterior.lote)) throw new Error("La fecha y el lote no se pueden cambiar desde esta corrección.");
+  if (!eliminar) {
+    const { data: otras, error } = await supabase.from("registros").select("id,data").neq("id", String(id));
+    if (error) throw error;
+    const numeros = (nuevo.tiquetes || []).map(t => String(t.num || "").trim()).filter(Boolean);
+    if (new Set(numeros).size !== numeros.length) throw new Error("Hay tiquetes repetidos dentro del registro.");
+    const choque = (otras || []).find(x => x.data?.fecha !== anterior.fecha && (x.data?.tiquetes || []).some(t => numeros.includes(String(t.num || "").trim())));
+    if (choque) throw new Error(`Un tiquete ya está registrado el ${choque.data.fecha}. Revisa los números antes de corregir.`);
+  }
+  const instante = new Date().toISOString();
+  const evento = { id: idNuevo(), instante, por: emailActual(), motivo, accion: eliminar ? "eliminar" : "editar", anterior, nuevo: eliminar ? null : nuevo, estado: "pendiente" };
+  const key = `granja2:correccionProduccion:${evento.id}`;
+  const { error: auditError } = await supabase.from("config").insert({ key, data: evento, updated_by: emailActual() });
+  if (auditError) throw auditError;
+  const { data: afectadas, error: cambioError } = eliminar
+    ? await supabase.from("registros").delete().eq("id", String(id)).filter("data", "eq", JSON.stringify(fila.data)).select("id")
+    : await supabase.from("registros").update({ data: nuevo }).eq("id", String(id)).filter("data", "eq", JSON.stringify(fila.data)).select("id");
+  if (cambioError || afectadas?.length !== 1) {
+    await supabase.from("config").update({ data: { ...evento, estado: "rechazado" } }).eq("key", key);
+    throw cambioError || new Error("Otro dispositivo cambió el registro. Actualiza y revisa antes de guardar.");
+  }
+  ultimaVersion.delete("granja2:registros");
+  const delta = (campo) => Number(eliminar ? 0 : nuevo[campo] || 0) - Number(anterior[campo] || 0);
+  const { data: loteFila, error: loteError } = await supabase.from("lotes").select("id,data").eq("id", String(anterior.lote)).maybeSingle();
+  if (loteError || !loteFila) throw loteError || new Error("El registro cambió, pero falta el lote. Consulta la auditoría antes de reintentar.");
+  const l = loteFila.data;
+  const loteNuevo = { ...l,
+    aves: Number(l.aves || 0) - delta("muertas"), mortAcum: Number(l.mortAcum || 0) + delta("muertas"),
+    acumHuevos: Number(l.acumHuevos || 0) + delta("cartones") * 30,
+    acumMasaKg: Number(l.acumMasaKg || 0) + delta("pesoKg"),
+    acumAlimentoKg: Number(l.acumAlimentoKg || 0) + delta("alimentoKg"),
+  };
+  const { data: lotesAfectados, error: actualizacionError } = await supabase.from("lotes").update({ data: loteNuevo }).eq("id", String(anterior.lote)).filter("data", "eq", JSON.stringify(l)).select("id");
+  if (actualizacionError || lotesAfectados?.length !== 1) {
+    // Una edición concurrente del lote exige intervención: no ocultar el
+    // registro que sí cambió ni marcar el evento como completado.
+    throw actualizacionError || new Error("El registro cambió, pero los acumulados del lote cambiaron en otro dispositivo. Consulta la auditoría; no repitas la corrección.");
+  }
+  ultimaVersion.delete("granja2:lotes");
+  const { error: cierreError } = await supabase.from("config").update({ data: { ...evento, estado: "aplicado" } }).eq("key", key);
+  if (cierreError) throw new Error("El cambio se aplicó, pero no se pudo cerrar la auditoría. Actualiza antes de volver a intentar.");
+  return evento;
+}
+
 export async function leer(key, porDefecto) {
   try {
     if (ES_CXP(key)) {
