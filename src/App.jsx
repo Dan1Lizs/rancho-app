@@ -4939,7 +4939,7 @@ export default function App() {
                     </div>)}
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                       <input type="email" aria-label="Correo del usuario" placeholder="correo exacto del usuario" value={correoNombre} onChange={e => setCorreoNombre(e.target.value)} style={{ ...inputStyle, flex: "1 1 190px", marginBottom: 0 }} />
-                      <input type="text" aria-label="Nombre visible" placeholder="Nombre visible, ej. José Daniel" value={nombreNuevo} onChange={e => setNombreNuevo(e.target.value)} style={{ ...inputStyle, flex: "1 1 160px", marginBottom: 0 }} />
+                      <input type="text" aria-label="Nombre visible" placeholder="Nombre visible, ej. Jose Daniel" value={nombreNuevo} onChange={e => setNombreNuevo(e.target.value)} style={{ ...inputStyle, flex: "1 1 160px", marginBottom: 0 }} />
                       <button onClick={() => guardarNombreVisible(correoNombre, nombreNuevo)} style={{ ...btnStyle, flex: "0 0 auto", margin: 0 }}>Guardar nombre</button>
                     </div>
                     <button onClick={() => setCorreoNombre(window.__usuarioEmail || "")} style={{ marginTop: 7, fontSize: 11.5, color: C.verde, background: "none", border: "none", cursor: "pointer" }}>Usar mi correo</button>
