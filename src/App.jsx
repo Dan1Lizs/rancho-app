@@ -15,7 +15,7 @@ import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
 import { saldosFormulasDesdeConteo, deltaConteoFormula } from "./inventarioFormulas";
-import { saltosTiquetes, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
+import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -2933,6 +2933,7 @@ export default function App() {
   const setCap = (cambios) => { suciosRef.current[galponActivo] = true; setCapturas({ ...capturas, [galponActivo]: { ...cap, ...cambios } }); };
   const tGal = totalesGalpon(cap);
   const loteActivo = lotes.find(l => l.id === galponActivo);
+  const tiquetesCompartidos = tiquetesDelDia(capturas, registros, fechaCaptura.split("-").reverse().join("/"), Object.keys(suciosRef.current));
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
       <style>{fuentes}</style>
@@ -2940,7 +2941,7 @@ export default function App() {
         <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "min(100%,560px)", maxHeight: "85vh", overflowY: "auto" }}>
           <h3 style={{ marginTop: 0 }}>Revisar antes de guardar · {fechaCaptura}</h3>
           {activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => { const c = capturas[l.id]; const t = totalesGalpon(c); const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id); return <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}><b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento · {c?.muertas || 0} muertas{anterior && <div style={{ color: C.textoSuave }}>Antes: {anterior.cartones} cartones · {anterior.alimentoKg} kg alimento · {anterior.muertas} muertas</div>}</div>; })}
-          {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id)).map((a, i) => <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6 }}>⚠ {a}</div>)}
+          {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6 }}>⚠ {a}</div>)}
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}><button onClick={() => setRevisionGuardado(null)} style={{ flex: 1 }}>Volver a editar</button><button disabled={guardando} onClick={() => { const id = revisionGuardado; setRevisionGuardado(null); guardarDia(id === "todos" ? null : id); }} style={{ ...btnStyle, flex: 1 }}>Confirmar y guardar</button></div>
         </div>
       </div>}
@@ -3186,7 +3187,7 @@ export default function App() {
               <div style={{ fontSize: 13, fontWeight: 600, color: C.verde, marginTop: 10 }}>
                 Total: {tGal.cartones} cartones = {tGal.huevos.toLocaleString()} huevos · {tGal.pesoKg.toFixed(1)} kg
               </div>
-              {!!saltosTiquetes(cap.tiquetes).length && <div style={{ color: C.alerta, fontSize: 12 }}>Revisa la secuencia: faltan #{saltosTiquetes(cap.tiquetes).slice(0, 12).join(", #")}. Pueden pertenecer a otra galera.</div>}
+              {!!saltosTiquetes(tiquetesCompartidos).length && <div style={{ color: C.alerta, fontSize: 12 }}>Revisa la secuencia de todos los gallineros de esta fecha: faltan #{saltosTiquetes(tiquetesCompartidos).slice(0, 12).join(", #")}.</div>}
             </Seccion>
 
             <Seccion accion={<BotonGuardaMini />} num="2" titulo="Huevo quebrado">
