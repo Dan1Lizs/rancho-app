@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
-import { leer, escribir, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
+import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
@@ -11,6 +11,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega } from "./historial";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -22,7 +23,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "8.4";
+const VERSION_APP = "8.5";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -345,7 +346,7 @@ export default function App() {
   const [galponActivo, setGalponActivo] = useState("G1");
   const suciosRef = useRef({});
   const notaSuciaRef = useRef(false);
-  const fechaCapturaRef = useRef(new Date().toISOString().slice(0, 10));
+  const fechaCapturaRef = useRef(hoyISO());
   const [completadoPor, setCompletadoPor] = useState("");
   const [capturas, setCapturas] = useState({});
   const [notaDia, setNotaDia] = useState("");
@@ -358,12 +359,18 @@ export default function App() {
   ]);
   const [obsInv, setObsInv] = useState("");
   const [ajusteBodega, setAjusteBodega] = useState("");
-  const [fechaBodega, setFechaBodega] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaBodega, setFechaBodega] = useState(hoyISO());
+  const [movBodegaId, setMovBodegaId] = useState(null);
+  const fechaBodegaRef = useRef(hoyISO());
+  const movBodegaIdRef = useRef(null);
+  const movBodegaOriginalRef = useRef(null);
+  const [motivoEdicionBodega, setMotivoEdicionBodega] = useState("");
+  const [periodosHistorial, setPeriodosHistorial] = useState({});
   const [nucleoInv, setNucleoInv] = useState({});
   const [cxp, setCxp] = useState({ facturas: [], pagos: [] });
   const [fCxpFac, setFCxpFac] = useState(null);
   const [abonando, setAbonando] = useState(null);
-  const [fAbono, setFAbono] = useState({ monto: "", fecha: new Date().toISOString().slice(0, 10), medio: "Transferencia", ref: "" });
+  const [fAbono, setFAbono] = useState({ monto: "", fecha: hoyISO(), medio: "Transferencia", ref: "" });
   const [kardex, setKardex] = useState([]);
   const [esAdmin, setEsAdmin] = useState(true);
   const [cfgAdmins, setCfgAdmins] = useState([]);
@@ -372,18 +379,18 @@ export default function App() {
   const [mpInvHist, setMpInvHist] = useState([]);
   const [gestionFav, setGestionFav] = useState(null);
   const [modalFav, setModalFav] = useState(null);
-  const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: hoyISO() });
 
   // Planta
-  const [fBache, setFBache] = useState({ formula: "Impulsor", baches: "", kg: "", numBache: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [fBache, setFBache] = useState({ formula: "Impulsor", baches: "", kg: "", numBache: "", fecha: hoyISO() });
   const [plantaCfg, setPlantaCfg] = useState({ inicialAves: SEED_PLANTA.saldoKg, inicialGanado: 0 });
   const [bodegaCfg, setBodegaCfg] = useState({ inicialCart: 128 });
   const [aperturaIns, setAperturaIns] = useState({});
-  const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: new Date().toISOString().slice(0, 10) });
-  const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", saldoReal: "", fecha: new Date().toISOString().slice(0, 10) });
-  const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() });
+  const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", saldoReal: "", fecha: hoyISO() });
+  const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: hoyISO() });
 
-  const [fPeso, setFPeso] = useState({ lote: "G1", pesos: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [fPeso, setFPeso] = useState({ lote: "G1", pesos: "", fecha: hoyISO() });
   const [excelPesajes, setExcelPesajes] = useState([]);
   const [excelAbierto, setExcelAbierto] = useState(-1);
   const [importandoPesajes, setImportandoPesajes] = useState(false);
@@ -400,7 +407,7 @@ export default function App() {
   const [guardandoTarea, setGuardandoTarea] = useState(false);
   const [fVac, setFVac] = useState({ lote: "G1", vacuna: "", cepa: "", via: "", proveedor: "" });
   const [fechasAplicar, setFechasAplicar] = useState({});
-  const [fechaCaptura, setFechaCaptura] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaCaptura, setFechaCaptura] = useState(hoyISO());
 
   const construirCaptura = (l, dmy, regs, medsAll, fumsAll) => {
     const reg = regs.find(r => r.fecha === dmy && r.lote === l.id);
@@ -449,18 +456,18 @@ export default function App() {
   const [alcanceReporteActividades, setAlcanceReporteActividades] = useState("");
   const [mpInv, setMpInv] = useState({});
   const [mpInvUltimo, setMpInvUltimo] = useState({});
-  const [mpFechaInput, setMpFechaInput] = useState(new Date().toISOString().slice(0, 10));
+  const [mpFechaInput, setMpFechaInput] = useState(hoyISO());
   const [mpFechaConteo, setMpFechaConteo] = useState("");
   const [mpResponsable, setMpResponsable] = useState("");
   const [mpConfig, setMpConfig] = useState({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {} });
   const [mpPedidos, setMpPedidos] = useState([]);
-  const [fPedidoMP, setFPedidoMP] = useState({ fecha: new Date().toISOString().slice(0, 10), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] });
+  const [fPedidoMP, setFPedidoMP] = useState({ fecha: hoyISO(), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] });
   const [recetas, setRecetas] = useState(SEED_RECETAS);
   const [mpCat, setMpCat] = useState(MP_LISTA);
   const [fNuevaMP, setFNuevaMP] = useState({ n: "", prov: "", pres: "" });
   const [insumos, setInsumos] = useState(SEED_INSUMOS);
   const [insumosMovs, setInsumosMovs] = useState([]);
-  const [fMovIns, setFMovIns] = useState({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: new Date().toISOString().slice(0, 10) });
+  const [fMovIns, setFMovIns] = useState({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: hoyISO() });
   const [fNuevoIns, setFNuevoIns] = useState({ nombre: "", categoria: "Medicinas", unidad: "ml", saldo: "", presentacion: "", dosis: "", proveedor: "" });
   const [recActiva, setRecActiva] = useState("Impulsor");
   const [fNuevaRec, setFNuevaRec] = useState({ nombre: "", uso: "Aves" });
@@ -468,8 +475,8 @@ export default function App() {
   const [fEnf, setFEnf] = useState({ lote: "G1", enfermedad: "", tratamiento: "", estado: "En tratamiento" });
   const [fNec, setFNec] = useState({ lote: "G1", tipo: "Necropsia", laboratorio: "", hallazgos: "" });
   const [fPlan, setFPlan] = useState({ vacuna: "", cepa: "", via: "", proveedor: "", dia: "" });
-  const [histFecha, setHistFecha] = useState(() => new Date().toISOString().slice(0, 10));
-  const [histMes, setHistMes] = useState(() => new Date().toISOString().slice(0, 7));
+  const [histFecha, setHistFecha] = useState(() => hoyISO());
+  const [histMes, setHistMes] = useState(() => hoyISO().slice(0, 7));
   const [formLote, setFormLote] = useState(null);
   const [razaReferencia, setRazaReferencia] = useState("isa");
   const [semanaReferencia, setSemanaReferencia] = useState(26);
@@ -588,14 +595,21 @@ export default function App() {
         const emailSesion = (typeof window !== "undefined" && window.__usuarioEmail || "").toLowerCase();
         if ((adm0 || []).length > 0 && emailSesion) setEsAdmin(adm0.map(x => x.toLowerCase()).includes(emailSesion));
       }
-      const movHoy = mv.find(m => m.fecha === hoyStr());
-      if (movHoy) {
-        setMovBodega({ comprado: movHoy.comprado || "", vendGranja: movHoy.vendGranja || "", destruido: movHoy.destruido || "", regalado: movHoy.regalado || "" });
-        if (movHoy.repartos) setRepartos(movHoy.repartos);
-        setObsInv(movHoy.obs || "");
+      if (!silencioso) {
+        const elegido = mv.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current && String(m.id) === String(movBodegaIdRef.current))
+          || mv.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current);
+        movBodegaIdRef.current = elegido?.id ?? null;
+        movBodegaOriginalRef.current = elegido ? snapshotBodega(elegido) : null;
+        setMovBodegaId(elegido?.id ?? null);
+        if (elegido) {
+          setMovBodega({ comprado: elegido.comprado || "", vendGranja: elegido.vendGranja || "", destruido: elegido.destruido || "", regalado: elegido.regalado || "" });
+          if (elegido.repartos) setRepartos(elegido.repartos);
+          setObsInv(elegido.obs || "");
+          setAjusteBodega(elegido.ajusteConteo == null ? "" : String(elegido.ajusteConteo));
+        }
       }
       {
-        const dmy = (fechaCapturaRef.current || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+        const dmy = (fechaCapturaRef.current || hoyISO()).split("-").reverse().join("/");
         const rsOrd = ordenarPorFecha(rs);
         setCapturas(prev => {
           const nuevas = { ...prev };
@@ -683,7 +697,7 @@ export default function App() {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
     const soloLote = soloLoteId ? lotes.find(x => x.id === soloLoteId) : null;
     setGuardando(true);
-    const fecha = (fechaCaptura || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+    const fecha = (fechaCaptura || hoyISO()).split("-").reverse().join("/");
     {
       const enFormulario = [];
       lotes.forEach(l => {
@@ -823,7 +837,7 @@ export default function App() {
   const filasConfPesajes = conflictosPesaje ? filtrarLista(conflictosPesaje.items.map(x => ({ ...x, lote: x.nuevo.lote, fecha: x.nuevo.fecha, texto: `${x.nuevo.fecha} G${x.galpon} ${lotes.find(l => l.id === x.nuevo.lote)?.raza || ""}` })), filtroConfPesajes) : [];
   const filasConfRespaldo = conflictosRespaldo ? filtrarLista(conflictosRespaldo.items.map(x => ({ ...x, texto: `${x.fecha} ${x.lote} ${x.tabla} ${lotes.find(l => l.id === x.lote)?.raza || ""}`, estado: x.tabla === "pesajes" ? "Pesaje" : "Control diario" })), filtroConfRespaldo) : [];
   const regsHoy = registros.filter(r => r.fecha === hoyStr());
-  const fechaB = (fechaBodega || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+  const fechaB = (fechaBodega || hoyISO()).split("-").reverse().join("/");
   const regsFechaB = registros.filter(r => r.fecha === fechaB);
   const producidoPorGalpon = activos.map(l => ({
     galpon: l.galpon, raza: l.raza,
@@ -838,20 +852,24 @@ export default function App() {
     return previos.reduce((mejor, m) => (!mejor || aDate(m.fecha) > aDate(mejor.fecha) ? m : mejor), null).saldoFinal;
   })();
   const guardarCfgBodega = async (cfg) => { if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; } setBodegaCfg(cfg); await escribir(K.bodegaCfg, cfg); };
-  const cambiarFechaBodega = (iso) => {
+  const cambiarFechaBodega = (iso, id = null) => {
     setFechaBodega(iso);
-    const dmy = iso.split("-").reverse().join("/");
-    const mov = bodegaMovs.find(m => m.fecha === dmy);
+    fechaBodegaRef.current = iso;
+    const mov = id != null ? bodegaMovs.find(m => String(m.id) === String(id)) : bodegaMovs.find(m => fechaHistorialISO(m.fecha) === iso);
+    setMovBodegaId(mov?.id ?? null);
+    movBodegaIdRef.current = mov?.id ?? null;
+    movBodegaOriginalRef.current = mov ? snapshotBodega(mov) : null;
+    setMotivoEdicionBodega("");
     if (mov) {
       setMovBodega({ comprado: mov.comprado || "", vendGranja: mov.vendGranja || "", destruido: mov.destruido || "", regalado: mov.regalado || "" });
-      if (mov.repartos) setRepartos(mov.repartos.map(r => ({ ...r })));
+      setRepartos((mov.repartos?.length ? mov.repartos : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
       setObsInv(mov.obs || "");
+      setAjusteBodega(mov.ajusteConteo == null ? "" : String(mov.ajusteConteo));
     } else {
       setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
       setRepartos((bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map(n2 => ({ nombre: n2, salida: "", devBueno: "", devMalo: "" })));
       setObsInv("");
     }
-    setAjusteBodega("");
   };
   const saldoCalculado = saldoBase + Number(movBodega.comprado || 0) + producidoHoyCart
     - rutaNeta - Number(movBodega.vendGranja || 0) - Number(movBodega.destruido || 0) - Number(movBodega.regalado || 0);
@@ -860,9 +878,18 @@ export default function App() {
   const difAjuste = hayAjuste ? +(Number(ajusteBodega) - saldoCalculado).toFixed(1) : 0;
 
   const guardarBodega = async () => {
-    if (cargandoFondo) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
+    if (cargandoFondo || guardando) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
     setGuardando(true);
+    try {
+    const actuales = await leerBodegaActual();
+    if (!actuales) { avisar("⚠ No se pudo consultar la bodega actual. No se guardó ningún cambio."); return; }
+    const { delDia, elegido, id: idMovimiento } = elegirMovimientoBodega(actuales, fechaBodega, movBodegaIdRef.current);
+    if (movBodegaIdRef.current != null && !elegido) { avisar("⚠ Este registro cambió en otro dispositivo. Actualiza y vuelve a elegirlo."); return; }
+    if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("⚠ El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
+    if (delDia.length && movBodegaIdRef.current == null) { avisar("⚠ Ya hay un movimiento para esta fecha. Cárgalo desde el historial antes de editarlo."); return; }
+    if (elegido && !motivoEdicionBodega.trim()) { avisar("⚠ Escribe el motivo de la modificación para dejar constancia."); return; }
     const nuevoMov = {
+      id: idMovimiento,
       fecha: fechaB, producido: +producidoHoyCart.toFixed(1),
       comprado: Number(movBodega.comprado || 0), vendGranja: Number(movBodega.vendGranja || 0),
       destruido: Number(movBodega.destruido || 0), regalado: Number(movBodega.regalado || 0),
@@ -870,20 +897,39 @@ export default function App() {
       obs: obsInv, saldoFinal: +saldoFinal.toFixed(1),
       ajusteConteo: hayAjuste ? Number(ajusteBodega) : null, difAjuste: hayAjuste ? difAjuste : null,
     };
-    let nuevos = [nuevoMov, ...bodegaMovs.filter(m => m.fecha !== fechaB)]
-      .sort((a, b) => aDate(a.fecha) - aDate(b.fecha));
-    let saldoCorrido = Number(bodegaCfg.inicialCart || 0);
-    nuevos = nuevos.map(m => {
-      if (aperturaB && aDate(m.fecha) < aperturaB) return m;
-      const calc = saldoCorrido + Number(m.producido || 0) + Number(m.comprado || 0)
-        - Number(m.rutaNeta || 0) - Number(m.vendGranja || 0) - Number(m.destruido || 0) - Number(m.regalado || 0);
-      const fin = m.ajusteConteo != null ? Number(m.ajusteConteo) : +calc.toFixed(1);
-      saldoCorrido = fin;
-      return { ...m, saldoFinal: fin, difAjuste: m.ajusteConteo != null ? +(Number(m.ajusteConteo) - calc).toFixed(1) : null };
-    }).reverse();
-    if (await escribir(K.movs, nuevos)) { setBodegaMovs(nuevos); setAjusteBodega(""); avisar(hayAjuste ? `✓ Bodega ajustada por conteo: ${Number(ajusteBodega)} cartones (${difAjuste > 0 ? "+" : ""}${difAjuste} vs calculado)` : "✓ Bodega actualizada"); }
+    if (elegido) {
+      nuevoMov.historialEdiciones = [...(elegido.historialEdiciones || []), {
+        fechaHora: new Date().toISOString(), por: completadoPor || window.__usuarioEmail || "Sin indicar",
+        motivo: motivoEdicionBodega.trim(), anterior: snapshotBodega(elegido),
+        duplicadosRetirados: delDia.filter(m => m.id !== elegido.id).map(snapshotBodega),
+        nuevo: snapshotBodega(nuevoMov),
+      }];
+    }
+    const recalculados = reconstruirBodega([nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)], bodegaCfg.inicialCart, bodegaCfg.inicialFecha);
+    const nuevos = recalculados.map(m => {
+      if (String(m.id) === String(nuevoMov.id) && elegido) {
+        const eventos = [...m.historialEdiciones];
+        eventos[eventos.length - 1] = { ...eventos[eventos.length - 1], nuevo: snapshotBodega(m) };
+        return { ...m, historialEdiciones: eventos };
+      }
+      const previo = actuales.find(x => String(x.id) === String(m.id));
+      if (!previo || Number(previo.saldoFinal) === Number(m.saldoFinal)) return m;
+      return { ...m, historialEdiciones: [...(m.historialEdiciones || []), {
+        fechaHora: new Date().toISOString(), por: completadoPor || window.__usuarioEmail || "Sin indicar",
+        motivo: `Saldo recalculado al editar la bodega del ${fechaB}: ${motivoEdicionBodega.trim()}`,
+        anterior: snapshotBodega(previo), nuevo: snapshotBodega(m), duplicadosRetirados: [],
+      }] };
+    });
+    if (await escribir(K.movs, nuevos)) {
+      setBodegaMovs(nuevos); setMovBodegaId(nuevoMov.id); movBodegaIdRef.current = nuevoMov.id;
+      movBodegaOriginalRef.current = snapshotBodega(nuevos.find(m => String(m.id) === String(nuevoMov.id)));
+      setMotivoEdicionBodega("");
+      setAjusteBodega(nuevoMov.ajusteConteo == null ? "" : String(nuevoMov.ajusteConteo));
+      avisar(delDia.length > 1 ? `✓ Fecha ${fechaB} unificada; ${delDia.length - 1} duplicado(s) conservados en la bitácora` : elegido ? "✓ Movimiento editado con registro de cambios" : "✓ Movimiento de bodega guardado");
+    }
     else avisar("⚠ No se pudo guardar la bodega");
-    setGuardando(false);
+    } catch (e) { console.error("Guardar bodega:", e); avisar("⚠ No se pudo guardar la bodega"); }
+    finally { setGuardando(false); }
   };
 
   // ── Planta de concentrado ──
@@ -910,7 +956,7 @@ export default function App() {
     if (!fBache.kg && !fBache.baches) return;
     setGuardando(true);
     const nBaches = Number(fBache.baches || 0);
-    const fechaBache = (fBache.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+    const fechaBache = (fBache.fecha || hoyISO()).split("-").reverse().join("/");
     const nuevo = [{ fecha: fechaBache, tipo: "bache", categoria: usoFormula(fBache.formula), formula: fBache.formula, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) {
       if (nBaches > 0) {
@@ -927,7 +973,7 @@ export default function App() {
         const inv = { ...invReal, [fBache.formula]: +((invReal[fBache.formula] || 0) - nBaches).toFixed(2) };
         await escribir(K.nucleo, inv); setNucleoInv(inv);
       }
-      setPlantaMovs(nuevo); setFBache({ ...fBache, baches: "", kg: "", numBache: "", fecha: new Date().toISOString().slice(0, 10) });
+      setPlantaMovs(nuevo); setFBache({ ...fBache, baches: "", kg: "", numBache: "", fecha: hoyISO() });
       avisar(`✓ Bache registrado — concentrado ${usoFormula(fBache.formula)}`);
     } else avisar("⚠ No se pudo guardar");
     setGuardando(false);
@@ -937,7 +983,7 @@ export default function App() {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — espera unos segundos"); return; }
     const n = Number(fNucleo.porciones || 0);
     if (!n) return;
-    const fechaNuc = (fNucleo.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+    const fechaNuc = (fNucleo.fecha || hoyISO()).split("-").reverse().join("/");
     const invReal = await leer(K.nucleo, {});
     const inv = { ...invReal, [fNucleo.formula]: +((invReal[fNucleo.formula] || 0) + n).toFixed(2) };
     if (await escribir(K.nucleo, inv)) {
@@ -950,7 +996,7 @@ export default function App() {
           .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaNuc, mp: c2, tipo: "salida", kg: +(Number(kg) * n).toFixed(3), ref: `Núcleo ${fNucleo.formula} ×${n}${fNucleo.numNucleo ? ` #${fNucleo.numNucleo}` : ""}` }));
         await registrarKardex(salidas);
       }
-      setNucleoInv(inv); setFNucleo({ ...fNucleo, porciones: "", numNucleo: "", fecha: new Date().toISOString().slice(0, 10) }); avisar(`✓ Núcleo producido: ${n} porción(es) de ${fNucleo.formula} — kardex actualizado`);
+      setNucleoInv(inv); setFNucleo({ ...fNucleo, porciones: "", numNucleo: "", fecha: hoyISO() }); avisar(`✓ Núcleo producido: ${n} porción(es) de ${fNucleo.formula} — kardex actualizado`);
     }
     else avisar("⚠ No se pudo guardar");
   };
@@ -1049,7 +1095,7 @@ export default function App() {
     const actual = fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado;
     const delta = +(Number(fAjPlanta.saldoReal) - actual).toFixed(1);
     if (delta === 0) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); setFAjPlanta({ ...fAjPlanta, saldoReal: "" }); return; }
-    const nuevo = [{ fecha: (fAjPlanta.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, kg: delta, detalle: `Conteo físico: ${fAjPlanta.saldoReal} kg`, por: completadoPor }, ...plantaMovs];
+    const nuevo = [{ fecha: (fAjPlanta.fecha || hoyISO()).split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, kg: delta, detalle: `Conteo físico: ${fAjPlanta.saldoReal} kg`, por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) { setPlantaMovs(nuevo); setFAjPlanta({ ...fAjPlanta, saldoReal: "" }); avisar(`✓ Ajuste de ${delta > 0 ? "+" : ""}${delta} kg registrado`); }
     else avisar("⚠ No se pudo guardar");
   };
@@ -1070,7 +1116,7 @@ export default function App() {
       const blob = new Blob([JSON.stringify({ version: 1, exportado: new Date().toISOString(), datos }, null, 1)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = `rancho-el-sonado-datos-${new Date().toISOString().slice(0, 10)}.json`;
+      a.href = url; a.download = `rancho-el-sonado-datos-${hoyISO()}.json`;
       a.click(); URL.revokeObjectURL(url);
       avisar("✓ Respaldo completo descargado");
     } catch { avisar("⚠ No se pudo exportar — intenta de nuevo"); }
@@ -1079,8 +1125,8 @@ export default function App() {
 
   const guardarFactura = async () => {
     if (!fFactura.proveedor && !fFactura.producto) return;
-    const nuevo = [{ ...fFactura, fecha: (fFactura.fecha || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/") }, ...facturas];
-    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); setFFactura({ proveedor: "", producto: "", monto: "", fecha: new Date().toISOString().slice(0, 10) }); avisar("✓ Factura registrada"); }
+    const nuevo = [{ ...fFactura, fecha: (fFactura.fecha || hoyISO()).split("-").reverse().join("/") }, ...facturas];
+    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); setFFactura({ proveedor: "", producto: "", monto: "", fecha: hoyISO() }); avisar("✓ Factura registrada"); }
     else avisar("⚠ No se pudo guardar");
   };
 
@@ -1333,11 +1379,11 @@ export default function App() {
     const nuevoIns = insumos.map(it => it.id === Number(itemId)
       ? { ...it, saldo: tipo === "ajuste" ? cant : +(it.saldo + (tipo === "entrada" ? cant : -cant)).toFixed(2) }
       : it);
-    const mov = { fecha: (fechaISO || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/"), itemId: Number(itemId), tipo, cantidad: cant, detalle: detalle || "", por: completadoPor };
+    const mov = { fecha: (fechaISO || hoyISO()).split("-").reverse().join("/"), itemId: Number(itemId), tipo, cantidad: cant, detalle: detalle || "", por: completadoPor };
     const nuevosMovs = [mov, ...insumosMovs];
     const ok1 = await escribir(K.insumos, nuevoIns);
     const ok2 = await escribir(K.insumosMovs, nuevosMovs);
-    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setFMovIns({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: new Date().toISOString().slice(0, 10) }); avisar("✓ Movimiento registrado"); }
+    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setFMovIns({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: hoyISO() }); avisar("✓ Movimiento registrado"); }
     else avisar("⚠ No se pudo guardar");
   };
   const agregarInsumo = async () => {
@@ -1459,7 +1505,7 @@ export default function App() {
     const items = Object.fromEntries(Object.entries(mpInv).filter(([, v]) => (v?.sacos ?? "") !== "" || (v?.kg ?? "") !== ""));
     if (!Object.keys(items).length) { avisar("⚠ Digita al menos un dato del conteo"); return; }
     setGuardando(true);
-    const fecha = (mpFechaInput || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/");
+    const fecha = (mpFechaInput || hoyISO()).split("-").reverse().join("/");
     const doc = { fecha, responsable: mpResponsable, items };
     const registroHist = { id: Date.now(), fecha, responsable: mpResponsable, items };
     const nuevoHist = [registroHist, ...mpInvHist];
@@ -1926,7 +1972,7 @@ export default function App() {
       item,
       nuevoTexto: ajExistente?.nuevoTexto || item.texto,
       responsable: ajExistente?.responsable || completadoPor || "Roxana",
-      fecha: ajExistente?.fechaISO || new Date().toISOString().slice(0, 10),
+      fecha: ajExistente?.fechaISO || hoyISO(),
       razon: ajExistente?.razon || "",
     });
   };
@@ -2004,6 +2050,13 @@ export default function App() {
     lote: id ? lotes.find(x => x.id === id) : null,
     registros, fumigaciones, trabajos: TRABAJOS, bodegaMovs, mpFechaConteo,
   }, fecha);
+  const historialVisible = (items, clave) => filtrarHistorial(items, periodosHistorial[clave] || "30");
+  const selectorHistorial = (clave) => <label style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", fontSize: 12.5, marginBottom: 10, color: C.textoSuave }}>
+    Mostrar
+    <select aria-label="Período del historial" value={periodosHistorial[clave] || "30"} onChange={e => setPeriodosHistorial(prev => ({ ...prev, [clave]: e.target.value }))} style={{ ...inputStyle, width: "auto", minWidth: 170, margin: 0, padding: "7px 10px" }}>
+      {PERIODOS_HISTORIAL.map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}
+    </select>
+  </label>;
   if (printDoc) {
     const l = printDoc.lote ? lotes.find(x => x.id === printDoc.lote) : null;
     const celda = { padding: "7px 6px", borderBottom: "1px solid #ccc", fontSize: 12.5, textAlign: "left", verticalAlign: "top" };
@@ -2838,7 +2891,7 @@ export default function App() {
         {/* ══ CONTROL DIARIO ══ */}
         {vista === "captura" && (
           <>
-            <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: (fechaCaptura || new Date().toISOString().slice(0, 10)).split("-").reverse().join("/") })}
+            <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: (fechaCaptura || hoyISO()).split("-").reverse().join("/") })}
               style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
               🖨 Imprimir reporte diario ({(fechaCaptura || "").split("-").reverse().join("/") || "hoy"})
             </button>
@@ -2853,7 +2906,7 @@ export default function App() {
               </label>
               <Campo mitad etiqueta="Completado por" type="text" placeholder="Nombre de quien captura" value={completadoPor} onChange={e => setCompletadoPor(e.target.value)} />
             </div>
-            {fechaCaptura !== new Date().toISOString().slice(0, 10) && (
+            {fechaCaptura !== hoyISO() && (
               <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9A6605", background: C.yemaSuave, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
                 📅 Estás capturando para el {fechaCaptura.split("-").reverse().join("/")} — si esa fecha ya tiene datos, se reemplazarán (edición).
               </div>
@@ -3297,11 +3350,14 @@ export default function App() {
               </div>
             )}
             <button onClick={() => setPrintDoc({ tipo: "bodega" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir movimiento de bodega</button>
-            <label style={{ display: "block", marginBottom: 10 }}>
+            <label id="form-bodega" style={{ display: "block", marginBottom: 10, scrollMarginTop: 110 }}>
               <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del movimiento de bodega</span>
               <input type="date" value={fechaBodega} onChange={e => cambiarFechaBodega(e.target.value)} style={inputStyle} />
             </label>
-            {fechaBodega !== new Date().toISOString().slice(0, 10) && (
+            {bodegaMovs.filter(m => fechaHistorialISO(m.fecha) === fechaBodega).length > 1 && <div style={{ padding: "9px 12px", marginBottom: 10, background: C.alertaSuave, borderRadius: 9, fontSize: 12.5, color: C.alerta }}>
+              Hay movimientos duplicados para {fechaB}. Elige «Editar / conservar» en la fila correcta del historial; al guardar con un motivo se unificarán y quedará copia de los otros valores en la bitácora.
+            </div>}
+            {fechaBodega !== hoyISO() && (
               <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9A6605", background: C.yemaSuave, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
                 📅 Estás en la bodega del {fechaB} — al guardar se {bodegaMovs.some(m => m.fecha === fechaB) ? "editará ese día y se recalcularán los saldos siguientes" : "creará ese día y se recalculará la cadena de saldos"}.
               </div>
@@ -3431,11 +3487,12 @@ export default function App() {
                 {difAjuste === 0 ? "✓ El conteo coincide con lo calculado" : `El saldo se fijará en ${Number(ajusteBodega)} cartones — diferencia de ${difAjuste > 0 ? "+" : ""}${difAjuste} vs lo calculado (quedará registrada)`}
               </div>}
               <Campo etiqueta="Observaciones del día" type="text" placeholder="Opcional" value={obsInv} onChange={e => setObsInv(e.target.value)} />
+              {movBodegaId != null && <Campo etiqueta="Motivo del cambio (obligatorio para editar)" type="text" placeholder="Ej. corregir devolución de ruta del 25" value={motivoEdicionBodega} onChange={e => setMotivoEdicionBodega(e.target.value)} />}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, marginBottom: 12 }}>
                 <b>Saldo final en bodega (=)</b><b style={{ color: C.verde }}>{saldoFinal.toFixed(1)} cartones</b>
               </div>
               <button onClick={guardarBodega} disabled={guardando} style={btnStyle}>{guardando ? "Guardando…" : "Guardar movimiento del día"}</button>
-              <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>Si guardas otra vez hoy, se actualiza (no se duplica)</div>
+              <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>Los cambios de movimientos existentes conservan la versión anterior y el motivo en el historial.</div>
             </Seccion>
 
             <Seccion titulo="Apertura de bodega — saldo inicial" sub="El punto de arranque oficial: desde esta fecha corren los balances; lo anterior queda como histórico sin afectar">
@@ -3452,12 +3509,26 @@ export default function App() {
 
             {bodegaMovs.length > 0 && (
               <Seccion titulo="Historial de bodega">
-                {bodegaMovs.slice(0, 10).map((m, i) => (
-                  <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 4 }}>
-                    <span><b>{m.fecha.slice(0, 5)}</b> · +{m.producido} prod · −{(m.rutaNeta || 0).toFixed(1)} ruta</span>
-                    <b style={{ color: C.verde }}>= {m.saldoFinal} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
-                  </div>
-                ))}
+                {selectorHistorial("bodega")}
+                {historialVisible(bodegaMovs, "bodega").map(m => {
+                  const duplicados = bodegaMovs.filter(x => fechaHistorialISO(x.fecha) === fechaHistorialISO(m.fecha)).length;
+                  return <div key={m.id} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 7 }}>
+                      <span><b>{m.fecha}</b> · +{m.producido} prod · −{Number(m.rutaNeta || 0).toFixed(1)} ruta{duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}</span>
+                      <b style={{ color: C.verde }}>= {m.saldoFinal} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
+                    </div>
+                    <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ marginTop: 7, padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
+                    {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
+                      {m.historialEdiciones.map((c, i) => <div key={i} style={{ padding: "7px 0", borderTop: `1px solid ${C.borde}`, fontSize: 11.5 }}>
+                        <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> · {c.por} · {c.motivo}<br />
+                        Antes: {c.anterior?.saldoFinal ?? "—"} cart → después: {c.nuevo?.saldoFinal ?? "—"} cart.
+                        {!!c.duplicadosRetirados?.length && <details><summary>Registros duplicados retirados ({c.duplicadosRetirados.length})</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(c.duplicadosRetirados, null, 2)}</pre></details>}
+                        <details><summary>Valores antes y después</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify({ antes: c.anterior, despues: c.nuevo }, null, 2)}</pre></details>
+                      </div>)}
+                    </details>}
+                  </div>;
+                })}
+                {!historialVisible(bodegaMovs, "bodega").length && <div style={{ fontSize: 12.5, color: C.textoSuave }}>Sin movimientos en este período. Elige «Todo el historial» para ver fechas anteriores.</div>}
               </Seccion>
             )}
           </>
@@ -3597,7 +3668,8 @@ export default function App() {
               </div>
               <button onClick={guardarFactura} style={btnStyle}>Registrar factura</button>
               <div style={{ marginTop: 12 }}>
-                {facturas.slice(0, 6).map((f, i) => (
+                {selectorHistorial("facturasPlanta")}
+                {historialVisible(facturas, "facturasPlanta").map((f, i) => (
                   <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
                     <span><b>{f.fecha.slice(0, 5)}</b> · {f.proveedor} — {f.producto}</span>
                     {f.monto && <b>₡{Number(f.monto).toLocaleString()}</b>}
@@ -3609,7 +3681,8 @@ export default function App() {
 
             {movsPlanta.length > 0 && (
               <Seccion titulo="Historial de movimientos">
-                {movsPlanta.slice(0, 10).map((m, i) => (
+                {selectorHistorial("planta")}
+                {historialVisible(movsPlanta, "planta").map((m, i) => (
                   <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                     <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.detalle ? ` (${m.detalle})` : ""}`}</span>
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" ? `${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
@@ -3674,7 +3747,8 @@ export default function App() {
                     <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Diferencia = conteo físico − saldo kardex. Positiva: hay más de lo esperado (falta registrar facturas). Negativa: merma o consumo sin registrar.</div>
                     <details style={{ marginTop: 10 }}>
                       <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Últimos movimientos del kardex</summary>
-                      {kardex.slice(0, 20).map(m2 => (
+                      {selectorHistorial("kardex")}
+                      {historialVisible(kardex, "kardex").map(m2 => (
                         <div key={m2.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "6px 0", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
                           <span>{m2.fecha.slice(0, 5)} · <b>{(mpCat.find(x => x.c === m2.mp) || { n: m2.mp }).n}</b> · {m2.ref}</span>
                           <b style={{ color: m2.tipo === "salida" ? C.alerta : C.verde }}>{m2.tipo === "salida" ? "−" : "+"}{Number(m2.kg).toFixed(1)} kg</b>
@@ -3753,7 +3827,8 @@ export default function App() {
               {mpInvHist.length > 0 && (
                 <details style={{ marginTop: 14 }}>
                   <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>📋 Historial de conteos ({mpInvHist.length})</summary>
-                  {mpInvHist.map(h => (
+                  {selectorHistorial("conteos")}
+                  {historialVisible(mpInvHist, "conteos").map(h => (
                     <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 2px", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
                       <span><b>{String(h.fecha).slice(0, 5)}</b> · {h.responsable || "sin responsable"} · {Object.keys(h.items || {}).length} materias primas contadas</span>
                       <span style={{ display: "flex", gap: 6 }}>
@@ -3821,14 +3896,15 @@ export default function App() {
                   if (!ls.length) { avisar("⚠ Agrega al menos una materia prima con kilos"); return; }
                   const doc = { id: Date.now(), fecha: fPedidoMP.fecha.split("-").reverse().join("/"), proveedor: fPedidoMP.proveedor.trim(), nota: fPedidoMP.nota, manual: true, estado: "pendiente", lineas: ls.map(l2 => ({ c: l2.mp, n: (mpCat.find(m => m.c === l2.mp) || {}).n, kg: Number(l2.kg) })) };
                   const nuevos = [doc, ...mpPedidos];
-                  if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); setFPedidoMP({ fecha: new Date().toISOString().slice(0, 10), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] }); avisar("✓ Pedido registrado — pendiente de recibir"); }
+                  if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); setFPedidoMP({ fecha: hoyISO(), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] }); avisar("✓ Pedido registrado — pendiente de recibir"); }
                 }} style={{ ...btnStyle, flex: 1, marginTop: 0 }}>Registrar pedido</button>
               </div>
             </Seccion>
 
             <Seccion titulo="5 · Historial de pedidos" sub="Pendientes y recibidos — al recibir, el kardex se alimenta solo">
               {mpPedidos.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin pedidos registrados todavía.</div>}
-              {mpPedidos.slice(0, 8).map((p, i2) => (
+              {selectorHistorial("pedidos")}
+              {historialVisible(mpPedidos, "pedidos").map((p, i2) => (
                 <div key={p.id || i2} style={{ padding: "10px 12px", background: C.fondo, borderRadius: 10, marginBottom: 7, fontSize: 12.5 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <span><b>{p.fecha}</b>{p.proveedor ? ` · ${p.proveedor}` : ""}{p.manual ? "" : " · calculado"}</span>
@@ -4076,8 +4152,9 @@ export default function App() {
 
                 {insumosMovs.length > 0 && (
                   <div style={{ marginTop: 14 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: C.textoSuave, marginBottom: 6 }}>Últimos movimientos</div>
-                    {insumosMovs.slice(0, 10).map((m, i) => {
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.textoSuave, marginBottom: 6 }}>Historial de movimientos</div>
+                    {selectorHistorial("insumos")}
+                    {historialVisible(insumosMovs, "insumos").map((m, i) => {
                       const it = insumos.find(x => x.id === m.itemId);
                       const colores = { entrada: C.verde, salida: C.alerta, ajuste: "#9A6605" };
                       return (
@@ -4159,7 +4236,8 @@ export default function App() {
                       📋 Historial de advertencias gestionadas / descartadas ({ajustesAuditoria.length})
                     </summary>
                     <div style={{ marginTop: 8 }}>
-                      {ajustesAuditoria.map((aj, idx) => (
+                      {selectorHistorial("advertencias")}
+                      {historialVisible(ajustesAuditoria, "advertencias").map((aj, idx) => (
                         <div key={aj.id || idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
                           <div>
                             <div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}:</b> {aj.textoOriginal}</div>
@@ -4393,7 +4471,7 @@ export default function App() {
               </div>
 
               <Seccion titulo="Registrar factura recibida" sub="El documento del proveedor entra aquí el día que llega">
-                {!fCxpFac && <button onClick={() => setFCxpFac({ tipo: "Factura", refId: "", proveedor: "", numero: "", emision: new Date().toISOString().slice(0, 10), vence: new Date().toISOString().slice(0, 10), monto: "", categoria: "Materia prima", detalle: "" })} style={btnStyle}>+ Nuevo documento (factura / NC / ND)</button>}
+                {!fCxpFac && <button onClick={() => setFCxpFac({ tipo: "Factura", refId: "", proveedor: "", numero: "", emision: hoyISO(), vence: hoyISO(), monto: "", categoria: "Materia prima", detalle: "" })} style={btnStyle}>+ Nuevo documento (factura / NC / ND)</button>}
                 {fCxpFac && (
                   <>
                     <label style={{ display: "block", marginBottom: 12 }}>
@@ -4509,7 +4587,7 @@ export default function App() {
                                       <td style={{ padding: "9px 4px", fontWeight: 700, whiteSpace: "nowrap" }}>{colones(sal)}</td>
                                       <td style={{ padding: "9px 4px", fontWeight: 700, color: C.verde, whiteSpace: "nowrap" }}>{colones(acumFila)}</td>
                                       <td style={{ padding: "9px 4px", whiteSpace: "nowrap" }}>
-                                        <button onClick={() => { setAbonando(abonando === f.id ? null : f.id); setFAbono({ monto: String(sal), fecha: new Date().toISOString().slice(0, 10), medio: "Transferencia", ref: "" }); }}
+                                        <button onClick={() => { setAbonando(abonando === f.id ? null : f.id); setFAbono({ monto: String(sal), fecha: hoyISO(), medio: "Transferencia", ref: "" }); }}
                                           style={{ padding: "6px 10px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>💸 Pago</button>
                                         <button onClick={async () => {
                                           if (confirmar !== `delfac${f.id}`) { setConfirmar(`delfac${f.id}`); avisar("⚠ Toca otra vez para ELIMINAR la factura y sus pagos"); setTimeout(() => setConfirmar(c2 => c2 === `delfac${f.id}` ? null : c2), 6000); return; }
@@ -4597,8 +4675,10 @@ export default function App() {
 
               {(pagadas.length > 0 || cxp.pagos.length > 0) && (
                 <Seccion titulo="Historial de pagos" sub="Los últimos movimientos — el detalle completo vive en la exportación">
+                  {selectorHistorial("pagos")}
                   {[...cxp.pagos.map(pg => ({ ...pg, _t: "Pago" })), ...(cxp.notas || []).map(n2 => ({ ...n2, _t: n2.tipo }))]
-                    .sort((a, b) => b.id - a.id).slice(0, 14).map(mv => {
+                    .sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))
+                    .filter(mv => historialVisible([mv], "pagos").length).map(mv => {
                     const f = cxp.facturas.find(x => x.id === mv.facturaId);
                     const et = mv._t === "Pago" ? mv.medio : mv._t === "NC" ? "Nota de Crédito" : "Nota de Débito";
                     const colM = mv._t === "ND" ? C.alerta : C.verde;
@@ -5186,8 +5266,9 @@ export default function App() {
             })}
 
             <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
+              {selectorHistorial("pesajes")}
               {(() => {
-                const filas = pesajes.map(p => {
+                const filas = historialVisible(pesajes, "pesajes").map(p => {
                   const l = lotes.find(x => x.id === p.lote);
                   const fecha = fechaPesajeISO(p.fecha);
                   return { ...p, texto: `${p.fecha} ${fecha} G${l?.galpon || ""} ${l?.raza || ""} ${l?.lote || ""} ${p.lote}`, estado: fecha > hoyISO() ? "Fecha futura" : "Registrado" };
@@ -5224,7 +5305,7 @@ export default function App() {
                 return planVac.map(p2 => {
                   const ev = estadoVacunaLote(l, p2);
                   const clave = `${l.id}-${p2.id}`;
-                  const defISO = ev.dias < 0 ? ev.fecha.split("/").reverse().join("-") : new Date().toISOString().slice(0, 10);
+                  const defISO = ev.dias < 0 ? ev.fecha.split("/").reverse().join("-") : hoyISO();
                   return (
                     <div key={p2.id} style={{ borderTop: `1px solid ${C.borde}`, padding: "10px 0" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
@@ -5279,7 +5360,8 @@ export default function App() {
               </div>
               <button onClick={guardarEnfermedad} style={btnStyle}>Registrar diagnóstico</button>
               <div style={{ marginTop: 12 }}>
-                {enfermedades.slice(0, 10).map((e2, i) => {
+                {selectorHistorial("enfermedades")}
+                {historialVisible(enfermedades, "enfermedades").map((e2, i) => {
                   const l = lotes.find(x => x.id === e2.lote);
                   const activoTx = e2.estado !== "Recuperado";
                   return (
@@ -5330,7 +5412,8 @@ export default function App() {
               </label>
               <button onClick={guardarNecropsia} disabled={guardando} style={btnStyle}>Registrar resultado</button>
               <div style={{ marginTop: 12 }}>
-                {necropsias.slice(0, 8).map((n2, i) => {
+                {selectorHistorial("necropsias")}
+                {historialVisible(necropsias, "necropsias").map((n2, i) => {
                   const l = lotes.find(x => x.id === n2.lote);
                   return (
                     <div key={i} style={{ fontSize: 13, padding: "10px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
@@ -5433,7 +5516,7 @@ export default function App() {
 
       <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
         Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
-        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 26/09/2026
+        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 27/09/2026
       </footer>
     </div>
   );

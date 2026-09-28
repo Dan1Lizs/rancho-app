@@ -1,4 +1,6 @@
-# 🐔 Rancho El Soñado — Guía de publicación en app.ranchosonado.cr
+# 🐔 Rancho El Soñado — Guía histórica de publicación
+
+> Documento de instalación inicial. Para trabajar con el repositorio actual, consulta `README.md`. El esquema vigente se encuentra en `supabase_v2_actualizado.sql`; esta guía conserva pasos de la primera instalación.
 
 Todo se hace desde el navegador, sin programar. Tiempo estimado: 60–90 minutos.
 Costo: $0 (planes gratuitos).
@@ -11,7 +13,7 @@ Costo: $0 (planes gratuitos).
 2. **New project** → Nombre: `rancho-el-sonado` → Region: la más cercana (East US) →
    inventa una contraseña de base de datos y **guárdala** → Create
 3. Cuando termine de crear (2 min), ve al menú **SQL Editor** → New query →
-   pega TODO el contenido del archivo `supabase.sql` → botón **Run** → debe decir "Success"
+   usa el esquema vigente `supabase_v2_actualizado.sql` → botón **Run** → debe decir "Success"
 4. Menú **Authentication → Users → Add user → Create new user**:
    - Crea un usuario por cada persona (tú, Roxana, el encargado)
    - Email + contraseña (invéntala tú y compártela con cada uno)
@@ -28,7 +30,7 @@ Costo: $0 (planes gratuitos).
 2. Botón **+ → New repository** → Nombre: `rancho-app` → **Private** → Create
 3. En el repositorio: **uploading an existing file** → arrastra TODOS los archivos
    y carpetas de este paquete (package.json, index.html, vite.config.js,
-   supabase.sql, la carpeta src completa...) → **Commit changes**
+   supabase_v2_actualizado.sql, la carpeta src completa...) → **Commit changes**
    - ⚠ NO subas ningún archivo .env con claves reales
 
 ---

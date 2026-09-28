@@ -67,7 +67,7 @@ const revisarError = (error) => {
   const msg = (error.message || "").toLowerCase();
   if (!avisoTabla && (msg.includes("relation") || msg.includes("does not exist") || error.code === "42P01" || error.code === "PGRST205")) {
     avisoTabla = true;
-    alert("⚙️ La base de datos no tiene las tablas nuevas de la granja.\n\nSolución: en Supabase → SQL Editor → pega el contenido de supabase_v2.sql → Run.\nLuego recarga esta página.");
+    alert("⚙️ La base de datos no tiene las tablas nuevas de la granja.\n\nSolución: en Supabase → SQL Editor → revisa el archivo supabase_v2_actualizado.sql del repositorio.\nLuego recarga esta página.");
   }
 };
 
@@ -105,6 +105,13 @@ async function leerColeccion(tabla) {
     if (!data || data.length < 500) break;
   }
   return filas.map((fila) => ({ ...fila.data, id: fila.data?.id ?? fila.id }));
+}
+
+// Para ediciones históricas: un error de red se distingue de una bodega vacía.
+export async function leerBodegaActual() {
+  const actual = await leerColeccion("bodega_movs");
+  if (actual !== null) ultimaVersion.set("granja2:bodegaMovs", actual);
+  return actual;
 }
 
 async function escribirColeccion(claveCache, tabla, arregloNuevo) {
