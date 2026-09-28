@@ -7,13 +7,25 @@ export function saltosTiquetes(tiquetes) {
   return Array.from({ length: nums.at(-1) - nums[0] - 1 }, (_, i) => nums[0] + i + 1).filter(n => !presentes.has(n));
 }
 
-export function observacionesCaptura(capturas, lotes) {
+// El talonario es común a todos los gallineros. Los formularios editados
+// sustituyen su registro guardado; el resto se toma de la fecha elegida.
+export function tiquetesDelDia(capturas, registros, fecha, editados = []) {
+  const cambios = new Set(editados);
+  const guardados = registros.filter(r => r.fecha === fecha && !cambios.has(r.lote));
+  const conRegistro = new Set(guardados.map(r => r.lote));
+  return [
+    ...guardados.flatMap(r => r.tiquetes || []),
+    ...Object.entries(capturas).filter(([id]) => cambios.has(id) || !conRegistro.has(id)).flatMap(([, c]) => c?.tiquetes || []),
+  ];
+}
+
+export function observacionesCaptura(capturas, lotes, tiquetesGlobales = []) {
   const avisos = [];
+  const saltos = saltosTiquetes(tiquetesGlobales);
+  if (saltos.length) avisos.push(`En la fecha, entre todos los gallineros, faltan números de tiquete ${saltos.slice(0, 12).join(", ")}${saltos.length > 12 ? "…" : ""}`);
   for (const l of lotes) {
     const c = capturas[l.id]; if (!c) continue;
     const tiquetes = (c.tiquetes || []).filter(t => t.num || t.cartones || t.peso);
-    const saltos = saltosTiquetes(tiquetes);
-    if (saltos.length) avisos.push(`G${l.galpon}: faltan números de tiquete ${saltos.slice(0, 12).join(", ")}${saltos.length > 12 ? "…" : ""}`);
     if (tiquetes.some(t => !t.num || !Number(t.cartones) || !Number(t.peso))) avisos.push(`G${l.galpon}: hay tiquetes incompletos`);
     for (const t of tiquetes) if (Number(t.cartones) > 0 && Number(t.peso) > 0) {
       const kgCart = Number(t.peso) / Number(t.cartones);
