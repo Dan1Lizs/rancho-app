@@ -14,7 +14,7 @@ import logoOficial from "./assets/logo-oficial.png";
 import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "./historial";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { nombreVisible } from "./nombresUsuarios";
-import { saldosFormulasDesdeConteo } from "./inventarioFormulas";
+import { saldosFormulasDesdeConteo, deltaConteoFormula } from "./inventarioFormulas";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -395,7 +395,6 @@ export default function App() {
   const [aperturaIns, setAperturaIns] = useState({});
   const [fServGan, setFServGan] = useState({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() });
   const [fAjPlanta, setFAjPlanta] = useState({ categoria: "Aves", formula: "", saldoReal: "", fecha: hoyISO(), responsable: "" });
-  const [conteosFormula, setConteosFormula] = useState({});
   const [racionesGanado, setRacionesGanado] = useState({});
   const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", monto: "", fecha: hoyISO() });
 
@@ -1122,12 +1121,11 @@ export default function App() {
   const guardarAjustePlanta = async () => {
     const esConcentrado = fAjPlanta.categoria !== "Núcleo";
     const formulas = Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria);
-    const conteos = Object.fromEntries(formulas.map(n => [n, Number(conteosFormula[n])]));
-    const real = esConcentrado ? Object.values(conteos).reduce((s, n) => s + n, 0) : Number(fAjPlanta.saldoReal);
+    const real = Number(fAjPlanta.saldoReal);
     const responsable = fAjPlanta.responsable.trim();
     const esNucleo = fAjPlanta.categoria === "Núcleo";
-    const formula = fAjPlanta.formula || Object.keys(recetas.formulas).find(n => kgNucleoDe(n) > 0);
-    if (!responsable || (!esConcentrado && fAjPlanta.saldoReal === "") || !Number.isFinite(real) || real < 0 || (esConcentrado && (!formulas.length || formulas.some(n => conteosFormula[n] === undefined || conteosFormula[n] === "" || !Number.isFinite(conteos[n]) || conteos[n] < 0))) || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esNucleo && !formula)) { avisar("⚠ Indica responsable y cantidad real de cada fórmula, con fecha válida"); return; }
+    const formula = fAjPlanta.formula;
+    if (!responsable || fAjPlanta.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esConcentrado ? !formulas.includes(formula) : !formula)) { avisar("⚠ Elige una fórmula e indica responsable, cantidad real y fecha válida"); return; }
     if (esConcentrado && fAjPlanta.fecha !== hoyISO()) { avisar("⚠ Para cuadrar el saldo actual por fórmula, realiza el conteo con la fecha de hoy"); return; }
     setGuardando(true);
     try {
@@ -1138,9 +1136,13 @@ export default function App() {
       const actual = esNucleo ? Number(inv[formula] || 0) : Number(plantaCfg[fAjPlanta.categoria === "Aves" ? "inicialAves" : "inicialGanado"] || 0)
         + movimientos.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) }).filter(m => (!aperturaP || aDate(m.fecha) >= aperturaP) && m.categoria === fAjPlanta.categoria).reduce((s, m) => s + (m.tipo === "bache" || m.tipo === "ajuste" ? Number(m.kg || 0) : m.tipo === "servido" ? -Number(m.kg || 0) : 0), 0)
         - (fAjPlanta.categoria === "Aves" ? servidoAvesTotal : 0);
-      const delta = +(real - actual).toFixed(2);
+      const registrosActuales = esConcentrado && fAjPlanta.categoria === "Aves" ? await leer(K.registros, null) : [];
+      if (esConcentrado && fAjPlanta.categoria === "Aves" && !registrosActuales) throw new Error("No se pudo consultar el servido de aves actual");
+      const saldos = esConcentrado ? saldosFormulasDesdeConteo(fAjPlanta.categoria, formulas, movimientos, registrosActuales) : null;
+      const anteriorFormula = saldos?.[formula] ?? null;
+      const delta = esConcentrado ? deltaConteoFormula(actual, saldos, formula, real, formulas) : +(real - actual).toFixed(2);
       if (!delta && !esConcentrado) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); return; }
-      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { kg: delta, conteosFormula: conteos }), saldoAnterior: actual, saldoReal: real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
+      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { formula, kg: delta, saldoFormulaAnterior: anteriorFormula, conteosFormula: { [formula]: real } }), saldoAnterior: actual, saldoReal: esConcentrado ? +(actual + delta).toFixed(2) : real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico de ${formula}: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
       if (!(await escribir(K.planta, [evento, ...movimientos]))) throw new Error("No se pudo registrar el ajuste en el historial");
       setPlantaMovs([evento, ...movimientos]);
       if (esNucleo) {
@@ -1149,7 +1151,7 @@ export default function App() {
         setNucleoInv(actualizado);
       }
       setFAjPlanta({ ...fAjPlanta, saldoReal: "" });
-      avisar(`✓ Ajuste ${delta > 0 ? "+" : ""}${delta} ${esNucleo ? "porciones" : "kg"} registrado`);
+      avisar(`✓ ${formula}: ${real} ${esNucleo ? "porciones" : "kg"} registradas. Ajuste total ${delta > 0 ? "+" : ""}${delta}`);
     } catch (e) { avisar(`⚠ ${e.message}`); }
     finally { setGuardando(false); }
   };
@@ -3658,8 +3660,8 @@ export default function App() {
             {[["Aves", saldosAvesFormula, saldoAves], ["Ganado", saldosGanadoFormula, saldoGanado]].map(([categoria, saldos, total]) => <div key={categoria} style={{ padding: 12, background: C.superficie, borderRadius: 12, marginBottom: 10, fontSize: 13 }}>
               <b>Existencias por fórmula · {categoria}</b>
               {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por fórmula. El total de {total.toFixed(1)} kg aún no tiene distribución verificada.</div> : <>
-                {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg < 0 ? C.alerta : C.verde }}>{kg.toFixed(1)} kg</b></div>)}
-                {Math.abs(Object.values(saldos).reduce((s, n) => s + n, 0) - total) > 0.11 && <div style={{ color: C.alerta, marginTop: 6 }}>⚠ El desglose difiere del total ({total.toFixed(1)} kg). Revisa servidos sin fórmula o movimientos anteriores.</div>}
+                {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg == null ? C.textoSuave : kg < 0 ? C.alerta : C.verde }}>{kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg`}</b></div>)}
+                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."}</div> : null; })()}
               </>}
             </div>)}
 
@@ -3763,22 +3765,19 @@ export default function App() {
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 40%" }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
-                  <select value={fAjPlanta.categoria} onChange={e => setFAjPlanta({ ...fAjPlanta, categoria: e.target.value })} style={inputStyle}>
+                  <select value={fAjPlanta.categoria} onChange={e => setFAjPlanta({ ...fAjPlanta, categoria: e.target.value, formula: "", saldoReal: "" })} style={inputStyle}>
                     <option>Aves</option><option>Ganado</option><option>Núcleo</option>
                   </select>
                 </label>
-                {fAjPlanta.categoria === "Núcleo" && <label style={{ flex: "1 1 160px", fontSize: 12 }}>Núcleo / fórmula<select value={fAjPlanta.formula} onChange={e => setFAjPlanta({ ...fAjPlanta, formula: e.target.value, saldoReal: "" })} style={inputStyle}><option value="">Elegir núcleo</option>{[...new Set([...Object.keys(recetas.formulas).filter(n => kgNucleoDe(n) > 0), ...Object.keys(nucleoInv)])].map(n => <option key={n} value={n}>{n}</option>)}</select></label>}
-                {fAjPlanta.categoria === "Núcleo" && <Campo mitad etiqueta={`Saldo real contado (app: ${Number(nucleoInv[fAjPlanta.formula] || 0).toFixed(1)} porciones)`} type="text" inputMode="decimal" placeholder="porciones" value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />}
+                <label style={{ flex: "1 1 160px", fontSize: 12 }}>{fAjPlanta.categoria === "Núcleo" ? "Núcleo / fórmula" : "Tipo de concentrado"}<select value={fAjPlanta.formula} onChange={e => setFAjPlanta({ ...fAjPlanta, formula: e.target.value, saldoReal: "" })} style={inputStyle}><option value="">Elegir fórmula</option>{(fAjPlanta.categoria === "Núcleo" ? [...new Set([...Object.keys(recetas.formulas).filter(n => kgNucleoDe(n) > 0), ...Object.keys(nucleoInv)])] : Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria)).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+                <Campo mitad etiqueta={`Saldo real de esta fórmula (app: ${fAjPlanta.categoria === "Núcleo" ? Number(nucleoInv[fAjPlanta.formula] || 0).toFixed(1) : (fAjPlanta.categoria === "Aves" ? saldosAvesFormula : saldosGanadoFormula)?.[fAjPlanta.formula]?.toFixed(1) ?? "Sin conteo"} ${fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"})`} type="text" inputMode="decimal" placeholder={fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"} value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
                 <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre de quien contó" value={fAjPlanta.responsable} onChange={e => setFAjPlanta({ ...fAjPlanta, responsable: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
                   <input type="date" value={fAjPlanta.fecha} onChange={e => setFAjPlanta({ ...fAjPlanta, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
-              {fAjPlanta.categoria !== "Núcleo" && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                {Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria).map(n => <label key={n} style={{ flex: "1 1 180px", fontSize: 12 }}>{n} · kg reales<input type="number" min="0" step="0.1" value={conteosFormula[n] ?? ""} onChange={e => setConteosFormula(v => ({ ...v, [n]: e.target.value }))} placeholder="Cuenta esta fórmula" style={{ ...inputStyle, width: "100%" }} /></label>)}
-                <div style={{ width: "100%", fontSize: 12 }}>Total del conteo: <b>{Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria).reduce((s, n) => s + Number(conteosFormula[n] || 0), 0).toFixed(1)} kg</b> · saldo actual: {(fAjPlanta.categoria === "Aves" ? saldoAves : saldoGanado).toFixed(1)} kg. Anota 0 si no queda de una fórmula.</div>
-              </div>}
+              {fAjPlanta.categoria !== "Núcleo" && <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 10 }}>Cuenta una fórmula a la vez. Los kilos sin fórmula asignada permanecen como pendientes hasta que cuentes las demás. Anota 0 si no queda de la fórmula elegida.</div>}
               <button onClick={guardarAjustePlanta} disabled={guardando} style={btnStyle}>Registrar ajuste</button>
               <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes físicos</div>
               {selectorHistorial("ajustesPlanta")}
