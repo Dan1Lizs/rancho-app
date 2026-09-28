@@ -31,7 +31,7 @@ class Capturador extends React.Component {
 function Raiz() {
   const [sesion, setSesion] = useState(undefined);
 
-  const fijarSesion = (s) => { window.__usuarioEmail = s?.user?.email || null; setSesion(s ?? null); };
+  const fijarSesion = (s) => { window.__usuarioEmail = s?.user?.email || null; window.__usuarioNombre = s?.user?.user_metadata?.full_name || s?.user?.user_metadata?.name || ""; setSesion(s ?? null); };
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => fijarSesion(data.session)).catch(() => fijarSesion(null));
     const { data: sub } = supabase.auth.onAuthStateChange((_ev, s) => fijarSesion(s));

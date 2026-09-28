@@ -13,7 +13,7 @@ import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
 import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "./historial";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
-import { nombreVisible } from "./nombresUsuarios";
+import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
 import { saldosFormulasDesdeConteo, deltaConteoFormula } from "./inventarioFormulas";
 
 // ─── Tokens ─────────────────────────────────────────────────────
@@ -589,7 +589,7 @@ export default function App() {
           setRepartos(bcfg.repartidores.map(n2 => ({ nombre: n2, salida: "", devBueno: "", devMalo: "" })));
         }
       }
-      if (mi) { setMpInvUltimo(mi.items || {}); setMpFechaConteo(mi.fecha || ""); setMpResponsable(mi.responsable || ""); }
+      if (mi) { setMpInvUltimo(mi.items || {}); setMpFechaConteo(mi.fecha || ""); }
       if (mc) setMpConfig({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {}, ...mc });
       setMpPedidos(ordenarPorFecha(pedidos)); setRecetas(rc); setMpCat(mcat); setInsumos(ins); setInsumosMovs(ordenarPorFecha(insMovs));
       setPesajes(ordenarPorFecha(ps)); setMedicaciones(ordenarPorFecha(ms)); setFumigaciones(ordenarPorFecha(fs));
@@ -600,6 +600,12 @@ export default function App() {
       setKardex(ordenarPorFecha(kdx0 || []));
       setCfgAdmins(adm0 || []);
       setNombresUsuarios(nombres0 || {});
+      const responsableSesion = nombreResponsableSesion(window.__usuarioEmail, nombres0 || {}, window.__usuarioNombre);
+      if (responsableSesion) {
+        setCompletadoPor(v => v || responsableSesion);
+        setMpResponsable(v => v || responsableSesion);
+        setFAjPlanta(v => v.responsable ? v : { ...v, responsable: responsableSesion });
+      }
       setFavoritos(fav0 || []);
       setMpInvHist(ordenarPorFecha(mih0 || []));
       setAdvAjustes(adv0 || []);
@@ -2035,7 +2041,7 @@ export default function App() {
       accion,
       item,
       nuevoTexto: ajExistente?.nuevoTexto || item.texto,
-      responsable: ajExistente?.responsable || completadoPor || "Roxana",
+      responsable: completadoPor || nombreResponsableSesion(window.__usuarioEmail, nombresUsuarios, window.__usuarioNombre) || ajExistente?.responsable || "",
       fecha: ajExistente?.fechaISO || hoyISO(),
       razon: ajExistente?.razon || "",
     });
@@ -2858,12 +2864,8 @@ export default function App() {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
               <label style={{ flex: "1 1 45%", minWidth: 140 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Responsable</span>
-                <select value={modalAdv.responsable} onChange={e => setModalAdv({ ...modalAdv, responsable: e.target.value })} style={inputStyle}>
-                  <option value="Roxana">Roxana</option>
-                  <option value="Ivannia Lizano">Ivannia Lizano</option>
-                  <option value="Jose Daniel Quesada">Jose Daniel Quesada</option>
-                  <option value="Otro">Otro / Personal de granja</option>
-                </select>
+                <input type="text" list="responsables-frecuentes" value={modalAdv.responsable} onChange={e => setModalAdv({ ...modalAdv, responsable: e.target.value })} style={inputStyle} />
+                <datalist id="responsables-frecuentes"><option value="Roxana" /><option value="Ivannia Lizano" /><option value="José Daniel Quesada" /></datalist>
               </label>
               <label style={{ flex: "1 1 45%", minWidth: 140 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del ajuste</span>
