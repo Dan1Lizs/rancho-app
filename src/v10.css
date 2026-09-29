@@ -1,0 +1,53 @@
+.app-v10 .v10-desktop-nav { display: none; }
+.app-v10 .v10-mobile-nav { display: none; }
+.app-v10 .v10-mobile-more { display: none; }
+.app-v10 .v10-search-action { border: 0; border-radius: 10px; background: #ffffff20; color: white; padding: 7px 12px; font-size: 22px; cursor: pointer; }
+.app-v10 .v10-home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.app-v10 .v10-home-grid button { text-align: left; background: #f2f8ef; color: #14432a; border: 1px solid #d7e6d7; border-radius: 12px; padding: 16px; cursor: pointer; }
+.app-v10 .v10-home-grid span { display: block; margin-top: 8px; color: #45574c; font-size: 13px; }
+.app-v10 .v10-home-row { border-bottom: 1px solid #e4e4dc; padding: 10px 0; }
+.app-v10 .v10-user-admin { background: #f2f8ef; border: 1px solid #d7e6d7; border-radius: 12px; padding: 16px; margin-top: 14px; }
+.app-v10 .v10-user-admin h3 { margin: 0 0 8px; }
+.app-v10 .v10-user-admin p { font-size: 13px; line-height: 1.5; }
+.app-v10 .v10-user-form, .app-v10 .v10-user-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.app-v10 .v10-user-form input, .app-v10 .v10-user-form select, .app-v10 .v10-user-row select { padding: 10px; border: 1px solid #bbcdbd; border-radius: 8px; min-width: 120px; }
+.app-v10 .v10-user-form input { flex: 1; }
+.app-v10 .v10-user-row { border-top: 1px solid #d7e6d7; padding-top: 9px; font-size: 13px; }
+.app-v10 .v10-user-row span { flex: 1; min-width: 130px; font-weight: 600; }
+.app-v10 .v10-user-row small { display: block; font-weight: 400; }
+.app-v10 .v10-user-form button, .app-v10 .v10-user-row button { border: 0; border-radius: 8px; padding: 10px; background: #14432a; color: white; cursor: pointer; }
+.app-v10 .v10-security-alert { padding: 12px; margin: 8px 0; border-radius: 10px; background: #fbeae6; color: #903526; }
+.app-v10 .v10-plant-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; padding: 12px; background: #f6f6f1; border-radius: 10px; font-size: 12px; }
+.app-v10 .v10-plant-filters :is(input, select, button) { min-width: 0; width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #d2d9d1; border-radius: 8px; background: white; font: inherit; }
+.app-v10 .v10-history-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+.app-v10 .v10-history-actions button { border: 1px solid #d2d9d1; border-radius: 8px; background: white; padding: 8px; }
+.app-v10 .v10-overlay { position: fixed; inset: 0; z-index: 160; background: #10251cb9; display: flex; align-items: flex-start; justify-content: center; padding: min(12vh, 100px) 16px 16px; }
+.app-v10 .v10-search { background: white; color: #203329; border-radius: 16px; width: min(100%, 650px); max-height: 75vh; overflow: auto; padding: 14px; box-shadow: 0 16px 50px #0004; }
+.app-v10 .v10-search-head { display: flex; gap: 8px; }
+.app-v10 .v10-search-head input { flex: 1; min-width: 0; font: inherit; padding: 12px; border: 1px solid #ccc; border-radius: 9px; }
+.app-v10 .v10-search-head button { background: #eee; border: 0; border-radius: 9px; padding: 0 15px; }
+.app-v10 .v10-result { display: block; width: 100%; border: 0; background: white; text-align: left; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; font: inherit; }
+.app-v10 .v10-result:hover { background: #f2f8ef; }
+.app-v10 :is(button, input, select, textarea):focus-visible { outline: 3px solid #e3a01e; outline-offset: 2px; }
+@media (min-width: 900px) {
+  .app-v10 .v10-desktop-nav { display: block; position: fixed; inset: 0 auto 0 0; width: 208px; box-sizing: border-box; z-index: 25; background: #103b26; color: white; overflow-y: auto; padding: 19px 12px 40px; }
+  .app-v10 .v10-menu-brand { font-size: 18px; font-weight: 700; padding: 8px 9px 20px; }
+  .app-v10 .v10-menu-brand small { display: block; font-size: 11px; font-weight: 400; opacity: .7; margin-top: 5px; }
+  .app-v10 .v10-menu-label { padding: 16px 10px 5px; text-transform: uppercase; font-size: 10px; letter-spacing: .1em; opacity: .65; }
+  .app-v10 .v10-desktop-nav button { display: block; width: 100%; text-align: left; border: 0; border-radius: 8px; padding: 10px; background: transparent; color: #e1eee5; cursor: pointer; font: inherit; font-size: 13px; }
+  .app-v10 .v10-desktop-nav button.v10-active, .app-v10 .v10-desktop-nav button:hover { background: #f6f6f1; color: #14432a; }
+  .app-v10 .v10-desktop-nav .v10-menu-search { margin-top: 20px; background: #ffffff1c; }
+  .app-v10 > .v10-header { padding-left: 225px !important; }
+  .app-v10 > .v10-main { box-sizing: border-box; max-width: 1230px !important; padding-left: 235px !important; }
+}
+@media (max-width: 899px) {
+  .app-v10 .v10-mobile-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; min-height: 66px; padding-bottom: env(safe-area-inset-bottom); background: #fff; border-top: 1px solid #d5ded5; box-shadow: 0 -4px 20px #0001; }
+  .app-v10 .v10-mobile-nav button { flex: 1; min-width: 0; border: 0; background: transparent; color: #355643; font-size: 11px; font-weight: 600; padding: 10px 2px; }
+  .app-v10 .v10-mobile-nav button[aria-current="page"] { color: #14432a; border-top: 3px solid #e2a129; background: #f4f8f2; }
+  .app-v10 .v10-mobile-more { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; position: fixed; z-index: 44; bottom: calc(66px + env(safe-area-inset-bottom)); left: 0; right: 0; max-height: 60vh; overflow-y: auto; background: white; padding: 12px; box-shadow: 0 -8px 30px #0003; }
+  .app-v10 .v10-mobile-more button { border: 1px solid #d5ded5; border-radius: 10px; background: #f6f8f5; padding: 14px; color: #14432a; font: inherit; }
+  .app-v10 > main { padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important; }
+  .app-v10 .v10-home-grid { grid-template-columns: 1fr; }
+  .app-v10 .v10-plant-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-v10 header .v10-search-action { padding: 5px 9px; }
+}

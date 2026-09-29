@@ -231,6 +231,29 @@ export async function corregirProduccion({ id, nuevo, motivo, eliminar = false }
   return evento;
 }
 
+// Corrige metadatos de planta sin tocar kg, fórmula, fecha ni inventarios.
+// Esos valores se concilian mediante un ajuste físico independiente.
+export async function corregirDetallePlanta({ id, visto, campos, motivo, responsable }) {
+  if (!motivo?.trim() || !responsable?.trim()) throw new Error("Indica el motivo y el responsable.");
+  const { data: fila, error: lecturaError } = await supabase.from("planta_movs").select("id,data").eq("id", String(id)).maybeSingle();
+  if (lecturaError) throw lecturaError;
+  if (!fila || JSON.stringify(fila.data) !== JSON.stringify(visto)) throw new Error("El movimiento cambió en otro dispositivo. Actualiza antes de corregir.");
+  const anterior = fila.data;
+  const permitidos = ["detalle", "numBache", "numNucleo", "responsable"];
+  const valores = Object.fromEntries(permitidos.map(k => [k, String(campos[k] ?? anterior[k] ?? "").trim()]));
+  const cambio = permitidos.some(k => valores[k] !== String(anterior[k] ?? ""));
+  if (!cambio) throw new Error("No hay cambios para guardar.");
+  const nuevo = { ...anterior, ...valores, historialEdiciones: [...(anterior.historialEdiciones || []), {
+    fechaHora: new Date().toISOString(), por: emailActual(), responsable: responsable.trim(), motivo: motivo.trim(),
+    anterior: Object.fromEntries(permitidos.map(k => [k, anterior[k] ?? ""])), nuevo: valores,
+  }] };
+  const { data: cambiado, error } = await supabase.from("planta_movs").update({ data: nuevo })
+    .eq("id", String(id)).filter("data", "eq", JSON.stringify(anterior)).select("id");
+  if (error || cambiado?.length !== 1) throw error || new Error("El movimiento cambió mientras se guardaba. Actualiza y revisa.");
+  ultimaVersion.delete("granja2:plantaMovs");
+  return nuevo;
+}
+
 export async function leer(key, porDefecto) {
   try {
     if (ES_CXP(key)) {
