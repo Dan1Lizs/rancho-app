@@ -60,6 +60,16 @@ const sumarDias = (dmy, dias) => {
   return `${String(f.getDate()).padStart(2, "0")}/${String(f.getMonth() + 1).padStart(2, "0")}/${f.getFullYear()}`;
 };
 const aDate = (dmy) => { const [d, m, y] = dmy.split("/").map(Number); return new Date(y, m - 1, d); };
+const f2Dec = (val, def = "—") => {
+  if (val == null || val === "" || isNaN(Number(val))) return def;
+  const num = Number(val);
+  const r = Math.round((num + Number.EPSILON) * 100) / 100;
+  return r.toString();
+};
+const n2Dec = (val) => {
+  if (val == null || val === "" || isNaN(Number(val))) return 0;
+  return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+};
 const fechaVacuna = (nacISO, dias) => {
   const [y, m, d] = nacISO.split("-").map(Number);
   const f = new Date(y, m - 1, d + Number(dias));
@@ -1380,7 +1390,7 @@ export default function App() {
         fecha, lote: l.id, cartones: +t.cartones.toFixed(2), quebrados: Number(c.quebrados || 0),
         pesoKg: +t.pesoKg.toFixed(1), muertas: Number(c.muertas || 0), dx: c.dx || "",
         alimentoKg: alimTotal, alimento6am: Number(c.alimento6am || 0), alimento1pm: Number(c.alimento1pm || 0), obsAlimento: c.obsAlimento || "",
-        alimentoEsperadoKg: l.racionGAve && l.aves ? +((l.racionGAve * l.aves) / 1000).toFixed(1) : 0,
+        alimentoEsperadoKg: l.racionGAve && l.aves ? n2Dec((l.racionGAve * l.aves) / 1000) : 0,
         aguaL: Number(c.aguaL || 0),
         chequeo: c.chequeo && Object.values(c.chequeo).some(v => v !== "") ? { ...c.chequeo } : null,
         por: completadoPor, tiquetes: c.tiquetes.filter(x => x.cartones), trabajos: c.trabajos,
@@ -2404,7 +2414,7 @@ export default function App() {
     const prom = p.pesos.reduce((a, b) => a + b, 0) / n;
     const sd = Math.sqrt(p.pesos.reduce((a, b) => a + (b - prom) ** 2, 0) / n);
     const dentro = p.pesos.filter(x => Math.abs(x - prom) <= prom * 0.1).length;
-    return { prom, cv: (sd / prom) * 100, unif: (dentro / n) * 100, min: Math.min(...p.pesos), max: Math.max(...p.pesos) };
+    return { n, prom, sd, cv: (sd / prom) * 100, unif: (dentro / n) * 100, min: Math.min(...p.pesos), max: Math.max(...p.pesos) };
   };
 
   const aplicarVacuna = async (l, p2, fechaISO) => {
@@ -3236,7 +3246,7 @@ export default function App() {
                           <td style={celda}><b>Saldo aves:</b> {l2.aves.toLocaleString()}</td>
                         </tr>
                         <tr>
-                          <td style={celda}><b>7. Alimento:</b> 6am {r.alimento6am || "—"} kg · 1pm {r.alimento1pm || "—"} kg · Total {r.alimentoKg} kg (esperado {r.alimentoEsperadoKg} kg)</td>
+                          <td style={celda}><b>7. Alimento:</b> 6am {r.alimento6am || "—"} kg · 1pm {r.alimento1pm || "—"} kg · Total {f2Dec(r.alimentoKg)} kg (esperado {f2Dec(r.alimentoEsperadoKg)} kg)</td>
                           <td style={celda}><b>Agua:</b> {r.aguaL ? `${r.aguaL} L` : "—"}</td>
                         </tr>
                       </tbody>
@@ -3460,7 +3470,7 @@ export default function App() {
                       {fila("Destruido / quebrado", mov.destruido, "−")}
                       {fila("Regalado", mov.regalado, "−")}
                       {mov.ajusteConteo != null && <tr><td style={celda}>Ajuste por conteo físico</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{mov.ajusteConteo} ({mov.difAjuste > 0 ? "+" : ""}{mov.difAjuste})</td></tr>}
-                      <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{mov.saldoFinal}</td></tr>
+                      <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{f2Dec(mov.saldoFinal)}</td></tr>
                     </tbody>
                   </table>
                   {mov.repartos?.length > 0 && (
@@ -3492,7 +3502,7 @@ export default function App() {
                           <td style={celda}>{m2.fecha}</td>
                           <td style={celda}>{m2.producido ?? "—"}</td>
                           <td style={celda}>{m2.rutaNeta ?? "—"}</td>
-                          <td style={{ ...celda, fontWeight: 600 }}>{m2.saldoFinal}{m2.ajusteConteo != null ? " *" : ""}</td>
+                          <td style={{ ...celda, fontWeight: 600 }}>{f2Dec(m2.saldoFinal)}{m2.ajusteConteo != null ? " *" : ""}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -4227,7 +4237,7 @@ const cssEtapaB = `
                   const dif = sumaF != null ? +(total - sumaF).toFixed(1) : null;
                   return (
                     <div key={categoria} style={{ padding: 8, fontSize: 13 }}>
-                      <b>{categoria}</b> · total {total.toFixed(1)} kg · fórmulas {sumaF != null ? `${sumaF.toFixed(1)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${dif} kg` : "—"}
+                      <b>{categoria}</b> · total {f2Dec(total)} kg · fórmulas {sumaF != null ? `${f2Dec(sumaF)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${f2Dec(dif)} kg` : "—"}
                     </div>
                   );
                 })}
@@ -4566,7 +4576,7 @@ const cssEtapaB = `
                     </div>
                     <Campo etiqueta="Observaciones del consumo" type="text" placeholder="ej. dejaron alimento en comederos, cambio de fórmula, calor fuerte…" value={cap.obsAlimento} onChange={e => setCap({ obsAlimento: e.target.value })} />
                     <div style={{ fontSize: 13.5, display: "grid", gap: 5, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
-                      {espDia > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Esperado del día</span><b>{espDia.toFixed(1)} kg · {loteActivo.racionGAve} g/ave</b></div>}
+                      {espDia > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Esperado del día</span><b>{f2Dec(espDia)} kg · {f2Dec(loteActivo.racionGAve)} g/ave</b></div>}
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span>Servido real</span><b>{real.toFixed(1)} kg{gAveReal ? ` · ${gAveReal.toFixed(0)} g/ave` : ""}</b></div>
                       {desv != null && <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${C.borde}`, paddingTop: 5, color: Math.abs(desv) > 5 ? C.alerta : C.verde }}>
                         <b>Diferencia vs ración</b><b>{desv > 0 ? "+" : ""}{desv.toFixed(1)}%{Math.abs(desv) > 5 ? " ⚠" : " ✓"}</b>
@@ -4877,10 +4887,10 @@ const cssEtapaB = `
               </div>
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <KPI etiqueta="Saldo inicial" valor={saldoBase.toFixed(1)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
-              <KPI etiqueta="Entradas (+)" valor={(producidoHoyCart + Number(movBodega.comprado || 0)).toFixed(1)} unidad="cart" tono="ok" sub={`Producido ${producidoHoyCart.toFixed(1)}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${Number(movBodega.comprado).toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Salidas (−)" valor={(rutaNeta + Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)).toFixed(1)} unidad="cart" tono={rutaNeta > 0 ? "alerta" : undefined} sub={`Ruta neta ${rutaNeta.toFixed(1)}${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)) > 0 ? ` + otras ${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)).toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Saldo proyectado" valor={saldoFinal.toFixed(1)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : "= inicial + entradas − salidas"} />
+              <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
+              <KPI etiqueta="Entradas (+)" valor={f2Dec(producidoHoyCart + Number(movBodega.comprado || 0))} unidad="cart" tono="ok" sub={`Producido ${producidoHoyCart.toFixed(1)}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${Number(movBodega.comprado).toFixed(1)}` : ""}`} />
+              <KPI etiqueta="Salidas (−)" valor={f2Dec(rutaNeta + Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0))} unidad="cart" tono={rutaNeta > 0 ? "alerta" : undefined} sub={`Ruta neta ${rutaNeta.toFixed(1)}${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)) > 0 ? ` + otras ${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)).toFixed(1)}` : ""}`} />
+              <KPI etiqueta="Saldo proyectado" valor={f2Dec(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : "= inicial + entradas − salidas"} />
             </div>
 
             {/* Sub-menú de funciones de Bodega */}
@@ -5040,17 +5050,17 @@ const cssEtapaB = `
             {(subBodega === "cierre" || subBodega === "todo") && (
             <Seccion num="4" titulo="Cierre del día" sub="Revisa el movimiento completo, ajusta si contaste, y guarda">
               <div style={{ fontSize: 14, marginBottom: 12, display: "grid", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del día (=)</span><b>{saldoBase.toFixed(1)}</b></div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Huevo producido (+)</span><b>{producidoHoyCart.toFixed(1)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del día (=)</span><b>{f2Dec(saldoBase)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Huevo producido (+)</span><b>{f2Dec(producidoHoyCart)}</b></div>
                 {Number(movBodega.comprado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Comprado (+)</span><b>{Number(movBodega.comprado).toFixed(1)}</b></div>}
                 <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Salida neta a ruta (−)</span><b>{rutaNeta.toFixed(1)}</b></div>
                 {Number(movBodega.vendGranja || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Vendido en granja (−)</span><b>{Number(movBodega.vendGranja).toFixed(1)}</b></div>}
                 {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (−)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}
                 {Number(movBodega.regalado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Regalado (−)</span><b>{Number(movBodega.regalado).toFixed(1)}</b></div>}
               </div>
-              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${saldoCalculado.toFixed(1)})`} type="text" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
+              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${f2Dec(saldoCalculado)})`} type="text" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
               {hayAjuste && <div style={{ fontSize: 12.5, color: difAjuste === 0 ? C.verde : "#9A6605", marginTop: -6, marginBottom: 10 }}>
-                {difAjuste === 0 ? "✓ El conteo coincide con lo calculado" : `El saldo se fijará en ${Number(ajusteBodega)} cartones — diferencia de ${difAjuste > 0 ? "+" : ""}${difAjuste} vs lo calculado (quedará registrada)`}
+                {difAjuste === 0 ? "✓ El conteo coincide con lo calculado" : `El saldo se fijará en ${f2Dec(ajusteBodega)} cartones — diferencia de ${difAjuste > 0 ? "+" : ""}${f2Dec(difAjuste)} vs lo calculado (quedará registrada)`}
               </div>}
               <Campo etiqueta="Observaciones del día" type="text" placeholder="Opcional" value={obsInv} onChange={e => setObsInv(e.target.value)} />
               {movBodegaId != null && <Campo etiqueta="Motivo del cambio (obligatorio para editar)" type="text" placeholder="Ej. corregir devolución de ruta del 25" value={motivoEdicionBodega} onChange={e => setMotivoEdicionBodega(e.target.value)} />}
@@ -5090,7 +5100,7 @@ const cssEtapaB = `
                   return <div key={m.id} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 7 }}>
                       <span><b>{m.fecha}</b> · +{m.producido} prod · −{Number(m.rutaNeta || 0).toFixed(1)} ruta{duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> · cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
-                      <b style={{ color: C.verde }}>= {m.saldoFinal} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
+                      <b style={{ color: C.verde }}>= {f2Dec(m.saldoFinal)} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
                       <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); setSubBodega("cierre"); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
@@ -5099,7 +5109,7 @@ const cssEtapaB = `
                     {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
                       {m.historialEdiciones.map((c, i) => <div key={i} style={{ padding: "7px 0", borderTop: `1px solid ${C.borde}`, fontSize: 11.5 }}>
                         <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> · {mostrarNombre(c.por)} · {c.motivo}<br />
-                        Antes: {c.anterior?.saldoFinal ?? "—"} cart → después: {c.nuevo?.saldoFinal ?? "—"} cart.
+                        Antes: {f2Dec(c.anterior?.saldoFinal)} cart → después: {f2Dec(c.nuevo?.saldoFinal)} cart.
                         {!!c.duplicadosRetirados?.length && <details><summary>Registros duplicados retirados ({c.duplicadosRetirados.length})</summary>{c.duplicadosRetirados.map((retirado, j) => <ResumenMovimientoBodega key={j} movimiento={retirado} />)}</details>}
                         <details><summary>Ver datos modificados</summary><CambiosBodega anterior={c.anterior} nuevo={c.nuevo} /></details>
                       </div>)}
@@ -5115,9 +5125,9 @@ const cssEtapaB = `
         {vista === "planta" && (
           <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <KPI etiqueta="Concentrado AVES" valor={saldoAves.toFixed(0)} unidad="kg" tono={saldoAves < entregadoHoyKg * 2 && entregadoHoyKg > 0 ? "alerta" : "ok"} sub={`${(saldoAves / 1000).toFixed(2)} ton`} />
-              <KPI etiqueta="Concentrado GANADO" valor={saldoGanado.toFixed(0)} unidad="kg" tono={saldoGanado < 0 ? "alerta" : "ok"} sub={`${(saldoGanado / 1000).toFixed(2)} ton`} />
-              <KPI etiqueta="Producido hoy" valor={producidoPlantaHoy.toFixed(0)} unidad="kg" sub={`${plantaHoy.filter(m => m.tipo === "bache").reduce((s, m) => s + Number(m.baches || 0), 0)} baches`} />
+              <KPI etiqueta="Concentrado AVES" valor={f2Dec(saldoAves)} unidad="kg" tono={saldoAves < entregadoHoyKg * 2 && entregadoHoyKg > 0 ? "alerta" : "ok"} sub={`${f2Dec(saldoAves / 1000)} ton`} />
+              <KPI etiqueta="Concentrado GANADO" valor={f2Dec(saldoGanado)} unidad="kg" tono={saldoGanado < 0 ? "alerta" : "ok"} sub={`${f2Dec(saldoGanado / 1000)} ton`} />
+              <KPI etiqueta="Producido hoy" valor={f2Dec(producidoPlantaHoy)} unidad="kg" sub={`${plantaHoy.filter(m => m.tipo === "bache").reduce((s, m) => s + Number(m.baches || 0), 0)} baches`} />
             </div>
             <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 12, padding: "0 2px" }}>
               Esquema por categoría: inventario inicial + baches producidos − servido (aves automático del Control diario · ganado se digita aquí) ± ajustes = inventario final.
@@ -5125,7 +5135,7 @@ const cssEtapaB = `
             {[["Aves", saldosAvesFormula, saldoAves], ["Ganado", saldosGanadoFormula, saldoGanado]].map(([categoria, saldos, total]) => <div key={categoria} style={{ padding: 12, background: C.superficie, borderRadius: 12, marginBottom: 10, fontSize: 13 }}>
               <b>Existencias por fórmula · {categoria}</b>
               {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por fórmula. El total de {total.toFixed(1)} kg aún no tiene distribución verificada.</div> : <>
-                {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg == null ? C.textoSuave : kg < 0 ? C.alerta : C.verde }}>{kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg`}</b></div>)}
+                {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg == null ? C.textoSuave : kg < 0 ? C.alerta : C.verde }}>{kg == null ? "Sin conteo" : `${f2Dec(kg)} kg`}</b></div>)}
                 {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."}</div> : null; })()}
               </>}
             </div>)}
@@ -5529,8 +5539,8 @@ const cssEtapaB = `
                     {lineasPedido.filter(x => x.kgDia > 0 || x.invKg > 0).map(x => (
                       <tr key={x.c} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right", background: x.pedido > 0 ? C.yemaSuave : "transparent" }}>
                         <td style={{ textAlign: "left", padding: "7px 4px", fontWeight: 500 }}>{x.n}</td>
-                        <td style={{ padding: "7px 4px" }}>{x.proyKg.toFixed(0)}</td>
-                        <td style={{ padding: "7px 4px" }}>{x.invKg.toFixed(0)}</td>
+                        <td style={{ padding: "7px 4px" }}>{f2Dec(x.proyKg)}</td>
+                        <td style={{ padding: "7px 4px" }}>{f2Dec(x.invKg)}</td>
                         <td style={{ padding: "7px 4px", fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>{x.pedido > 0 ? `${x.pedido} ${x.pres === 1 ? "kg" : "sc"}` : "—"}</td>
                       </tr>
                     ))}
@@ -7027,37 +7037,37 @@ const cssEtapaB = `
                             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
                               <KPI
                                 etiqueta="Peso promedio"
-                                valor={`${st.prom.toFixed(0)}`}
+                                valor={`${f2Dec(st.prom)}`}
                                 unidad="g"
                                 tono={tonoBrecha}
-                                sub={meta ? `Meta tabla: ${meta} g (${brechaG >= 0 ? "+" : ""}${brechaG} g · ${brechaP >= 0 ? "+" : ""}${brechaP}%)` : "Sin meta configurada"}
+                                sub={meta ? `Meta tabla: ${f2Dec(meta)} g (${brechaG >= 0 ? "+" : ""}${f2Dec(brechaG)} g · ${brechaP >= 0 ? "+" : ""}${f2Dec(brechaP)}%)` : "Sin meta configurada"}
                               />
                               <KPI
                                 etiqueta="Uniformidad"
-                                valor={`${st.unif.toFixed(1)}%`}
+                                valor={`${f2Dec(st.unif)}%`}
                                 unidad=""
                                 tono={tonoUnif}
                                 sub={st.unif >= 85 ? "✓ Excelente (meta >85%)" : st.unif >= 80 ? "Aceptable (meta >85%)" : "⚠ Desuniforme (<80%)"}
                               />
                               <KPI
                                 etiqueta="Variación (CV)"
-                                valor={`${st.cv.toFixed(1)}%`}
+                                valor={`${f2Dec(st.cv)}%`}
                                 unidad=""
                                 tono={tonoCV}
                                 sub={st.cv <= 8 ? "✓ Homogénea (<8%)" : st.cv <= 10 ? "Variabilidad normal" : "⚠ Alta dispersión"}
                               />
                               <KPI
                                 etiqueta="Ganancia vs anterior"
-                                valor={ganancia != null ? `${ganancia >= 0 ? "+" : ""}${ganancia}` : "—"}
+                                valor={ganancia != null ? `${ganancia >= 0 ? "+" : ""}${f2Dec(ganancia)}` : "—"}
                                 unidad="g"
                                 tono={ganancia >= 0 ? "ok" : "alerta"}
-                                sub={ant ? `vs ${ant.fecha.slice(0, 5)} (${stAnt?.prom.toFixed(0)} g)` : "Primer pesaje del lote"}
+                                sub={ant ? `vs ${ant.fecha.slice(0, 5)} (${f2Dec(stAnt?.prom)} g)` : "Primer pesaje del lote"}
                               />
                               <KPI
                                 etiqueta="Rango de pesos"
-                                valor={`${st.min} – ${st.max}`}
+                                valor={`${f2Dec(st.min)} – ${f2Dec(st.max)}`}
                                 unidad="g"
-                                sub={`Muestra de ${st.n} aves`}
+                                sub={`Muestra de ${st.n || ult?.pesos?.length || 0} aves`}
                               />
                             </div>
 
@@ -7066,15 +7076,15 @@ const cssEtapaB = `
                               <div style={{ background: C.fondo, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
                                   <span>Curva de peso vs estándar genético ({l.raza})</span>
-                                  <b>{st.prom.toFixed(0)} g de {meta} g ({((st.prom / meta) * 100).toFixed(1)}%)</b>
+                                  <b>{f2Dec(st.prom)} g de {f2Dec(meta)} g ({f2Dec((st.prom / meta) * 100)}%)</b>
                                 </div>
                                 <div style={{ position: "relative", height: 10, background: C.borde, borderRadius: 5, overflow: "hidden" }}>
                                   <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, (st.prom / (meta * 1.2)) * 100)}%`, background: colBrecha, borderRadius: 5 }} />
                                   <div style={{ position: "absolute", left: `${(meta / (meta * 1.2)) * 100}%`, top: 0, height: "100%", width: 2.5, background: C.texto, zIndex: 2 }} title="Meta genética" />
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textoSuave, marginTop: 4 }}>
-                                  <span>0 g</span>
-                                  <span>Meta: {meta} g</span>
+                                  <span>0.00 g</span>
+                                  <span>Meta: {f2Dec(meta)} g</span>
                                   <span>+20%</span>
                                 </div>
                               </div>
@@ -7134,28 +7144,28 @@ const cssEtapaB = `
                                   ) : <span style={{ color: C.textoSuave }}>Sin pesaje</span>}
                                 </td>
                                 <td style={{ padding: "10px 6px", fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, fontWeight: 700 }}>
-                                  {st ? `${st.prom.toFixed(0)} g` : "—"}
+                                  {st ? `${f2Dec(st.prom)} g` : "—"}
                                 </td>
                                 <td style={{ padding: "10px 6px", color: C.textoSuave }}>
-                                  {meta ? `${meta} g` : "—"}
+                                  {meta ? `${f2Dec(meta)} g` : "—"}
                                 </td>
                                 <td style={{ padding: "10px 6px", fontWeight: 700, color: colBrecha }}>
-                                  {brechaG != null ? `${brechaG >= 0 ? "+" : ""}${brechaG} g (${brechaP >= 0 ? "+" : ""}${brechaP}%)` : "—"}
+                                  {brechaG != null ? `${brechaG >= 0 ? "+" : ""}${f2Dec(brechaG)} g (${brechaP >= 0 ? "+" : ""}${f2Dec(brechaP)}%)` : "—"}
                                 </td>
                                 <td style={{ padding: "10px 6px" }}>
                                   {st ? (
                                     <span style={{ padding: "3px 8px", borderRadius: 10, background: st.unif >= 85 ? C.verdeSuave : st.unif >= 80 ? C.yemaSuave : C.alertaSuave, color: colUnif, fontWeight: 700 }}>
-                                      {st.unif.toFixed(1)}%
+                                      {f2Dec(st.unif)}%
                                     </span>
                                   ) : "—"}
                                 </td>
                                 <td style={{ padding: "10px 6px", color: st && st.cv <= 8 ? C.verde : st && st.cv <= 10 ? "#9A6605" : C.alerta, fontWeight: 600 }}>
-                                  {st ? `${st.cv.toFixed(1)}%` : "—"}
+                                  {st ? `${f2Dec(st.cv)}%` : "—"}
                                 </td>
                                 <td style={{ padding: "10px 6px", fontSize: 12 }}>
                                   {ganancia != null ? (
                                     <span style={{ color: ganancia >= 0 ? C.verde : C.alerta, fontWeight: 600 }}>
-                                      {ganancia >= 0 ? "+" : ""}{ganancia} g
+                                      {ganancia >= 0 ? "+" : ""}{Number(ganancia).toFixed(2)} g
                                     </span>
                                   ) : ant ? "—" : <span style={{ color: C.textoSuave, fontSize: 11 }}>1er pesaje</span>}
                                 </td>
@@ -7208,10 +7218,10 @@ const cssEtapaB = `
                   <div style={{ margin: "6px 0 14px", padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, border: `1px solid #ECD7A0` }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#9A6605", marginBottom: 6 }}>Cálculo preliminar en vivo ({nLive} aves digitadas):</div>
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
-                      <div><b>Promedio:</b> <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{promLive.toFixed(0)} g</span> {metaLive ? `(meta: ${metaLive} g · ${brechaLive >= 0 ? "+" : ""}${brechaLive.toFixed(0)} g)` : ""}</div>
-                      <div><b>Uniformidad:</b> <span style={{ fontWeight: 700, color: unifLive >= 85 ? C.verde : unifLive >= 80 ? "#9A6605" : C.alerta }}>{unifLive.toFixed(1)}%</span> {unifLive >= 85 ? "✓ Buena" : "(meta >85%)"}</div>
-                      <div><b>CV:</b> {cvLive.toFixed(1)}%</div>
-                      <div><b>Rango:</b> {Math.min(...pesosArr)} g – {Math.max(...pesosArr)} g</div>
+                      <div><b>Promedio:</b> <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{f2Dec(promLive)} g</span> {metaLive ? `(meta: ${f2Dec(metaLive)} g · ${brechaLive >= 0 ? "+" : ""}${f2Dec(brechaLive)} g)` : ""}</div>
+                      <div><b>Uniformidad:</b> <span style={{ fontWeight: 700, color: unifLive >= 85 ? C.verde : unifLive >= 80 ? "#9A6605" : C.alerta }}>{f2Dec(unifLive)}%</span> {unifLive >= 85 ? "✓ Buena" : "(meta >85%)"}</div>
+                      <div><b>CV:</b> {f2Dec(cvLive)}%</div>
+                      <div><b>Rango:</b> {f2Dec(Math.min(...pesosArr))} g – {f2Dec(Math.max(...pesosArr))} g</div>
                     </div>
                   </div>
                 );
