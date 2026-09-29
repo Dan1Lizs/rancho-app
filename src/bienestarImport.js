@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 export const fechaPesajeISO = (valor) => {
   const fechaValida = (y, m, d) => {
     const fecha = new Date(Date.UTC(y, m - 1, d));
@@ -8,8 +6,8 @@ export const fechaPesajeISO = (valor) => {
   const isoValido = (y, m, d) => fechaValida(+y, +m, +d) ? `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` : "";
   if (valor instanceof Date && !isNaN(valor)) return isoValido(valor.getFullYear(), valor.getMonth() + 1, valor.getDate());
   if (typeof valor === "number" && valor > 30000 && valor < 80000) {
-    const d = XLSX.SSF.parse_date_code(valor);
-    return d ? isoValido(d.y, d.m, d.d) : "";
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(valor) * 86400000);
+    return isoValido(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
   }
   const s = String(valor ?? "").trim();
   const iso = /^(20\d\d)-(\d\d?)-(\d\d?)$/.exec(s);
@@ -40,7 +38,7 @@ export const pesoEnGramos = (valor) => {
 
 const normalizarTitulo = (s) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 
-const extraerTablaSimple = (libro, fecha, lote) => {
+const extraerTablaSimple = (XLSX, libro, fecha, lote) => {
   if (!fechaPesajeISO(fecha)) return [];
   for (const hoja of libro.SheetNames) {
     const filas = XLSX.utils.sheet_to_json(libro.Sheets[hoja], { header: 1, defval: null });
@@ -69,7 +67,8 @@ const extraerTablaSimple = (libro, fecha, lote) => {
   return [];
 };
 
-export const extraerPesajesExcel = (buffer, { fecha = "", lote = "" } = {}) => {
+export const extraerPesajesExcel = async (buffer, { fecha = "", lote = "" } = {}) => {
+  const XLSX = await import("xlsx");
   const libro = XLSX.read(buffer, { type: "array", cellDates: true });
   const encontrados = [];
   for (const hoja of libro.SheetNames.filter(n => /pesaje/i.test(n))) {
@@ -106,5 +105,5 @@ export const extraerPesajesExcel = (buffer, { fecha = "", lote = "" } = {}) => {
       }
     }
   }
-  return encontrados.length ? encontrados : extraerTablaSimple(libro, fecha, lote);
+  return encontrados.length ? encontrados : extraerTablaSimple(XLSX, libro, fecha, lote);
 };

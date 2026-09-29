@@ -51,3 +51,76 @@
   .app-v10 .v10-plant-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .app-v10 header .v10-search-action { padding: 5px 9px; }
 }
+@media (min-width: 900px) {
+  .v10-mobile-nav,
+  .v10-mobile-drawer-overlay,
+  .v10-header-mobile-menu-btn { display: none !important; }
+}
+
+@media (max-width: 899px) {
+  .v10-desktop-nav { display: none !important; }
+  .v10-main { padding-bottom: 95px !important; }
+}
+
+.v10-mobile-nav::-webkit-scrollbar { display: none; }
+
+@keyframes v10ModalIn {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.v10-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.v10-badge-alerta { background: #FBEAE6; color: #C4442A; border: 1px solid #F5C6BA; }
+.v10-badge-aviso { background: #FDF3E0; color: #9A6605; border: 1px solid #F8DFB3; }
+.v10-badge-ok { background: #E7EFE8; color: #14432A; border: 1px solid #C8DEC9; }
+
+.v10-breadcrumbs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  margin-bottom: 14px;
+  background: #F8F8F4;
+  border: 1px solid #E8E8DF;
+  border-radius: 12px;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.v10-breadcrumbs-trail { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.v10-breadcrumbs-crumb {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #6B7266;
+  font: 500 12.5px inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.v10-breadcrumbs-crumb:hover { color: #14432A; text-decoration: underline; }
+.v10-breadcrumbs-current { color: #1C1F1A; font-weight: 700; }
+.v10-breadcrumbs-sep { color: #A3A89E; font-size: 11px; }
+.v10-copy-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid #C8DEC9;
+  border-radius: 8px;
+  background: #E7EFE8;
+  color: #14432A;
+  font: 600 11.5px inherit;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.v10-copy-link-btn:hover { background: #D4E6D6; }

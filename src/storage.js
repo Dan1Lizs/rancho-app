@@ -117,6 +117,9 @@ export async function leerBodegaActual() {
 async function escribirColeccion(claveCache, tabla, arregloNuevo) {
   const base = ultimaVersion.get(claveCache) || [];
   const porId = new Map(base.map((it) => [String(it.id), it]));
+  const actual = await leerColeccion(tabla);
+  if (actual === null) return false;
+  const actualPorId = new Map(actual.map((it) => [String(it.id), it]));
   const usados = new Set();
   const filas = [];
 
@@ -125,24 +128,31 @@ async function escribirColeccion(claveCache, tabla, arregloNuevo) {
     const idStr = String(item.id);
     usados.add(idStr);
     const previo = porId.get(idStr);
-    if (!previo || JSON.stringify(previo) !== JSON.stringify(item)) {
+    const remoto = actualPorId.get(idStr);
+    const cambioLocal = !previo || JSON.stringify(previo) !== JSON.stringify(item);
+    const cambioRemoto = previo && (!remoto || JSON.stringify(previo) !== JSON.stringify(remoto));
+    if (cambioLocal && cambioRemoto && JSON.stringify(remoto) !== JSON.stringify(item)) {
+      console.warn(`Conflicto de edición en ${tabla}/${idStr}`);
+      return false;
+    }
+    if (!previo && remoto && JSON.stringify(remoto) !== JSON.stringify(item)) {
+      console.warn(`Identificador duplicado en ${tabla}/${idStr}`);
+      return false;
+    }
+    if (cambioLocal && JSON.stringify(remoto) !== JSON.stringify(item)) {
       filas.push({ id: idStr, data: item });
     }
   }
-  const aBorrar = [...porId.keys()].filter((idb) => !usados.has(idb));
+  const aBorrar = [...porId.keys()].filter((idb) => {
+    if (usados.has(idb)) return false;
+    const remoto = actualPorId.get(idb);
+    if (!remoto || JSON.stringify(remoto) === JSON.stringify(porId.get(idb))) return true;
+    console.warn(`No se eliminó ${tabla}/${idb}: cambió en otro dispositivo`);
+    return false;
+  });
+  if ([...porId.keys()].some((idb) => !usados.has(idb) && actualPorId.has(idb) && !aBorrar.includes(idb))) return false;
 
   try {
-    if (tabla === "lotes") {
-      // Si otro usuario eliminó un lote desde nuestra última lectura, una
-      // actualización con estado viejo no puede volver a insertarlo.
-      const anteriores = filas.filter(f => porId.has(f.id)).map(f => f.id);
-      for (let i = 0; i < anteriores.length; i += 400) {
-        const { data, error } = await supabase.from("lotes").select("id").in("id", anteriores.slice(i, i + 400));
-        if (error) { revisarError(error); return false; }
-        const presentes = new Set((data || []).map(f => String(f.id)));
-        if (anteriores.slice(i, i + 400).some(id => !presentes.has(id))) return false;
-      }
-    }
     // Se envía en bloques por si algún día una colección crece mucho
     for (let i = 0; i < filas.length; i += 400) {
       const { error } = await supabase.from(tabla).upsert(filas.slice(i, i + 400));
@@ -156,7 +166,10 @@ async function escribirColeccion(claveCache, tabla, arregloNuevo) {
         if (error) return false;
       }
     }
-    ultimaVersion.set(claveCache, arregloNuevo);
+    const finalPorId = new Map(actual.map((it) => [String(it.id), it]));
+    aBorrar.forEach((id) => finalPorId.delete(id));
+    filas.forEach((fila) => finalPorId.set(fila.id, fila.data));
+    ultimaVersion.set(claveCache, [...finalPorId.values()]);
     if (filas.length || aBorrar.length || arregloNuevo.length) await marcarSembrada(tabla);
     return true;
   } catch (e) {
