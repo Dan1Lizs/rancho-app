@@ -254,6 +254,23 @@ export async function corregirDetallePlanta({ id, visto, campos, motivo, respons
   return nuevo;
 }
 
+export async function leerAjustesPlantaBorrados() {
+  const { data, error } = await supabase.from("config").select("data")
+    .like("key", "granja2:ajustePlantaBorrado:%");
+  if (error) throw error;
+  return (data || []).map(f => f.data).sort((a, b) => String(b.instante).localeCompare(String(a.instante)));
+}
+
+export async function borrarAjustePlanta({ original, motivo }) {
+  if (!motivo?.trim()) throw new Error("Indica el motivo de la eliminación.");
+  const { data, error } = await supabase.rpc("borrar_ajuste_planta", {
+    p_id: String(original.id), p_visto: original, p_motivo: motivo.trim(),
+  });
+  if (error) throw error;
+  ultimaVersion.delete("granja2:plantaMovs");
+  return data;
+}
+
 export async function leer(key, porDefecto) {
   try {
     if (ES_CXP(key)) {

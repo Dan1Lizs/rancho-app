@@ -14,7 +14,7 @@ class Capturador extends React.Component {
         <div style={{ minHeight: "100vh", background: "#F6F6F1", padding: 24, fontFamily: "sans-serif" }}>
           <div style={{ maxWidth: 640, margin: "40px auto", background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 6px 30px rgba(0,0,0,0.08)" }}>
             <h2 style={{ color: "#C4442A", marginTop: 0 }}>⚠️ La app encontró un error al arrancar</h2>
-            <p style={{ fontSize: 14, color: "#333" }}>Tómale captura a este recuadro y envíasela a Claude — con esto se arregla:</p>
+            <p style={{ fontSize: 14, color: "#333" }}>Toma una captura de este mensaje y compártela con el equipo de soporte.</p>
             <pre style={{ background: "#FBEAE6", padding: 14, borderRadius: 10, fontSize: 12, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
 {String(this.state.error?.message || this.state.error)}
 {"\n\n"}{String(this.state.error?.stack || "").slice(0, 800)}
@@ -64,7 +64,7 @@ function Raiz() {
 window.addEventListener("error", (e) => {
   const root = document.getElementById("root");
   if (root && !root.hasChildNodes()) {
-    root.innerHTML = `<div style="padding:30px;font-family:sans-serif"><h3 style="color:#C4442A">⚠️ Error al cargar la app</h3><pre style="background:#FBEAE6;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap">${e.message}\n${e.filename}:${e.lineno}</pre><p>Captura esto y envíaselo a Claude.</p></div>`;
+    root.innerHTML = `<div style="padding:30px;font-family:sans-serif"><h3 style="color:#C4442A">⚠️ Error al cargar la app</h3><p>Recarga la página. Si el problema continúa, toma una captura y contacta al equipo de soporte.</p></div>`;
   }
 });
 
