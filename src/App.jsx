@@ -2461,20 +2461,7 @@ export default function App() {
   const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
   const irA = (id) => { if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id); else abrirVista(id); };
 
-  const faltantesCapturaHoy = activos.filter(l => !registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length;
-  const numAdvertencias = auditoriaVisibles.length;
-  const bodegaHoyRegistrada = bodegaMovs.some(m => m.fecha === hoyStr());
-  const bodegaHoyCerrada = bodegaMovs.some(m => m.fecha === hoyStr() && m.cierreVerificado);
-  const facVencidas = facturasAbiertas.filter(f => diasVence(f) < 0).length;
-  const vacsAtrasadas = activos.reduce((acc, l) => acc + planVac.filter(p => estadoVacunaLote(l, p).estado === "atrasada").length, 0);
 
-  const badgePorTab = {
-    captura: faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" },
-    revision: numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditoría` } : null,
-    bodega: !bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "●", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "✓", tipo: "ok", titulo: "Cierre de bodega verificado" },
-    cxp: facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
-    pesaje: vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
-  };
 
   useEffect(() => {
     const h = leerHashRuta();
@@ -2859,6 +2846,22 @@ export default function App() {
       {PERIODOS_HISTORIAL.map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}
     </select>
   </label>;
+
+  const faltantesCapturaHoy = activos.filter(l => !registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length;
+  const numAdvertencias = auditoriaVisibles.length;
+  const bodegaHoyRegistrada = bodegaMovs.some(m => m.fecha === hoyStr());
+  const bodegaHoyCerrada = bodegaMovs.some(m => m.fecha === hoyStr() && m.cierreVerificado);
+  const facVencidas = facturasAbiertas.filter(f => diasVence(f) < 0).length;
+  const vacsAtrasadas = activos.reduce((acc, l) => acc + planVac.filter(p => estadoVacunaLote(l, p).estado === "atrasada").length, 0);
+
+  const badgePorTab = {
+    captura: faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" },
+    revision: numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditoría` } : null,
+    bodega: !bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "●", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "✓", tipo: "ok", titulo: "Cierre de bodega verificado" },
+    cxp: facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
+    pesaje: vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
+  };
+
   if (printDoc) {
     const l = printDoc.lote ? lotes.find(x => x.id === printDoc.lote) : null;
     const celda = { padding: "7px 6px", borderBottom: "1px solid #ccc", fontSize: 12.5, textAlign: "left", verticalAlign: "top" };
