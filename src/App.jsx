@@ -1592,27 +1592,100 @@ export default function App() {
   const desdeApertura = (fechaDmy) => !aperturaP || aDate(fechaDmy) >= aperturaP;
   const servidoAvesTotal = registros.filter(r => desdeApertura(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
   const sumaMovs = (cat, tipo) => movsPlanta.filter(m => m.categoria === cat && m.tipo === tipo && desdeApertura(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0);
+
+  const extraerKilosConteo = (m, fKey) => {
+    if (m?.conteosFormula?.[fKey] != null && !isNaN(Number(m.conteosFormula[fKey]))) return Number(m.conteosFormula[fKey]);
+    if (m?.saldoReal != null && Number(m.saldoReal) > 0) return Number(m.saldoReal);
+    const match = String(m?.detalle || "").match(/Conteo físico.*:\s*([0-9.]+)/i);
+    if (match && !isNaN(Number(match[1]))) return Number(match[1]);
+    return Number(m?.kg || 0);
+  };
+
+  const formulasAves = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Aves").map(([n]) => n);
+  const formulasGanado = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Ganado").map(([n]) => n);
+
+  const saldosAvesFormula = (() => {
+    const res = saldosFormulasDesdeConteo("Aves", formulasAves, movsPlanta, registros) || {};
+    formulasAves.forEach(f => {
+      const ajF = movsPlanta.filter(m => m.tipo === "ajuste" && (m.formula === f || m.conteosFormula?.[f] != null));
+      if (ajF.length > 0) {
+        const ult = [...ajF].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
+        const val = extraerKilosConteo(ult, f);
+        const fDate = aDate(ult.fecha);
+        const bPost = movsPlanta.filter(m => m.tipo === "bache" && m.formula === f && aDate(m.fecha) > fDate).reduce((s, m) => s + Number(m.kg || 0), 0);
+        const sPost = registros.filter(r => r.formulaConcentrado === f && aDate(r.fecha) > fDate).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
+        res[f] = Math.max(0, +(val + bPost - sPost).toFixed(1));
+      }
+    });
+    return res;
+  })();
+
+  const saldosGanadoFormula = (() => {
+    const res = saldosFormulasDesdeConteo("Ganado", formulasGanado, movsPlanta, registros) || {};
+    formulasGanado.forEach(f => {
+      const ajF = movsPlanta.filter(m => m.tipo === "ajuste" && (m.formula === f || m.conteosFormula?.[f] != null));
+      if (ajF.length > 0) {
+        const ult = [...ajF].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
+        const val = extraerKilosConteo(ult, f);
+        const fDate = aDate(ult.fecha);
+        const bPost = movsPlanta.filter(m => m.tipo === "bache" && m.formula === f && aDate(m.fecha) > fDate).reduce((s, m) => s + Number(m.kg || 0), 0);
+        const sPost = movsPlanta.filter(m => m.tipo === "servido" && m.formula === f && aDate(m.fecha) > fDate).reduce((s, m) => s + Number(m.kg || 0), 0);
+        res[f] = Math.max(0, +(val + bPost - sPost).toFixed(1));
+      }
+    });
+    return res;
+  })();
+
   const saldoAves = (() => {
+    if (saldosAvesFormula) {
+      const vals = Object.values(saldosAvesFormula).filter(v => v != null && !isNaN(Number(v)));
+      if (vals.length > 0) {
+        return Math.max(0, +vals.reduce((s, n) => s + Number(n), 0).toFixed(1));
+      }
+    }
     const ajustesAves = movsPlanta.filter(m => m.tipo === "ajuste" && (m.categoria === "Aves" || usoFormula(m.formula) === "Aves"));
     if (ajustesAves.length > 0) {
-      const ultAjuste = [...ajustesAves].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
-      const baseReal = Number(ultAjuste.saldoReal != null ? ultAjuste.saldoReal : (ultAjuste.kg || 0));
-      const fAjDate = aDate(ultAjuste.fecha);
-      const bachesPost = movsPlanta.filter(m => m.tipo === "bache" && (m.categoria === "Aves" || usoFormula(m.formula) === "Aves") && aDate(m.fecha) > fAjDate).reduce((s, m) => s + Number(m.kg || 0), 0);
-      const servidoPost = registros.filter(r => aDate(r.fecha) > fAjDate).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
-      return Math.max(0, +(baseReal + bachesPost - servidoPost).toFixed(1));
+      const porFormula = {};
+      [...ajustesAves].sort((a, b) => fechaVal(a.fecha) - fechaVal(b.fecha)).forEach(m => {
+        const k = m.formula || "Aves";
+        porFormula[k] = { val: extraerKilosConteo(m, k), fecha: m.fecha };
+      });
+      let tot = Object.values(porFormula).reduce((s, x) => s + Number(x.val || 0), 0);
+      const ultF = Object.values(porFormula).sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0]?.fecha;
+      if (ultF) {
+        const dF = aDate(ultF);
+        const bPost = movsPlanta.filter(m => m.tipo === "bache" && (m.categoria === "Aves" || usoFormula(m.formula) === "Aves") && aDate(m.fecha) > dF).reduce((s, m) => s + Number(m.kg || 0), 0);
+        const sPost = registros.filter(r => aDate(r.fecha) > dF).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
+        tot = tot + bPost - sPost;
+      }
+      return Math.max(0, +tot.toFixed(1));
     }
     return Math.max(0, +(Number(plantaCfg.inicialAves || 0) + sumaMovs("Aves", "bache") + sumaMovs("Aves", "ajuste") - servidoAvesTotal).toFixed(1));
   })();
+
   const saldoGanado = (() => {
+    if (saldosGanadoFormula) {
+      const vals = Object.values(saldosGanadoFormula).filter(v => v != null && !isNaN(Number(v)));
+      if (vals.length > 0) {
+        return Math.max(0, +vals.reduce((s, n) => s + Number(n), 0).toFixed(1));
+      }
+    }
     const ajustesGanado = movsPlanta.filter(m => m.tipo === "ajuste" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado"));
     if (ajustesGanado.length > 0) {
-      const ultAjuste = [...ajustesGanado].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
-      const baseReal = Number(ultAjuste.saldoReal != null ? ultAjuste.saldoReal : (ultAjuste.kg || 0));
-      const fAjDate = aDate(ultAjuste.fecha);
-      const bachesPost = movsPlanta.filter(m => m.tipo === "bache" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado") && aDate(m.fecha) > fAjDate).reduce((s, m) => s + Number(m.kg || 0), 0);
-      const servidoPost = movsPlanta.filter(m => m.tipo === "servido" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado") && aDate(m.fecha) > fAjDate).reduce((s, m) => s + Number(m.kg || 0), 0);
-      return Math.max(0, +(baseReal + bachesPost - servidoPost).toFixed(1));
+      const porFormula = {};
+      [...ajustesGanado].sort((a, b) => fechaVal(a.fecha) - fechaVal(b.fecha)).forEach(m => {
+        const k = m.formula || "Ganado";
+        porFormula[k] = { val: extraerKilosConteo(m, k), fecha: m.fecha };
+      });
+      let tot = Object.values(porFormula).reduce((s, x) => s + Number(x.val || 0), 0);
+      const ultF = Object.values(porFormula).sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0]?.fecha;
+      if (ultF) {
+        const dF = aDate(ultF);
+        const bPost = movsPlanta.filter(m => m.tipo === "bache" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado") && aDate(m.fecha) > dF).reduce((s, m) => s + Number(m.kg || 0), 0);
+        const sPost = movsPlanta.filter(m => m.tipo === "servido" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado") && aDate(m.fecha) > dF).reduce((s, m) => s + Number(m.kg || 0), 0);
+        tot = tot + bPost - sPost;
+      }
+      return Math.max(0, +tot.toFixed(1));
     }
     return Math.max(0, +(Number(plantaCfg.inicialGanado || 0) + sumaMovs("Ganado", "bache") + sumaMovs("Ganado", "ajuste") - sumaMovs("Ganado", "servido")).toFixed(1));
   })();
@@ -1812,7 +1885,7 @@ export default function App() {
     const esNucleo = fAjPlanta.categoria === "Núcleo";
     const formula = fAjPlanta.formula;
     if (!responsable || fAjPlanta.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esConcentrado ? !formulas.includes(formula) : !formula)) { avisar("⚠ Elige una fórmula e indica responsable, cantidad real y fecha válida"); return; }
-    if (esConcentrado && fAjPlanta.fecha !== hoyISO()) { avisar("⚠ Para cuadrar el saldo actual por fórmula, realiza el conteo con la fecha de hoy"); return; }
+    if (esConcentrado && fAjPlanta.fecha > hoyISO()) { avisar("⚠ La fecha del conteo no puede ser futura"); return; }
     setGuardando(true);
     try {
       const movimientos = await leer(K.planta, null);
@@ -1826,9 +1899,8 @@ export default function App() {
       if (esConcentrado && fAjPlanta.categoria === "Aves" && !registrosActuales) throw new Error("No se pudo consultar el servido de aves actual");
       const saldos = esConcentrado ? saldosFormulasDesdeConteo(fAjPlanta.categoria, formulas, movimientos, registrosActuales) : null;
       const anteriorFormula = saldos?.[formula] ?? null;
-      const delta = esConcentrado ? deltaConteoFormula(actual, saldos, formula, real, formulas) : +(real - actual).toFixed(2);
-      if (!delta && !esConcentrado) { avisar("✓ El saldo ya cuadra — sin ajuste necesario"); return; }
-      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { formula, kg: delta, saldoFormulaAnterior: anteriorFormula, conteosFormula: { [formula]: real } }), saldoAnterior: actual, saldoReal: esConcentrado ? +(actual + delta).toFixed(2) : real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico de ${formula}: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
+      const delta = +(real - actual).toFixed(2);
+      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { formula, kg: delta, saldoFormulaAnterior: anteriorFormula, conteosFormula: { [formula]: real } }), saldoAnterior: actual, saldoReal: real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico de ${formula}: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
       if (!(await escribir(K.planta, [evento, ...movimientos]))) throw new Error("No se pudo registrar el ajuste en el historial");
       setPlantaMovs([evento, ...movimientos]);
       if (esNucleo) {
@@ -2191,10 +2263,7 @@ export default function App() {
   };
   const proveedoresCat = [...new Set(mpCat.map(m => m.prov).filter(Boolean))];
 
-  const formulasAves = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Aves").map(([n]) => n);
-  const formulasGanado = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Ganado").map(([n]) => n);
-  const saldosAvesFormula = saldosFormulasDesdeConteo("Aves", formulasAves, movsPlanta, registros);
-  const saldosGanadoFormula = saldosFormulasDesdeConteo("Ganado", formulasGanado, movsPlanta, registros);
+// formulasAves y saldos definidos arriba
   const sumaBache = (f) => Object.values(f.items).reduce((a, b) => a + Number(b || 0), 0);
 
   // ── Pedido de Materia Prima ──
@@ -6889,100 +6958,220 @@ const cssEtapaB = `
                 return { l, ult, ant, st, stAnt, meta, brechaG, brechaP, ganancia, diasPesaje };
               });
 
-              const pesadosConDatos = resumenLotes.filter(x => x.st);
-              const promGranja = pesadosConDatos.length ? Math.round(pesadosConDatos.reduce((s, x) => s + x.st.prom, 0) / pesadosConDatos.length) : null;
-              const unifGranja = pesadosConDatos.length ? +(pesadosConDatos.reduce((s, x) => s + x.st.unif, 0) / pesadosConDatos.length).toFixed(1) : null;
-              const cvGranja = pesadosConDatos.length ? +(pesadosConDatos.reduce((s, x) => s + x.st.cv, 0) / pesadosConDatos.length).toFixed(1) : null;
-              const totalAvesMuestreadas = pesadosConDatos.reduce((s, x) => s + x.st.n, 0);
-
               return (
-                <Seccion titulo="Evaluación técnica de peso corporal y uniformidad" sub="Tu medida crítica de lote — peso promedio, uniformidad (>85%), CV y comparación vs tabla genética">
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-                    <KPI etiqueta="Peso prom. parvada" valor={promGranja != null ? promGranja : "—"} unidad="g" sub="Promedio de galeras" />
-                    <KPI etiqueta="Uniformidad global" valor={unifGranja != null ? `${unifGranja}%` : "—"} unidad="" tono={unifGranja >= 85 ? "ok" : unifGranja >= 80 ? undefined : "alerta"} sub="Meta recomendada: >85%" />
-                    <KPI etiqueta="Variabilidad (CV)" valor={cvGranja != null ? `${cvGranja}%` : "—"} unidad="" tono={cvGranja <= 8 ? "ok" : cvGranja <= 10 ? undefined : "alerta"} sub="Meta: <8% excelente" />
-                    <KPI etiqueta="Muestra total" valor={totalAvesMuestreadas} unidad="aves" sub={`${pesadosConDatos.length} de ${activos.length} galeras pesadas`} />
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: 18, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.verde }}>
+                        Evaluación técnica por gallinero
+                      </h2>
+                      <div style={{ fontSize: 12.5, color: C.textoSuave }}>
+                        Estadísticas zootécnicas independientes para cada parvada activa: peso promedio, uniformidad (>85%), CV y ganancia.
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => setSubPesaje("pesajes")} style={{ ...btnStyle, width: "auto", padding: "8px 14px", fontSize: 13 }}>
+                        ➕ Registrar pesaje
+                      </button>
+                      <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                        🖨 Imprimir informe
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
-                      <thead>
-                        <tr style={{ color: C.textoSuave, fontSize: 11.5, textAlign: "right", borderBottom: `2px solid ${C.borde}` }}>
-                          <th style={{ textAlign: "left", padding: "8px 6px" }}>Gallinero / Genética</th>
-                          <th style={{ padding: "8px 6px" }}>Último control</th>
-                          <th style={{ padding: "8px 6px" }}>Peso prom.</th>
-                          <th style={{ padding: "8px 6px" }}>Meta tabla</th>
-                          <th style={{ padding: "8px 6px" }}>Brecha vs tabla</th>
-                          <th style={{ padding: "8px 6px" }}>Uniformidad</th>
-                          <th style={{ padding: "8px 6px" }}>CV</th>
-                          <th style={{ padding: "8px 6px" }}>Ganancia</th>
-                          <th style={{ padding: "8px 6px" }}>Acción</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resumenLotes.map(({ l, ult, ant, st, stAnt, meta, brechaG, brechaP, ganancia, diasPesaje }) => {
-                          const colBrecha = brechaP == null ? C.textoSuave : Math.abs(brechaP) <= 4 ? C.verde : Math.abs(brechaP) <= 8 ? "#9A6605" : C.alerta;
-                          const colUnif = !st ? C.textoSuave : st.unif >= 85 ? C.verde : st.unif >= 80 ? "#9A6605" : C.alerta;
-                          return (
-                            <tr key={l.id} style={{ borderBottom: `1px solid ${C.borde}`, textAlign: "right" }}>
-                              <td style={{ textAlign: "left", padding: "10px 6px" }}>
-                                <b>Gallinero {l.galpon}</b> <span style={{ fontSize: 11.5, color: C.textoSuave }}>({l.raza} · {semanasDe(l.nac).toFixed(0)} sem)</span>
-                              </td>
-                              <td style={{ padding: "10px 6px" }}>
-                                {ult ? (
-                                  <div>
-                                    <b>{ult.fecha.slice(0, 5)}</b> <span style={{ fontSize: 11, color: C.textoSuave }}>({ult.pesos.length} aves)</span>
-                                    {diasPesaje > 21 && <div style={{ fontSize: 10.5, color: C.alerta, fontWeight: 600 }}>⚠ {diasPesaje} días sin pesar</div>}
-                                  </div>
-                                ) : <span style={{ color: C.textoSuave }}>Sin pesaje</span>}
-                              </td>
-                              <td style={{ padding: "10px 6px", fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, fontWeight: 700 }}>
-                                {st ? `${st.prom.toFixed(0)} g` : "—"}
-                              </td>
-                              <td style={{ padding: "10px 6px", color: C.textoSuave }}>
-                                {meta ? `${meta} g` : "—"}
-                              </td>
-                              <td style={{ padding: "10px 6px", fontWeight: 700, color: colBrecha }}>
-                                {brechaG != null ? `${brechaG >= 0 ? "+" : ""}${brechaG} g (${brechaP >= 0 ? "+" : ""}${brechaP}%)` : "—"}
-                              </td>
-                              <td style={{ padding: "10px 6px" }}>
-                                {st ? (
-                                  <span style={{ padding: "3px 8px", borderRadius: 10, background: st.unif >= 85 ? C.verdeSuave : st.unif >= 80 ? C.yemaSuave : C.alertaSuave, color: colUnif, fontWeight: 700 }}>
-                                    {st.unif.toFixed(1)}%
-                                  </span>
-                                ) : "—"}
-                              </td>
-                              <td style={{ padding: "10px 6px", color: st && st.cv <= 8 ? C.verde : st && st.cv <= 10 ? "#9A6605" : C.alerta, fontWeight: 600 }}>
-                                {st ? `${st.cv.toFixed(1)}%` : "—"}
-                              </td>
-                              <td style={{ padding: "10px 6px", fontSize: 12 }}>
-                                {ganancia != null ? (
-                                  <span style={{ color: ganancia >= 0 ? C.verde : C.alerta, fontWeight: 600 }}>
-                                    {ganancia >= 0 ? "+" : ""}{ganancia} g
-                                  </span>
-                                ) : ant ? "—" : <span style={{ color: C.textoSuave, fontSize: 11 }}>1er pesaje</span>}
-                              </td>
-                              <td style={{ padding: "10px 6px" }}>
-                                <button type="button" onClick={() => { setFPeso(prev => ({ ...prev, lote: l.id })); setSubPesaje("pesajes"); }} style={{ padding: "5px 9px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, cursor: "pointer" }}>
-                                  + Pesar
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  {/* Tarjetas individuales e independientes en grande por Gallinero */}
+                  {resumenLotes.map(({ l, ult, ant, st, stAnt, meta, brechaG, brechaP, ganancia, diasPesaje }) => {
+                    const colBrecha = brechaP == null ? C.textoSuave : Math.abs(brechaP) <= 4 ? C.verde : Math.abs(brechaP) <= 8 ? "#9A6605" : C.alerta;
+                    const tonoBrecha = brechaP == null ? undefined : Math.abs(brechaP) <= 4 ? "ok" : Math.abs(brechaP) <= 8 ? undefined : "alerta";
+                    const tonoUnif = !st ? undefined : st.unif >= 85 ? "ok" : st.unif >= 80 ? undefined : "alerta";
+                    const tonoCV = !st ? undefined : st.cv <= 8 ? "ok" : st.cv <= 10 ? undefined : "alerta";
 
-                  <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => setSubPesaje("pesajes")} style={{ ...btnStyle, flex: "1 1 200px", padding: "10px 14px", fontSize: 13.5 }}>
-                      ➕ Registrar nuevo pesaje
-                    </button>
-                    <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ flex: "1 1 200px", padding: "10px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                      🖨 Imprimir reporte de pesajes
-                    </button>
-                  </div>
-                </Seccion>
+                    return (
+                      <div key={l.id} style={{ background: C.superficie, border: `1.5px solid ${C.borde}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16, boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+                        {/* Cabecera del Gallinero */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, borderBottom: `1.5px solid ${C.fondo}`, paddingBottom: 12, marginBottom: 14 }}>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                              <span style={{ background: C.verde, color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 700, padding: "3px 10px", fontFamily: "'Space Grotesk', sans-serif" }}>
+                                GALLINERO {l.galpon}
+                              </span>
+                              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 17, fontWeight: 700, color: C.texto }}>
+                                {l.raza}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 12.5, color: C.textoSuave, marginTop: 4 }}>
+                              Edad actual: <b>{semanasDe(l.nac).toFixed(1)} semanas</b> ({Math.floor(semanasDe(l.nac) * 7)} días) · Población activa: <b>{l.aves.toLocaleString()} aves</b> · Nacimiento: {l.nac.split("-").reverse().join("/")}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            {ult ? (
+                              <div>
+                                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.texto }}>
+                                  Último pesaje: <b>{ult.fecha}</b> ({ult.pesos.length} aves)
+                                </div>
+                                <div style={{ fontSize: 11.5, color: diasPesaje > 21 ? C.alerta : C.verde, fontWeight: 700, marginTop: 2 }}>
+                                  {diasPesaje === 0 ? "✓ Pesado hoy" : `Hace ${diasPesaje} día(s)`} {diasPesaje > 21 ? "⚠ Control atrasado (>21 días)" : "✓ Al día"}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 12.5, color: C.alerta, fontWeight: 600, background: C.alertaSuave, padding: "3px 9px", borderRadius: 8 }}>
+                                ⚠ Sin pesajes registrados
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Estadísticas zootécnicas en grande de este Gallinero */}
+                        {st ? (
+                          <>
+                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+                              <KPI
+                                etiqueta="Peso promedio"
+                                valor={`${st.prom.toFixed(0)}`}
+                                unidad="g"
+                                tono={tonoBrecha}
+                                sub={meta ? `Meta tabla: ${meta} g (${brechaG >= 0 ? "+" : ""}${brechaG} g · ${brechaP >= 0 ? "+" : ""}${brechaP}%)` : "Sin meta configurada"}
+                              />
+                              <KPI
+                                etiqueta="Uniformidad"
+                                valor={`${st.unif.toFixed(1)}%`}
+                                unidad=""
+                                tono={tonoUnif}
+                                sub={st.unif >= 85 ? "✓ Excelente (meta >85%)" : st.unif >= 80 ? "Aceptable (meta >85%)" : "⚠ Desuniforme (<80%)"}
+                              />
+                              <KPI
+                                etiqueta="Variación (CV)"
+                                valor={`${st.cv.toFixed(1)}%`}
+                                unidad=""
+                                tono={tonoCV}
+                                sub={st.cv <= 8 ? "✓ Homogénea (<8%)" : st.cv <= 10 ? "Variabilidad normal" : "⚠ Alta dispersión"}
+                              />
+                              <KPI
+                                etiqueta="Ganancia vs anterior"
+                                valor={ganancia != null ? `${ganancia >= 0 ? "+" : ""}${ganancia}` : "—"}
+                                unidad="g"
+                                tono={ganancia >= 0 ? "ok" : "alerta"}
+                                sub={ant ? `vs ${ant.fecha.slice(0, 5)} (${stAnt?.prom.toFixed(0)} g)` : "Primer pesaje del lote"}
+                              />
+                              <KPI
+                                etiqueta="Rango de pesos"
+                                valor={`${st.min} – ${st.max}`}
+                                unidad="g"
+                                sub={`Muestra de ${st.n} aves`}
+                              />
+                            </div>
+
+                            {/* Barra visual de peso vs meta tabla */}
+                            {meta > 0 && (
+                              <div style={{ background: C.fondo, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
+                                  <span>Curva de peso vs estándar genético ({l.raza})</span>
+                                  <b>{st.prom.toFixed(0)} g de {meta} g ({((st.prom / meta) * 100).toFixed(1)}%)</b>
+                                </div>
+                                <div style={{ position: "relative", height: 10, background: C.borde, borderRadius: 5, overflow: "hidden" }}>
+                                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, (st.prom / (meta * 1.2)) * 100)}%`, background: colBrecha, borderRadius: 5 }} />
+                                  <div style={{ position: "absolute", left: `${(meta / (meta * 1.2)) * 100}%`, top: 0, height: "100%", width: 2.5, background: C.texto, zIndex: 2 }} title="Meta genética" />
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textoSuave, marginTop: 4 }}>
+                                  <span>0 g</span>
+                                  <span>Meta: {meta} g</span>
+                                  <span>+20%</span>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div style={{ padding: "12px 14px", background: C.fondo, borderRadius: 10, marginBottom: 12, fontSize: 13, color: C.textoSuave }}>
+                            Este gallinero aún no tiene pesajes guardados. Ingresa una muestra de 100 a 200 aves para ver su peso promedio, uniformidad y variabilidad.
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => { setFPeso(prev => ({ ...prev, lote: l.id })); setSubPesaje("pesajes"); }}
+                            style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: `1.5px solid ${C.verde}`, borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+                          >
+                            ➕ Pesar Gallinero {l.galpon}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Tabla resumen comparativo de todos los galpones */}
+                  <Seccion titulo="Resumen comparativo de galpones" sub="Vista consolidada lado a lado de todos los gallineros activos">
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+                        <thead>
+                          <tr style={{ color: C.textoSuave, fontSize: 11.5, textAlign: "right", borderBottom: `2px solid ${C.borde}` }}>
+                            <th style={{ textAlign: "left", padding: "8px 6px" }}>Gallinero / Genética</th>
+                            <th style={{ padding: "8px 6px" }}>Último control</th>
+                            <th style={{ padding: "8px 6px" }}>Peso prom.</th>
+                            <th style={{ padding: "8px 6px" }}>Meta tabla</th>
+                            <th style={{ padding: "8px 6px" }}>Brecha vs tabla</th>
+                            <th style={{ padding: "8px 6px" }}>Uniformidad</th>
+                            <th style={{ padding: "8px 6px" }}>CV</th>
+                            <th style={{ padding: "8px 6px" }}>Ganancia</th>
+                            <th style={{ padding: "8px 6px" }}>Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {resumenLotes.map(({ l, ult, ant, st, stAnt, meta, brechaG, brechaP, ganancia, diasPesaje }) => {
+                            const colBrecha = brechaP == null ? C.textoSuave : Math.abs(brechaP) <= 4 ? C.verde : Math.abs(brechaP) <= 8 ? "#9A6605" : C.alerta;
+                            const colUnif = !st ? C.textoSuave : st.unif >= 85 ? C.verde : st.unif >= 80 ? "#9A6605" : C.alerta;
+                            return (
+                              <tr key={l.id} style={{ borderBottom: `1px solid ${C.borde}`, textAlign: "right" }}>
+                                <td style={{ textAlign: "left", padding: "10px 6px" }}>
+                                  <b>Gallinero {l.galpon}</b> <span style={{ fontSize: 11.5, color: C.textoSuave }}>({l.raza} · {semanasDe(l.nac).toFixed(0)} sem)</span>
+                                </td>
+                                <td style={{ padding: "10px 6px" }}>
+                                  {ult ? (
+                                    <div>
+                                      <b>{ult.fecha.slice(0, 5)}</b> <span style={{ fontSize: 11, color: C.textoSuave }}>({ult.pesos.length} aves)</span>
+                                      {diasPesaje > 21 && <div style={{ fontSize: 10.5, color: C.alerta, fontWeight: 600 }}>⚠ {diasPesaje} d</div>}
+                                    </div>
+                                  ) : <span style={{ color: C.textoSuave }}>Sin pesaje</span>}
+                                </td>
+                                <td style={{ padding: "10px 6px", fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, fontWeight: 700 }}>
+                                  {st ? `${st.prom.toFixed(0)} g` : "—"}
+                                </td>
+                                <td style={{ padding: "10px 6px", color: C.textoSuave }}>
+                                  {meta ? `${meta} g` : "—"}
+                                </td>
+                                <td style={{ padding: "10px 6px", fontWeight: 700, color: colBrecha }}>
+                                  {brechaG != null ? `${brechaG >= 0 ? "+" : ""}${brechaG} g (${brechaP >= 0 ? "+" : ""}${brechaP}%)` : "—"}
+                                </td>
+                                <td style={{ padding: "10px 6px" }}>
+                                  {st ? (
+                                    <span style={{ padding: "3px 8px", borderRadius: 10, background: st.unif >= 85 ? C.verdeSuave : st.unif >= 80 ? C.yemaSuave : C.alertaSuave, color: colUnif, fontWeight: 700 }}>
+                                      {st.unif.toFixed(1)}%
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                                <td style={{ padding: "10px 6px", color: st && st.cv <= 8 ? C.verde : st && st.cv <= 10 ? "#9A6605" : C.alerta, fontWeight: 600 }}>
+                                  {st ? `${st.cv.toFixed(1)}%` : "—"}
+                                </td>
+                                <td style={{ padding: "10px 6px", fontSize: 12 }}>
+                                  {ganancia != null ? (
+                                    <span style={{ color: ganancia >= 0 ? C.verde : C.alerta, fontWeight: 600 }}>
+                                      {ganancia >= 0 ? "+" : ""}{ganancia} g
+                                    </span>
+                                  ) : ant ? "—" : <span style={{ color: C.textoSuave, fontSize: 11 }}>1er pesaje</span>}
+                                </td>
+                                <td style={{ padding: "10px 6px" }}>
+                                  <button type="button" onClick={() => { setFPeso(prev => ({ ...prev, lote: l.id })); setSubPesaje("pesajes"); }} style={{ padding: "5px 9px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, cursor: "pointer" }}>
+                                    + Pesar
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Seccion>
+                </>
               );
             })()}
 
