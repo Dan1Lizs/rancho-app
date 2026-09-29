@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import * as XLSX from "xlsx";
-import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirDetallePlanta } from "./storage";
+import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirDetallePlanta, leerAjustesPlantaBorrados, borrarAjustePlanta } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
@@ -30,6 +29,13 @@ const C = {
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
 const VERSION_APP = "10.0";
+const SECCIONES_MENU = {
+  bodega: [["operacion", "Movimiento y cierre"], ["historial", "Historial de bodega"]],
+  planta: [["produccion", "Producción"], ["nucleo", "Núcleos"], ["servido", "Servido a ganado"], ["ajustes", "Conteo físico"], ["facturas", "Facturas"], ["historial", "Historial de planta"], ["apertura", "Inventario inicial"]],
+  pesaje: [["registro", "Registrar pesaje"], ["comparacion", "Peso y uniformidad"], ["buscar", "Buscar y corregir"], ["vacunas", "Vacunación"], ["medicina", "Enfermedades"], ["laboratorio", "Laboratorio"]],
+  lotes: [["lotes", "Lotes y edición"], ["genetica", "Tablas por raza"]],
+  reporte: [["resumen", "Reporte diario"], ["gestion", "Auditoría de gestión"], ["indicadores", "Indicadores"]],
+};
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -54,6 +60,9 @@ const hoyISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+const mostrarDecimal = valor => valor !== null && valor !== undefined && valor !== "" && Number.isFinite(Number(valor))
+  ? Number(Number(valor).toFixed(2)).toLocaleString("es-CR", { maximumFractionDigits: 2 })
+  : "—";
 const sumarDias = (dmy, dias) => {
   const [d, m, y] = dmy.split("/").map(Number);
   const f = new Date(y, m - 1, d + Number(dias));
@@ -330,6 +339,7 @@ export default function App() {
   const [errorCarga, setErrorCarga] = useState(false);
   const [cargandoFondo, setCargandoFondo] = useState(false);
   const [vista, setVista] = useState(() => localStorage.getItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`) || "inicio");
+  const [subVista, setSubVista] = useState({ bodega: "operacion", planta: "produccion", pesaje: "registro", lotes: "lotes", reporte: "resumen" });
   const [busquedaGlobal, setBusquedaGlobal] = useState("");
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [menuMovil, setMenuMovil] = useState(false);
@@ -349,6 +359,9 @@ export default function App() {
   const [filtroPlanta, setFiltroPlanta] = useState(filtroPlantaInicial);
   const [editarDetallePlanta, setEditarDetallePlanta] = useState(null);
   const [motivoDetallePlanta, setMotivoDetallePlanta] = useState("");
+  const [ajustePorBorrar, setAjustePorBorrar] = useState(null);
+  const [motivoBorradoAjuste, setMotivoBorradoAjuste] = useState("");
+  const [ajustesPlantaBorrados, setAjustesPlantaBorrados] = useState([]);
   const [facturas, setFacturas] = useState([]);
   const [vacunas, setVacunas] = useState([]);
   const [enfermedades, setEnfermedades] = useState([]);
@@ -622,6 +635,7 @@ export default function App() {
       setLotes(ls); setRegistros(ordenarPorFecha(rs)); setPesajes(ordenarPorFecha(ps0));
       if (primera) try { const b = JSON.parse(localStorage.getItem(`borrador-control:${window.__usuarioEmail || "local"}:${fechaCapturaRef.current}`) || "null"); if (b && Date.now() - b.guardadoEl < 7 * 86400000) setBorradorDisponible(b); } catch { /* sin borrador local */ }
       leerCorreccionesProduccion().then(setCorreccionesProduccion).catch(console.error);
+      leerAjustesPlantaBorrados().then(setAjustesPlantaBorrados).catch(console.error);
       if (primera) setCapturas(Object.fromEntries(ls.map(l => [l.id, capturaVacia()])));
       setErrorCarga(false);
       baseLista = true;
@@ -1195,6 +1209,21 @@ export default function App() {
     setGuardando(false);
   };
 
+  const confirmarBorradoAjuste = async () => {
+    if (!ajustePorBorrar || !motivoBorradoAjuste.trim() || guardando) return;
+    setGuardando(true);
+    try {
+      const resultado = await borrarAjustePlanta({ original: ajustePorBorrar, motivo: motivoBorradoAjuste });
+      setPlantaMovs(v => v.filter(m => String(m.id) !== String(ajustePorBorrar.id)));
+      if (resultado.inventario) setNucleoInv(resultado.inventario);
+      setAjustesPlantaBorrados(v => [resultado.evento, ...v]);
+      setAjustePorBorrar(null);
+      setMotivoBorradoAjuste("");
+      avisar("✓ Ajuste eliminado; saldo y auditoría actualizados");
+    } catch (e) { avisar(`⚠ No se eliminó el ajuste: ${e.message}`); }
+    finally { setGuardando(false); }
+  };
+
   const eliminarFacturaPlanta = async (f) => {
     const clave = `delfacpl:${f.id || f.fecha + f.proveedor}`;
     if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para eliminar esta factura"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
@@ -1328,7 +1357,7 @@ export default function App() {
   const abrirExcelPesajes = async (archivo) => {
     if (!archivo) return;
     try {
-      const datos = extraerPesajesExcel(await archivo.arrayBuffer(), { fecha: fPeso.fecha, lote: fPeso.lote });
+      const datos = await extraerPesajesExcel(await archivo.arrayBuffer(), { fecha: fPeso.fecha, lote: fPeso.lote });
       const asignados = datos.map(p => {
         if (p.lote) return { ...p, incluir: p.fecha <= hoyISO() && p.incluir };
         const posibles = lotes.filter(l => String(l.galpon) === p.galpon && p.fecha >= l.nac &&
@@ -1926,7 +1955,7 @@ export default function App() {
         const espKg = Number(r.alimentoEsperadoKg || 0) || (l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0);
         if (espKg > 0 && r.alimentoKg > 0) {
           const desvR = ((r.alimentoKg - espKg) / espKg) * 100;
-          if (Math.abs(desvR) > 5) decisiones.push({ nivel: desvR > 0 ? "amarillo" : "rojo", texto: `Gallinero ${l.galpon}: se sirvieron ${r.alimentoKg} kg vs ${espKg.toFixed(1)} kg de ración definida (${desvR > 0 ? "+" : ""}${desvR.toFixed(1)}%). ${desvR > 0 ? "Posible desperdicio o sobrealimentación." : "Las aves comieron menos de lo definido — revisar salud, agua o calidad del alimento."}` });
+          if (Math.abs(desvR) > 5) decisiones.push({ nivel: desvR > 0 ? "amarillo" : "rojo", texto: `Gallinero ${l.galpon}: se sirvieron ${mostrarDecimal(r.alimentoKg)} kg vs ${espKg.toFixed(1)} kg de ración definida (${desvR > 0 ? "+" : ""}${desvR.toFixed(1)}%). ${desvR > 0 ? "Posible desperdicio o sobrealimentación." : "Las aves comieron menos de lo definido — revisar salud, agua o calidad del alimento."}` });
         } else if (gAve > 125) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: consumo de ${gAve.toFixed(0)} g/ave/día — posible desperdicio o sobreconsumo.` });
       }
     });
@@ -1998,7 +2027,7 @@ export default function App() {
   ];
   const tabsVisibles = tabs.filter(t => (esAdmin || t.id !== "cxp") && (miRol !== "bodega" || ["inicio", "bodega", "reporte", "historial"].includes(t.id)) && (miRol !== "planta" || ["inicio", "planta", "pedidomp", "formulas", "revision", "reporte"].includes(t.id)) && (miRol !== "bienestar" || ["inicio", "pesaje", "insumos", "lotes", "reporte", "revision"].includes(t.id)));
   useEffect(() => { if (!tabsVisibles.some(t => t.id === vista)) setVista("inicio"); }, [vista, esAdmin, miRol]);
-  const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
+  const abrirVista = (id, seccion) => { setVista(id); if (seccion) setSubVista(v => ({ ...v, [id]: seccion })); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
   const irA = (id) => { if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id); else abrirVista(id); };
   const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
     ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
@@ -2011,15 +2040,16 @@ export default function App() {
     ...mpCat.map(m => ({ texto: `Materia prima ${m.n || ""} · ${m.c || ""}`, vista: "pedidomp" })),
     ...(esAdmin ? (cxp.facturas || []).map(f => ({ texto: `Factura ${f.proveedor || ""} · ${f.numero || ""}`, vista: "cxp" })) : []),
   ].filter(x => x.texto.toLocaleLowerCase("es").includes(busquedaGlobal.trim().toLocaleLowerCase("es"))).slice(0, 30);
-  const abrirResultado = r => { if (r.vista === "historial" && r.fecha) setHistFecha(r.fecha); if (r.vista === "bodega" && r.fecha) cambiarFechaBodega(r.fecha); if (r.lote) setGalponActivo(r.lote); if (r.formula) setRecActiva(r.formula); irA(r.vista); };
+  const abrirResultado = r => { if (r.vista === "historial" && r.fecha) setHistFecha(r.fecha); if (r.vista === "bodega" && r.fecha) { cambiarFechaBodega(r.fecha); setSubVista(v => ({ ...v, bodega: "operacion" })); } if (r.vista === "pesaje" && r.fecha) setSubVista(v => ({ ...v, pesaje: "buscar" })); if (r.lote) setGalponActivo(r.lote); if (r.formula) setRecActiva(r.formula); irA(r.vista); };
   const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta, filtroPlanta);
   const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
     const filas = [
       ...correccionesProduccion.map(c => ({ fecha: c.instante, area: "Producción", accion: c.accion, responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.cartones} cart`, despues: c.nuevo ? `${c.nuevo.cartones} cart` : "Retirado" })),
-      ...bodegaMovs.flatMap(m => (m.historialEdiciones || []).map(c => ({ fecha: c.fechaHora, area: "Bodega", accion: "Edición", responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.saldoFinal} cart`, despues: `${c.nuevo?.saldoFinal} cart` }))),
-      ...bodegaMovs.filter(m => m.cierreVerificado).map(m => ({ fecha: m.cierreVerificado.fechaHora, area: "Bodega", accion: "Cierre verificado", responsable: m.cierreVerificado.responsable, motivo: "Salidas, devoluciones y conteo", antes: "", despues: `${m.saldoFinal} cart` })),
+      ...bodegaMovs.flatMap(m => (m.historialEdiciones || []).map(c => ({ fecha: c.fechaHora, area: "Bodega", accion: "Edición", responsable: c.por, motivo: c.motivo, antes: `${mostrarDecimal(c.anterior?.saldoFinal)} cart`, despues: `${mostrarDecimal(c.nuevo?.saldoFinal)} cart` }))),
+      ...bodegaMovs.filter(m => m.cierreVerificado).map(m => ({ fecha: m.cierreVerificado.fechaHora, area: "Bodega", accion: "Cierre verificado", responsable: m.cierreVerificado.responsable, motivo: "Salidas, devoluciones y conteo", antes: "", despues: `${mostrarDecimal(m.saldoFinal)} cart` })),
       ...plantaMovs.filter(m => m.tipo === "ajuste").map(m => ({ fecha: m.registradoEl || m.fecha, area: "Planta", accion: "Conteo físico", responsable: m.responsable || m.por, motivo: m.detalle, antes: m.saldoAnterior, despues: m.saldoReal })),
+      ...ajustesPlantaBorrados.map(a => ({ fecha: a.instante, area: "Planta", accion: "Ajuste eliminado", responsable: a.por, motivo: a.motivo, antes: `${a.original?.saldoReal ?? "—"} ${a.categoria === "Núcleo" ? "porciones" : "kg"}`, despues: "Ajuste retirado" })),
       ...plantaMovs.flatMap(m => (m.historialEdiciones || []).map(ed => ({ fecha: ed.fechaHora, area: "Planta", accion: "Corrección de detalle", responsable: ed.responsable || ed.por, motivo: ed.motivo, antes: [ed.anterior?.detalle, ed.anterior?.numBache, ed.anterior?.numNucleo].filter(Boolean).join(" · "), despues: [ed.nuevo?.detalle, ed.nuevo?.numBache, ed.nuevo?.numNucleo].filter(Boolean).join(" · ") }))),
       ...advAjustes.map(a => ({ fecha: a.fecha, area: "Auditoría", accion: a.accion, responsable: a.responsable, motivo: a.razon, antes: a.textoOriginal, despues: a.nuevoTexto })),
       ...tareasProgramadas.flatMap(t => (t.historialRealizaciones || []).map(h => ({ fecha: h.registradoEl || h.fecha, area: "Actividades", accion: h.accion === "reversión" ? "Realización deshecha" : "Realización", responsable: h.por, motivo: t.nombre, antes: "", despues: h.responsable || "" }))),
@@ -2494,7 +2524,7 @@ export default function App() {
                           <td style={celda}><b>Saldo aves:</b> {l2.aves.toLocaleString()}</td>
                         </tr>
                         <tr>
-                          <td style={celda}><b>7. Alimento:</b> 6am {r.alimento6am || "—"} kg · 1pm {r.alimento1pm || "—"} kg · Total {r.alimentoKg} kg (esperado {r.alimentoEsperadoKg} kg)</td>
+                          <td style={celda}><b>7. Alimento:</b> 6am {mostrarDecimal(r.alimento6am)} kg · 1pm {mostrarDecimal(r.alimento1pm)} kg · Total {mostrarDecimal(r.alimentoKg)} kg (esperado {mostrarDecimal(r.alimentoEsperadoKg)} kg)</td>
                           <td style={celda}><b>Agua:</b> {r.aguaL ? `${r.aguaL} L` : "—"}</td>
                         </tr>
                       </tbody>
@@ -2718,7 +2748,7 @@ export default function App() {
                       {fila("Destruido / quebrado", mov.destruido, "−")}
                       {fila("Regalado", mov.regalado, "−")}
                       {mov.ajusteConteo != null && <tr><td style={celda}>Ajuste por conteo físico</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{mov.ajusteConteo} ({mov.difAjuste > 0 ? "+" : ""}{mov.difAjuste})</td></tr>}
-                      <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{mov.saldoFinal}</td></tr>
+                      <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{mostrarDecimal(mov.saldoFinal)}</td></tr>
                     </tbody>
                   </table>
                   {mov.repartos?.length > 0 && (
@@ -2750,7 +2780,7 @@ export default function App() {
                           <td style={celda}>{m2.fecha}</td>
                           <td style={celda}>{m2.producido ?? "—"}</td>
                           <td style={celda}>{m2.rutaNeta ?? "—"}</td>
-                          <td style={{ ...celda, fontWeight: 600 }}>{m2.saldoFinal}{m2.ajusteConteo != null ? " *" : ""}</td>
+                          <td style={{ ...celda, fontWeight: 600 }}>{mostrarDecimal(m2.saldoFinal)}{m2.ajusteConteo != null ? " *" : ""}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -3008,9 +3038,15 @@ export default function App() {
         <label>Motivo de la corrección<textarea style={{ ...inputStyle, width: "100%" }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} /></label>
         <div style={{ display: "flex", gap: 9 }}><button disabled={guardando} onClick={guardarDetallePlanta}>Guardar corrección</button><button onClick={() => setEditarDetallePlanta(null)}>Cancelar</button></div>
       </div></div>}
+      {ajustePorBorrar && <div className="v10-overlay"><div className="v10-search" role="dialog" aria-modal="true" aria-label="Eliminar ajuste de conteo físico" style={{ padding: 20 }}>
+        <h3>Eliminar ajuste de conteo físico</h3>
+        <p>{ajustePorBorrar.fecha} · {ajustePorBorrar.categoria} · {ajustePorBorrar.formula}. Se retirará este ajuste del cálculo actual; los movimientos posteriores permanecen. El motivo y el ajuste original quedarán en el historial de anulaciones.</p>
+        <label>Motivo de la eliminación<textarea autoFocus style={{ ...inputStyle, width: "100%" }} rows={2} value={motivoBorradoAjuste} onChange={e => setMotivoBorradoAjuste(e.target.value)} /></label>
+        <div style={{ display: "flex", gap: 9, marginTop: 12 }}><button disabled={guardando || !motivoBorradoAjuste.trim()} onClick={confirmarBorradoAjuste} style={{ ...btnStyle, flex: 1, background: C.alerta }}>Eliminar ajuste</button><button disabled={guardando} onClick={() => { setAjustePorBorrar(null); setMotivoBorradoAjuste(""); }}>Cancelar</button></div>
+      </div></div>}
       <nav className="v10-desktop-nav" aria-label="Navegación principal">
         <div className="v10-menu-brand">Rancho El Soñado <small>Operación de la granja</small></div>
-        {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => <button key={t.id} className={vista === t.id ? "v10-active" : ""} aria-current={vista === t.id ? "page" : undefined} onClick={() => irA(t.id)}>{t.nombre}</button>)}</div>)}
+        {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => <div key={t.id}><button className={vista === t.id ? "v10-active" : ""} aria-expanded={SECCIONES_MENU[t.id] ? vista === t.id : undefined} onClick={() => irA(t.id)}>{t.nombre}{SECCIONES_MENU[t.id] && <span aria-hidden="true"> ▾</span>}</button>{vista === t.id && SECCIONES_MENU[t.id] && <div className="v10-submenu">{SECCIONES_MENU[t.id].map(([id, nombre]) => <button key={id} className={subVista[t.id] === id ? "v10-subactive" : ""} aria-current={subVista[t.id] === id ? "page" : undefined} onClick={() => abrirVista(t.id, id)}>{nombre}</button>)}</div>}</div>)}</div>)}
         <button className="v10-menu-search" onClick={() => setBuscadorAbierto(true)}>⌕ Buscar · Ctrl K</button>
       </nav>
       {buscadorAbierto && <div className="v10-overlay" role="presentation" onClick={() => setBuscadorAbierto(false)}><div className="v10-search" role="dialog" aria-modal="true" aria-label="Buscar en la granja" onClick={e => e.stopPropagation()}>
@@ -3021,7 +3057,7 @@ export default function App() {
       {revisionGuardado && <div style={{ position: "fixed", inset: 0, zIndex: 110, background: "rgba(20,30,24,.6)", display: "grid", placeItems: "center", padding: 14 }}>
         <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "min(100%,560px)", maxHeight: "85vh", overflowY: "auto" }}>
           <h3 style={{ marginTop: 0 }}>Revisar antes de guardar · {fechaCaptura}</h3>
-          {activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => { const c = capturas[l.id]; const t = totalesGalpon(c); const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id); return <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}><b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento · {c?.muertas || 0} muertas{anterior && <div style={{ color: C.textoSuave }}>Antes: {anterior.cartones} cartones · {anterior.alimentoKg} kg alimento · {anterior.muertas} muertas</div>}</div>; })}
+          {activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => { const c = capturas[l.id]; const t = totalesGalpon(c); const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id); return <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}><b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {mostrarDecimal(Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0))} kg alimento · {c?.muertas || 0} muertas{anterior && <div style={{ color: C.textoSuave }}>Antes: {anterior.cartones} cartones · {mostrarDecimal(anterior.alimentoKg)} kg alimento · {anterior.muertas} muertas</div>}</div>; })}
           {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6 }}>⚠ {a}</div>)}
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}><button onClick={() => setRevisionGuardado(null)} style={{ flex: 1 }}>Volver a editar</button><button disabled={guardando} onClick={() => { const id = revisionGuardado; setRevisionGuardado(null); guardarDia(id === "todos" ? null : id); }} style={{ ...btnStyle, flex: 1 }}>Confirmar y guardar</button></div>
         </div>
@@ -3164,6 +3200,7 @@ export default function App() {
       </header>
 
       <main className="v10-main" style={{ maxWidth: 880, margin: "0 auto", padding: 16 }}>
+        {SECCIONES_MENU[vista] && <nav className="v10-section-tabs" aria-label={`Secciones de ${tabs.find(t => t.id === vista)?.nombre || vista}`}>{SECCIONES_MENU[vista].map(([id, nombre]) => <button key={id} type="button" aria-current={subVista[vista] === id ? "page" : undefined} onClick={() => abrirVista(vista, id)}>{nombre}</button>)}</nav>}
         {miRol === "sin_acceso" && <div role="alert" className="v10-security-alert">Tu cuenta no tiene un rol activo. Solicita acceso a un administrador.</div>}
         {miRol === "consulta" && <div className="v10-security-alert">Acceso de consulta: los cambios están bloqueados por la base de datos.</div>}
         {vista === "inicio" && <>
@@ -3249,7 +3286,7 @@ export default function App() {
             {loteActivo && <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 10, marginTop: -6 }}>
               Gallinero {loteActivo.galpon} · {loteActivo.raza} · nacidas {loteActivo.nac.split("-").reverse().join("/")} · <b>{semanasDe(loteActivo.nac).toFixed(1)} semanas</b> · {loteActivo.aves.toLocaleString()} aves
             </div>}
-            {loteActivo && (() => { const prev = registros.filter(r => r.lote === loteActivo.id && fechaHistorialISO(r.fecha) < fechaCaptura).sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))[0]; const actual = totalesGalpon(capturas[loteActivo.id]); return prev ? <div style={{ fontSize: 12, background: C.verdeSuave, borderRadius: 9, padding: 8, marginBottom: 10 }}>Último control G{loteActivo.galpon} ({prev.fecha}): {prev.cartones} cartones · {prev.alimentoKg} kg alimento · {prev.muertas} muertas. Ahora: {actual.cartones} cartones.</div> : null; })()}
+            {loteActivo && (() => { const prev = registros.filter(r => r.lote === loteActivo.id && fechaHistorialISO(r.fecha) < fechaCaptura).sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))[0]; const actual = totalesGalpon(capturas[loteActivo.id]); return prev ? <div style={{ fontSize: 12, background: C.verdeSuave, borderRadius: 9, padding: 8, marginBottom: 10 }}>Último control G{loteActivo.galpon} ({prev.fecha}): {prev.cartones} cartones · {mostrarDecimal(prev.alimentoKg)} kg alimento · {prev.muertas} muertas. Ahora: {actual.cartones} cartones.</div> : null; })()}
 
             <Seccion accion={<BotonGuardaMini />} num="1" titulo="Producción por tiquete" sub="Número de tiquete, cartones y peso (kg)">
               {cap.tiquetes.map((t, i) => (
@@ -3520,10 +3557,10 @@ export default function App() {
         )}
 
         {/* ══ REPORTE ══ */}
-        {vista === "reporte" && (
+        {vista === "reporte" && subVista.reporte === "resumen" && (
           <button onClick={() => setPrintDoc({ tipo: "reporte" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte gerencial</button>
         )}
-        {vista === "reporte" && dHoy && (() => {
+        {vista === "reporte" && subVista.reporte === "resumen" && dHoy && (() => {
           const Delta = ({ hoy, contra, invertir, unidad = "", dec = 1 }) => {
             if (contra == null || !isFinite(contra)) return <span style={{ color: C.textoSuave }}>—</span>;
             const d = hoy - contra;
@@ -3663,7 +3700,7 @@ export default function App() {
             </>
           );
         })()}
-        {vista === "reporte" && !dHoy && (
+        {vista === "reporte" && subVista.reporte === "resumen" && !dHoy && (
           <Seccion titulo="Reporte del día">
             <div style={{ fontSize: 14, color: C.textoSuave }}>Aún no hay registros. Captura el control diario y el reporte se genera solo.</div>
           </Seccion>
@@ -3671,6 +3708,7 @@ export default function App() {
         {/* ══ BODEGA ══ */}
         {vista === "bodega" && (
           <>
+            {subVista.bodega === "operacion" && <>
             {retirosActivos.length > 0 && (
               <div style={{ background: C.alertaSuave, border: `1px solid #EBC0B5`, borderRadius: 14, padding: "12px 15px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.5 }}>
                 <b>🔴 Retiro de medicamento activo:</b> {retirosActivos.map(m => `G${m.galpon} (${m.producto}) hasta ${m.retiroHasta}`).join(" · ")}. No comercializar huevo de esos gallineros.
@@ -3839,8 +3877,9 @@ export default function App() {
               </div>
               {bodegaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La bodega abre el {bodegaCfg.inicialFecha.split("-").reverse().join("/")} con {bodegaCfg.inicialCart || 0} cartones.</div>}
             </Seccion>
+            </>}
 
-            {bodegaMovs.length > 0 && (
+            {subVista.bodega === "historial" && bodegaMovs.length > 0 && (
               <Seccion titulo="Historial de bodega">
                 {selectorHistorial("bodega")}
                 {historialVisible(bodegaMovs, "bodega").map(m => {
@@ -3848,16 +3887,16 @@ export default function App() {
                   return <div key={m.id} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 7 }}>
                       <span><b>{m.fecha}</b> · +{m.producido} prod · −{Number(m.rutaNeta || 0).toFixed(1)} ruta{duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> · cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
-                      <b style={{ color: C.verde }}>= {m.saldoFinal} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
+                      <b style={{ color: C.verde }}>= {mostrarDecimal(m.saldoFinal)} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${mostrarDecimal(m.difAjuste)}` : ""})</span>}</b>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
-                      <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
+                      <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); abrirVista("bodega", "operacion"); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
                       <button onClick={() => setPrintDoc({ tipo: "bodega", movimientoId: m.id })} style={{ padding: "5px 9px", fontSize: 11.5, background: "#fff", color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>🖨 Imprimir</button>
                     </div>
                     {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
                       {m.historialEdiciones.map((c, i) => <div key={i} style={{ padding: "7px 0", borderTop: `1px solid ${C.borde}`, fontSize: 11.5 }}>
                         <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> · {mostrarNombre(c.por)} · {c.motivo}<br />
-                        Antes: {c.anterior?.saldoFinal ?? "—"} cart → después: {c.nuevo?.saldoFinal ?? "—"} cart.
+                        Antes: {mostrarDecimal(c.anterior?.saldoFinal)} cart → después: {mostrarDecimal(c.nuevo?.saldoFinal)} cart.
                         {!!c.duplicadosRetirados?.length && <details><summary>Registros duplicados retirados ({c.duplicadosRetirados.length})</summary>{c.duplicadosRetirados.map((retirado, j) => <ResumenMovimientoBodega key={j} movimiento={retirado} />)}</details>}
                         <details><summary>Ver datos modificados</summary><CambiosBodega anterior={c.anterior} nuevo={c.nuevo} /></details>
                       </div>)}
@@ -3888,7 +3927,7 @@ export default function App() {
               </>}
             </div>)}
 
-            <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
+            {subVista.planta === "produccion" && <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
               <select value={fBache.formula} onChange={e => setFBache({ ...fBache, formula: e.target.value })} style={selectStyle}>
                 {Object.keys(recetas.formulas).map(f => <option key={f} value={f}>{f} — {usoFormula(f)}</option>)}
               </select>
@@ -3906,9 +3945,9 @@ export default function App() {
                 style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
                 🖨 Imprimir checklist del bache (básculas 1–4)
               </button>
-            </Seccion>
+            </Seccion>}
 
-            <Seccion titulo="Núcleo — premezcla de micros (báscula 4)" sub="Produce porciones por adelantado; cada bache de concentrado descuenta 1 porción automáticamente">
+            {subVista.planta === "nucleo" && <Seccion titulo="Núcleo — premezcla de micros (báscula 4)" sub="Produce porciones por adelantado; cada bache de concentrado descuenta 1 porción automáticamente">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
                 {Object.entries(recetas.formulas).filter(([n2]) => kgNucleoDe(n2) > 0).map(([n2]) => {
                   const disp = nucleoInv[n2] || 0;
@@ -3938,9 +3977,9 @@ export default function App() {
                   🖨 Imprimir hoja de núcleo
                 </button>
               </div>
-            </Seccion>
+            </Seccion>}
 
-            <Seccion titulo="B. Servido a ganado" sub="Calcula el servido de hoy desde animales × kg por animal configurados en Materias primas, o registra el peso real manualmente.">
+            {subVista.planta === "servido" && <Seccion titulo="B. Servido a ganado" sub="Calcula el servido de hoy desde animales × kg por animal configurados en Materias primas, o registra el peso real manualmente.">
               {(() => {
                 const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), plantaMovs);
                 return <div style={{ background: C.verdeSuave, borderRadius: 12, padding: 13, marginBottom: 16 }}>
@@ -3982,9 +4021,9 @@ export default function App() {
                 <Campo mitad etiqueta="Detalle / corral" type="text" placeholder="ej. Potreros + toros" value={fServGan.detalle} onChange={e => setFServGan({ ...fServGan, detalle: e.target.value })} />
               </div>
               <button onClick={guardarServidoGanado} disabled={guardando} style={btnStyle}>Registrar servido a ganado</button>
-            </Seccion>
+            </Seccion>}
 
-            <Seccion titulo="C. Ajuste por conteo físico" sub="Cuenta el concentrado real y la app registra la diferencia">
+            {subVista.planta === "ajustes" && <Seccion titulo="C. Ajuste por conteo físico" sub="Cuenta el concentrado real y la app registra la diferencia">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 40%" }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
@@ -4004,10 +4043,11 @@ export default function App() {
               <button onClick={guardarAjustePlanta} disabled={guardando} style={btnStyle}>Registrar ajuste</button>
               <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes físicos</div>
               {selectorHistorial("ajustesPlanta")}
-              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}><b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}{m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" · ")}</div>}</div>)}
-            </Seccion>
+              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}><b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}{m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" · ")}</div>}{!["consulta", "sin_acceso", "bienestar", "bodega"].includes(miRol) && <button disabled={guardando} onClick={() => setAjustePorBorrar(m)} style={{ marginTop: 7, color: C.alerta }}>Eliminar ajuste</button>}</div>)}
+              {!!ajustesPlantaBorrados.length && <details style={{ marginTop: 12, fontSize: 12 }}><summary>Ver ajustes eliminados ({ajustesPlantaBorrados.length})</summary>{historialVisible(ajustesPlantaBorrados, "ajustesPlanta").map(a => <div key={a.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}` }}><b>{a.fecha} · {a.categoria} · {a.formula}</b> · Eliminado por {mostrarNombre(a.por)} el {new Date(a.instante).toLocaleString("es-CR")}. Motivo: {a.motivo}</div>)}</details>}
+            </Seccion>}
 
-            <Seccion titulo="D. Productos y facturas recibidas">
+            {subVista.planta === "facturas" && <Seccion titulo="D. Productos y facturas recibidas">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo tercio etiqueta="Proveedor" type="text" placeholder="ej. AVIN" value={fFactura.proveedor} onChange={e => setFFactura({ ...fFactura, proveedor: e.target.value })} />
                 <Campo tercio etiqueta="Producto" type="text" placeholder="ej. Maíz 2 ton" value={fFactura.producto} onChange={e => setFFactura({ ...fFactura, producto: e.target.value })} />
@@ -4028,9 +4068,9 @@ export default function App() {
                   </div>
                 ))}
               </div>
-            </Seccion>
+            </Seccion>}
 
-            {movsPlanta.length > 0 && (
+            {subVista.planta === "historial" && movsPlanta.length > 0 && (
               <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. El detalle se puede corregir con motivo; las cantidades se concilian mediante ajuste físico.">
                 <div className="v10-plant-filters">
                   <input aria-label="Buscar movimiento de planta" placeholder="Fórmula, detalle, número o responsable" value={filtroPlanta.texto} onChange={e => setFiltroPlanta(v => ({ ...v, texto: e.target.value }))} />
@@ -4047,6 +4087,7 @@ export default function App() {
                     <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
                     {m.tipo !== "ajuste" && <button onClick={() => eliminarMovPlanta(m)} title="Eliminar (revierte efectos)" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>}
+                    {m.tipo === "ajuste" && !["consulta", "sin_acceso", "bienestar", "bodega"].includes(miRol) && <button onClick={() => setAjustePorBorrar(m)} disabled={guardando} title="Eliminar ajuste con motivo" style={{ padding: "0 9px", fontSize: 14, color: C.alerta, border: "none", background: "transparent", cursor: "pointer" }}>×</button>}
                     </div>
                     <button onClick={() => { setEditarDetallePlanta({ original: plantaMovs.find(x => String(x.id) === String(m.id)) || m, campos: { detalle: m.detalle || "", numBache: m.numBache || "", numNucleo: m.numNucleo || "", responsable: m.responsable || m.por || completadoPor } }); setMotivoDetallePlanta(""); }} style={{ marginTop: 7, fontSize: 12 }}>Corregir detalle</button>
                     {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} · {mostrarNombre(ed.por)} · {ed.motivo}<div>Antes: {ed.anterior?.detalle || ed.anterior?.numBache || ed.anterior?.numNucleo || "—"} → Después: {ed.nuevo?.detalle || ed.nuevo?.numBache || ed.nuevo?.numNucleo || "—"}</div></div>)}</details>}
@@ -4056,7 +4097,7 @@ export default function App() {
               </Seccion>
             )}
 
-            <Seccion titulo="Apertura de planta — inventario inicial" sub="Desde la fecha de apertura corren los balances; baches y consumos anteriores quedan como histórico sin afectar">
+            {subVista.planta === "apertura" && <Seccion titulo="Apertura de planta — inventario inicial" sub="Desde la fecha de apertura corren los balances; baches y consumos anteriores quedan como histórico sin afectar">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo tercio etiqueta="Inicial AVES (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialAves} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialAves: e.target.value })} />
                 <Campo tercio etiqueta="Inicial GANADO (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialGanado} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialGanado: e.target.value })} />
@@ -4066,7 +4107,7 @@ export default function App() {
                 </label>
               </div>
               {plantaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La planta abre el {plantaCfg.inicialFecha.split("-").reverse().join("/")} con {plantaCfg.inicialAves || 0} kg (aves) y {plantaCfg.inicialGanado || 0} kg (ganado).</div>}
-            </Seccion>
+            </Seccion>}
           </>
         )}
         {/* ══ PEDIDO MATERIA PRIMA ══ */}
@@ -4562,7 +4603,7 @@ export default function App() {
           );
         })()}
         {/* ══ KPIs ══ */}
-        {vista === "reporte" && (() => {
+        {vista === "reporte" && subVista.reporte === "gestion" && (() => {
           const avesTot = activos.reduce((a, l) => a + l.aves, 0);
           const kgHuevoHoy = regsHoy.reduce((a, r) => a + Number(r.pesoKg || 0), 0);
           const masaHuevo = avesTot > 0 && kgHuevoHoy > 0 ? (kgHuevoHoy * 1000) / avesTot : null;
@@ -4691,7 +4732,7 @@ export default function App() {
             </>
           );
         })()}
-        {vista === "reporte" && (
+        {vista === "reporte" && subVista.reporte === "indicadores" && (
           <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="% Postura" valor={posturaDia.toFixed(1)} unidad="%" tono={posturaDia < 80 ? "alerta" : "ok"} sub={`${huevosDia.toLocaleString()} huevos · Est.: ≥85%`} />
@@ -5091,8 +5132,9 @@ export default function App() {
             muertas: resMesLote.reduce((s, x) => s + x.muertas, 0),
           };
 
-          const exportar = () => {
+          const exportar = async () => {
             try {
+              const XLSX = await import("xlsx");
               const wb = XLSX.utils.book_new();
               const filasProd = (rsMes.length ? rsMes : registros).map(r => ({
                 Fecha: r.fecha, Gallinero: r.lote, Cartones: r.cartones, Huevos: r.cartones * HXC,
@@ -5153,7 +5195,7 @@ export default function App() {
                             <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{r.cartones}</td>
                             <td style={{ padding: "8px 4px" }}>{r.quebrados}</td>
                             <td style={{ padding: "8px 4px", color: r.muertas > 3 ? C.alerta : C.texto }}>{r.muertas}</td>
-                            <td style={{ padding: "8px 4px" }}>{r.alimentoKg}</td>
+                            <td style={{ padding: "8px 4px" }}>{mostrarDecimal(r.alimentoKg)}</td>
                             <td><button onClick={() => { setEditarProduccion({ ...r, tiquetes: (r.tiquetes || []).map(t => ({ ...t })) }); setMotivoProduccion(""); }} style={{ fontSize: 11 }}>Corregir</button></td>
                           </tr>
                         ))}
@@ -5181,7 +5223,7 @@ export default function App() {
                   </div>
                 </div>}
                 {movDia && <div style={{ fontSize: 13, marginTop: 10, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}>
-                  <b>Bodega:</b> +{movDia.producido} producido · −{(movDia.rutaNeta || 0).toFixed(1)} ruta · saldo final <b style={{ color: C.verde }}>{movDia.saldoFinal} cart</b>
+                  <b>Bodega:</b> +{mostrarDecimal(movDia.producido)} producido · −{(movDia.rutaNeta || 0).toFixed(1)} ruta · saldo final <b style={{ color: C.verde }}>{mostrarDecimal(movDia.saldoFinal)} cart</b>
                 </div>}
                 {plantaDia.map((p, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Planta:</b> {p.baches} bache(s) de {p.formula} · {p.kg} kg</div>)}
                 {fumsDia.map((f, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Fumigación G{f.galpon}:</b> {f.producto} · {f.dosis} {f.hora && `· ${f.hora}`}</div>)}
@@ -5194,8 +5236,8 @@ export default function App() {
                 {historialVisible(correccionesProduccion.map(c => ({ ...c, fecha: c.anterior?.fecha })), "correccionesProduccion").map(c => <details key={c.id} style={{ padding: 9, borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
                   <summary>{c.anterior?.fecha} · G{lotes.find(l => l.id === c.anterior?.lote)?.galpon || c.anterior?.lote} · {c.accion === "eliminar" ? "Registro retirado" : "Editado"} · {mostrarNombre(c.por)} {c.estado !== "aplicado" && `· ${c.estado}`}</summary>
                   <div>{new Date(c.instante).toLocaleString()} · Motivo: {c.motivo}</div>
-                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados · {c.anterior?.alimentoKg} kg alimento</div>
-                  {c.nuevo && <div>Después: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados · {c.nuevo.alimentoKg} kg alimento</div>}
+                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados · {mostrarDecimal(c.anterior?.alimentoKg)} kg alimento</div>
+                  {c.nuevo && <div>Después: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados · {mostrarDecimal(c.nuevo.alimentoKg)} kg alimento</div>}
                   <div>Tiquetes anteriores: {(c.anterior?.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ") || "Ninguno"}</div>
                   {c.nuevo && <div>Tiquetes corregidos: {(c.nuevo.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ")}</div>}
                 </details>)}
@@ -5385,6 +5427,7 @@ export default function App() {
         {/* ══ LOTES ══ */}
         {vista === "lotes" && (
           <>
+            {subVista.lotes === "lotes" && <>
             <button onClick={() => setPrintDoc({ tipo: "lotes" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir estado de lotes</button>
             {!formLote && (
               <button onClick={() => setFormLote({ galpon: "", lote: "", raza: "", nac: "", avesIniciales: "", formula: Object.keys(costos)[0] || "", racionGAve: "", posturaIdeal: "", pesoMeta: "", proveedor: "" })}
@@ -5457,7 +5500,8 @@ export default function App() {
               </Seccion>
             )}
 
-            <div id="tablasRazas"><Seccion titulo="Tablas genéticas por raza" sub="Selecciona una línea y una semana. Los indicadores del lote usan automáticamente la fila de su edad; los rangos se muestran tal como aparecen en la guía.">
+            </>}
+            {subVista.lotes === "genetica" && <div id="tablasRazas"><Seccion titulo="Tablas genéticas por raza" sub="Selecciona una línea y una semana. Los indicadores del lote usan automáticamente la fila de su edad; los rangos se muestran tal como aparecen en la guía.">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
                 <label style={{ flex: "2 1 220px", fontSize: 13 }}>Raza / línea
                   <select value={razaReferencia} onChange={e => { setRazaReferencia(e.target.value); setSemanaReferencia(26); }} style={inputStyle}>
@@ -5492,7 +5536,9 @@ export default function App() {
                   </div>
                 </>;
               })()}
-            </Seccion></div>
+            </Seccion></div>}
+
+            {subVista.lotes === "lotes" && <>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
               {activos.map(l => {
@@ -5505,7 +5551,7 @@ export default function App() {
                       <div>
                         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>Gallinero {l.galpon} · Lote {l.lote || ""}</div>
                         <div style={{ fontSize: 12, color: C.textoSuave }}>{l.raza} · nac. {l.nac.split("-").reverse().join("/")} · <b>{semanasDe(l.nac).toFixed(1)} sem</b></div>
-                        {claveRaza(l.raza) && <button onClick={() => { setRazaReferencia(claveRaza(l.raza)); setSemanaReferencia(fichaLote(l)?.semana || 1); document.getElementById("tablasRazas")?.scrollIntoView({ behavior: "smooth" }); }} style={{ fontSize: 11, border: 0, background: "transparent", color: C.verde, padding: "4px 0", textDecoration: "underline", cursor: "pointer" }}>Ver tabla de {REFERENCIAS_RAZAS[claveRaza(l.raza)].nombre} · semana {fichaLote(l)?.semana || "—"}</button>}
+                        {claveRaza(l.raza) && <button onClick={() => { setRazaReferencia(claveRaza(l.raza)); setSemanaReferencia(fichaLote(l)?.semana || 1); abrirVista("lotes", "genetica"); }} style={{ fontSize: 11, border: 0, background: "transparent", color: C.verde, padding: "4px 0", textDecoration: "underline", cursor: "pointer" }}>Ver tabla de {REFERENCIAS_RAZAS[claveRaza(l.raza)].nombre} · semana {fichaLote(l)?.semana || "—"}</button>}
                         {l.estadoProd && l.estadoProd !== "Producción normal" && <div style={{ display: "inline-block", marginTop: 4, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 12, background: C.yemaSuave, color: "#9A6605" }}>⚠ {l.estadoProd}</div>}
                         {l.proveedor && <div style={{ fontSize: 11.5, color: C.textoSuave }}>Pollonas: {l.proveedor}</div>}
                       </div>
@@ -5580,13 +5626,14 @@ export default function App() {
                 ))}
               </Seccion>
             )}
+            </>}
           </>
         )}
 
         {/* ══ BIENESTAR ANIMAL ══ */}
         {vista === "pesaje" && (
           <>
-            <Seccion titulo="Pesaje de la parvada" sub="Usualmente 200 aves por gallinero — pega o escribe los pesos en gramos, separados por coma, espacio o salto de línea">
+            {subVista.pesaje === "registro" && <Seccion titulo="Pesaje de la parvada" sub="Usualmente 200 aves por gallinero — pega o escribe los pesos en gramos, separados por coma, espacio o salto de línea">
               <select value={fPeso.lote} onChange={e => setFPeso({ ...fPeso, lote: e.target.value })} style={selectStyle}>
                 {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza} ({semanasDe(l.nac).toFixed(0)} sem)</option>)}
               </select>
@@ -5655,9 +5702,9 @@ export default function App() {
                 </div>
               </div>}
               <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de pesajes (Dr. / nutricionista)</button>
-            </Seccion>
+            </Seccion>}
 
-            {activos.map(l => {
+            {subVista.pesaje === "comparacion" && activos.map(l => {
               const delLote = pesajes.filter(p => p.lote === l.id);
               const ult = delLote[0];
               if (!ult) return null;
@@ -5698,7 +5745,7 @@ export default function App() {
               );
             })}
 
-            <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
+            {subVista.pesaje === "buscar" && <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
               {selectorHistorial("pesajes")}
               {(() => {
                 const filas = historialVisible(pesajes, "pesajes").map(p => {
@@ -5723,9 +5770,9 @@ export default function App() {
                   </div>
                 </>;
               })()}
-            </Seccion>
+            </Seccion>}
 
-            <Seccion titulo="Vacunación — programa y aplicación" sub="Plan del Dr. Heiner Hernández Ávila (C.M.V #666) por día de edad. Marca cada vacuna aplicada con su fecha.">
+            {subVista.pesaje === "vacunas" && <Seccion titulo="Vacunación — programa y aplicación" sub="Plan del Dr. Heiner Hernández Ávila (C.M.V #666) por día de edad. Marca cada vacuna aplicada con su fecha.">
               <button onClick={() => setPrintDoc({ tipo: "vacunas", lote: fVac.lote })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de vacunación</button>
               <select value={fVac.lote} onChange={e => setFVac({ ...fVac, lote: e.target.value })} style={selectStyle}>
                 {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza} ({semanasDe(l.nac).toFixed(0)} sem · {Math.floor(semanasDe(l.nac) * 7)} días)</option>)}
@@ -5780,9 +5827,9 @@ export default function App() {
               <div style={{ fontSize: 12, color: C.textoSuave, marginTop: 8 }}>
                 Para quitar una vacuna del programa del doctor, avísame y la removemos — así evitamos borrados accidentales del plan oficial.
               </div>
-            </Seccion>
+            </Seccion>}
 
-            <Seccion titulo="Expediente médico — Enfermedades y tratamientos" sub="Diagnósticos por gallinero con su tratamiento y estado">
+            {subVista.pesaje === "medicina" && <Seccion titulo="Expediente médico — Enfermedades y tratamientos" sub="Diagnósticos por gallinero con su tratamiento y estado">
               <button onClick={() => setPrintDoc({ tipo: "enfermedades" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir expediente</button>
               <select value={fEnf.lote} onChange={e => setFEnf({ ...fEnf, lote: e.target.value })} style={selectStyle}>
                 {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza}</option>)}
@@ -5810,9 +5857,9 @@ export default function App() {
                 })}
                 {enfermedades.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin diagnósticos registrados.</div>}
               </div>
-            </Seccion>
+            </Seccion>}
 
-            <Seccion titulo="Necropsias y laboratorio" sub="Resultados de necropsias, coprológicos, bromatológicos y otros análisis">
+            {subVista.pesaje === "laboratorio" && <Seccion titulo="Necropsias y laboratorio" sub="Resultados de necropsias, coprológicos, bromatológicos y otros análisis">
               <button onClick={() => setPrintDoc({ tipo: "necropsias" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir registro</button>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <select value={fNec.lote} onChange={e => setFNec({ ...fNec, lote: e.target.value })} style={{ ...inputStyle, flex: "1 1 45%", marginBottom: 12 }}>
@@ -5868,7 +5915,7 @@ export default function App() {
                 })}
                 {necropsias.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin resultados registrados.</div>}
               </div>
-            </Seccion>
+            </Seccion>}
           </>
         )}
       </main>
