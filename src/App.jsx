@@ -574,11 +574,225 @@ function ModalPegarTiquetes({ abierto, onCerrar, onAplicar, galponNum, tiquetesC
     </div>
   );
 }
+
+
+function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 560, pie = null, tono = "normal" }) {
+  useEffect(() => {
+    if (!abierto) return;
+    const handleKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [abierto, onClose]);
+
+  if (!abierto) return null;
+
+  return (
+    <div
+      className="v10-modal-backdrop"
+      role="presentation"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 120,
+        background: "rgba(20, 30, 24, 0.65)",
+        backdropFilter: "blur(3px)",
+        WebkitBackdropFilter: "blur(3px)",
+        display: "grid",
+        placeItems: "center",
+        padding: "16px",
+        overflowY: "auto",
+      }}
+    >
+      <div
+        className="v10-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-label={titulo || "Diálogo"}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: C.superficie,
+          borderRadius: 18,
+          border: `1px solid ${tono === "alerta" ? C.alerta : C.borde}`,
+          boxShadow: "0 14px 38px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.12)",
+          width: "100%",
+          maxWidth: ancho,
+          maxHeight: "88vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            padding: "18px 20px 14px",
+            borderBottom: `1px solid ${C.borde}`,
+            background: tono === "alerta" ? C.alertaSuave : C.superficie,
+          }}
+        >
+          <div>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 17,
+                fontFamily: "'Space Grotesk', sans-serif",
+                color: tono === "alerta" ? C.alerta : C.verde,
+                fontWeight: 700,
+              }}
+            >
+              {titulo}
+            </h3>
+            {subtitulo && (
+              <div style={{ fontSize: 12.5, color: C.textoSuave, marginTop: 4, lineHeight: 1.4 }}>
+                {subtitulo}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar ventana"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: C.textoSuave,
+              fontSize: 20,
+              lineHeight: 1,
+              padding: "4px 8px",
+              cursor: "pointer",
+              borderRadius: 8,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+        <div style={{ padding: "18px 20px", overflowY: "auto", flex: 1, fontSize: 13.5, lineHeight: 1.5 }}>
+          {children}
+        </div>
+        {pie && (
+          <div
+            style={{
+              padding: "12px 20px",
+              borderTop: `1px solid ${C.borde}`,
+              background: C.fondo,
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            {pie}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, bodegaFechaInput, recActiva, fPeso, histFecha, irA, avisar }) {
+  if (vista === "inicio") return null;
+
+  const tabActual = tabs.find(t => t.id === vista) || { nombre: vista };
+  const grupoActual = gruposMenu.find(g => g.ids.includes(vista));
+
+  let subdetalle = null;
+  if (vista === "captura") {
+    const l = lotes.find(x => x.id === galponActivo);
+    subdetalle = `Galpón ${l?.galpon || galponActivo || "1"} · ${fechaCaptura ? fechaCaptura.split("-").reverse().join("/") : "Hoy"}`;
+  } else if (vista === "bodega" && bodegaFechaInput) {
+    subdetalle = `Fecha ${bodegaFechaInput.split("-").reverse().join("/")}`;
+  } else if (vista === "formulas" && recActiva) {
+    subdetalle = `Fórmula ${recActiva}`;
+  } else if (vista === "pesaje" && fPeso?.lote) {
+    const l = lotes.find(x => x.id === fPeso.lote);
+    subdetalle = `Galpón ${l?.galpon || fPeso.lote}`;
+  } else if (vista === "historial" && histFecha) {
+    subdetalle = `Fecha ${histFecha.split("-").reverse().join("/")}`;
+  }
+
+  const copiarEnlace = () => {
+    try {
+      const url = window.location.href;
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url);
+      } else {
+        const inp = document.createElement("input");
+        inp.value = url;
+        document.body.appendChild(inp);
+        inp.select();
+        document.execCommand("copy");
+        document.body.removeChild(inp);
+      }
+      avisar?.("✓ Enlace directo copiado al portapapeles");
+    } catch {
+      avisar?.("⚠ No se pudo copiar el enlace");
+    }
+  };
+
+  return (
+    <nav className="v10-breadcrumbs" aria-label="Ruta de navegación">
+      <div className="v10-breadcrumbs-trail">
+        <button type="button" className="v10-breadcrumbs-crumb" onClick={() => irA("inicio")}>
+          Inicio
+        </button>
+        {grupoActual && (
+          <>
+            <span className="v10-breadcrumbs-sep">›</span>
+            <span style={{ color: C.textoSuave }}>{grupoActual.nombre}</span>
+          </>
+        )}
+        <span className="v10-breadcrumbs-sep">›</span>
+        <button
+          type="button"
+          className={`v10-breadcrumbs-crumb ${!subdetalle ? "v10-breadcrumbs-current" : ""}`}
+          onClick={() => irA(vista)}
+        >
+          {tabActual.nombre}
+        </button>
+        {subdetalle && (
+          <>
+            <span className="v10-breadcrumbs-sep">›</span>
+            <span className="v10-breadcrumbs-current">{subdetalle}</span>
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        className="v10-copy-link-btn"
+        onClick={copiarEnlace}
+        title="Copiar enlace directo a esta vista"
+      >
+        🔗 Copiar enlace
+      </button>
+    </nav>
+  );
+}
+
 export default function App() {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(false);
   const [cargandoFondo, setCargandoFondo] = useState(false);
-  const [vista, setVista] = useState(() => localStorage.getItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`) || "inicio");
+  const leerHashRuta = () => {
+    if (typeof window === "undefined" || !window.location.hash) return null;
+    const raw = window.location.hash.replace(/^#\/?/, "");
+    if (!raw) return null;
+    const [ruta, queryStr] = raw.split("?");
+    const params = new URLSearchParams(queryStr || "");
+    return { ruta, params };
+  };
+  const [vista, setVista] = useState(() => {
+    const h = leerHashRuta();
+    if (h && h.ruta) return h.ruta;
+    return localStorage.getItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`) || "inicio";
+  });
   const [busquedaGlobal, setBusquedaGlobal] = useState("");
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [menuMovil, setMenuMovil] = useState(false);
@@ -2246,6 +2460,88 @@ export default function App() {
   useEffect(() => { if (!tabsVisibles.some(t => t.id === vista)) setVista("inicio"); }, [vista, esAdmin, miRol]);
   const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
   const irA = (id) => { if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id); else abrirVista(id); };
+
+  const faltantesCapturaHoy = activos.filter(l => !registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length;
+  const numAdvertencias = auditoriaVisibles.length;
+  const bodegaHoyRegistrada = bodegaMovs.some(m => m.fecha === hoyStr());
+  const bodegaHoyCerrada = bodegaMovs.some(m => m.fecha === hoyStr() && m.cierreVerificado);
+  const facVencidas = facturasAbiertas.filter(f => diasVence(f) < 0).length;
+  const vacsAtrasadas = activos.reduce((acc, l) => acc + planVac.filter(p => estadoVacunaLote(l, p).estado === "atrasada").length, 0);
+
+  const badgePorTab = {
+    captura: faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" },
+    revision: numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditoría` } : null,
+    bodega: !bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "●", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "✓", tipo: "ok", titulo: "Cierre de bodega verificado" },
+    cxp: facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
+    pesaje: vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
+  };
+
+  useEffect(() => {
+    const h = leerHashRuta();
+    if (!h) return;
+    if (h.ruta && tabsVisibles.some(t => t.id === h.ruta) && h.ruta !== vista) {
+      setVista(h.ruta);
+    }
+    const g = h.params.get("galpon") || h.params.get("lote");
+    if (g && lotes.some(l => l.id === g || String(l.galpon) === String(g))) {
+      const lMatch = lotes.find(l => l.id === g || String(l.galpon) === String(g));
+      if (lMatch) setGalponActivo(lMatch.id);
+    }
+    const f = h.params.get("fecha");
+    if (f) {
+      if (h.ruta === "captura") setFechaCaptura(f);
+      if (h.ruta === "bodega") setBodegaFechaInput(f);
+      if (h.ruta === "historial") setHistFecha(f);
+    }
+    const form = h.params.get("formula");
+    if (form && recetas.formulas && recetas.formulas[form]) {
+      setRecActiva(form);
+    }
+  }, [lotes.length]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (vista === "captura") {
+      if (galponActivo) params.set("lote", galponActivo);
+      if (fechaCaptura && fechaCaptura !== hoyISO()) params.set("fecha", fechaCaptura);
+    } else if (vista === "bodega") {
+      if (bodegaFechaInput && bodegaFechaInput !== hoyISO()) params.set("fecha", bodegaFechaInput);
+    } else if (vista === "formulas") {
+      if (recActiva) params.set("formula", recActiva);
+    } else if (vista === "pesaje") {
+      if (fPeso.lote) params.set("lote", fPeso.lote);
+    } else if (vista === "historial") {
+      if (histFecha && histFecha !== hoyISO()) params.set("fecha", histFecha);
+    }
+    const pStr = params.toString();
+    const nuevoHash = `#${vista}${pStr ? "?" + pStr : ""}`;
+    if (window.location.hash !== nuevoHash) {
+      window.history.replaceState(null, "", nuevoHash);
+    }
+  }, [vista, galponActivo, fechaCaptura, bodegaFechaInput, recActiva, fPeso.lote, histFecha]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const h = leerHashRuta();
+      if (!h) return;
+      if (h.ruta && tabsVisibles.some(t => t.id === h.ruta) && h.ruta !== vista) {
+        setVista(h.ruta);
+      }
+      const g = h.params.get("galpon") || h.params.get("lote");
+      if (g) {
+        const lMatch = lotes.find(l => l.id === g || String(l.galpon) === String(g));
+        if (lMatch && lMatch.id !== galponActivo) setGalponActivo(lMatch.id);
+      }
+      const f = h.params.get("fecha");
+      if (f) {
+        if (h.ruta === "captura" && f !== fechaCaptura) setFechaCaptura(f);
+        if (h.ruta === "bodega" && f !== bodegaFechaInput) setBodegaFechaInput(f);
+        if (h.ruta === "historial" && f !== histFecha) setHistFecha(f);
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [vista, tabsVisibles, lotes, galponActivo, fechaCaptura, bodegaFechaInput, histFecha]);
   const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
     ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
     ...registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })),
@@ -3255,33 +3551,201 @@ export default function App() {
     avisar(`✓ ${nuevosTiq.length} tiquete(s) insertado(s) desde Excel`);
   };
 
+  
+const cssEtapaB = `
+@keyframes v10ModalIn {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.v10-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-left: 6px;
+  line-height: 1.2;
+}
+.v10-badge-alerta {
+  background: #FBEAE6;
+  color: #C4442A;
+  border: 1px solid #F5C6BA;
+}
+.v10-badge-aviso {
+  background: #FDF3E0;
+  color: #9A6605;
+  border: 1px solid #F8DFB3;
+}
+.v10-badge-ok {
+  background: #E7EFE8;
+  color: #14432A;
+  border: 1px solid #C8DEC9;
+}
+.v10-breadcrumbs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  margin-bottom: 14px;
+  background: #F8F8F4;
+  border-radius: 12px;
+  border: 1px solid #E8E8DF;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.v10-breadcrumbs-trail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.v10-breadcrumbs-crumb {
+  color: #6B7266;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 500;
+}
+.v10-breadcrumbs-crumb:hover {
+  color: #14432A;
+  text-decoration: underline;
+}
+.v10-breadcrumbs-current {
+  color: #1C1F1A;
+  font-weight: 700;
+}
+.v10-breadcrumbs-sep {
+  color: #A3A89E;
+  font-size: 11px;
+}
+.v10-copy-link-btn {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #14432A;
+  background: #E7EFE8;
+  border: 1px solid #C8DEC9;
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+.v10-copy-link-btn:hover {
+  background: #D4E6D6;
+}
+`;
+
   return (
     <div className="app-v10" style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
-      <style>{fuentes}</style>
-      {editarDetallePlanta && <div className="v10-overlay"><div className="v10-search" role="dialog" aria-modal="true" aria-label="Corregir detalle de planta" style={{ padding: 20 }}>
-        <h3>Corregir detalle de planta</h3><p>Movimiento del {editarDetallePlanta.original.fecha} · {editarDetallePlanta.original.formula}. Para cambiar kilos o porciones usa el ajuste por conteo físico; esta corrección conserva los saldos.</p>
-        {[...new Set(["detalle", editarDetallePlanta.original.tipo === "bache" ? "numBache" : "numNucleo", "responsable"])].map(k => <label key={k} style={{ display: "block", marginBottom: 10 }}>{({ detalle: "Detalle", numBache: "Número de bache", numNucleo: "Número de núcleo", responsable: "Responsable" })[k]}<input style={{ ...inputStyle, width: "100%" }} value={editarDetallePlanta.campos[k] || ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, [k]: e.target.value } }))} /></label>)}
-        <label>Motivo de la corrección<textarea style={{ ...inputStyle, width: "100%" }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} /></label>
-        <div style={{ display: "flex", gap: 9 }}><button disabled={guardando} onClick={guardarDetallePlanta}>Guardar corrección</button><button onClick={() => setEditarDetallePlanta(null)}>Cancelar</button></div>
-      </div></div>}
+      <style>{fuentes + cssEtapaB}</style>
+      <ModalDialog
+        abierto={!!editarDetallePlanta}
+        titulo="Corregir detalle de planta"
+        subtitulo={`Movimiento del ${editarDetallePlanta?.original?.fecha || ""} · ${editarDetallePlanta?.original?.formula || ""}. Para cambiar kilos o porciones usa el ajuste por conteo físico; esta corrección conserva los saldos.`}
+        onClose={() => setEditarDetallePlanta(null)}
+        ancho={540}
+        pie={
+          <>
+            <button type="button" onClick={() => setEditarDetallePlanta(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cancelar
+            </button>
+            <button type="button" disabled={guardando} onClick={guardarDetallePlanta} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              Guardar corrección
+            </button>
+          </>
+        }
+      >
+        {editarDetallePlanta && (
+          <>
+            {[...new Set(["detalle", editarDetallePlanta.original.tipo === "bache" ? "numBache" : "numNucleo", "responsable"])].map(k => (
+              <label key={k} style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>
+                {({ detalle: "Detalle", numBache: "Número de bache", numNucleo: "Número de núcleo", responsable: "Responsable" })[k]}
+                <input style={{ ...inputStyle, width: "100%", marginTop: 4 }} value={editarDetallePlanta.campos[k] || ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, [k]: e.target.value } }))} />
+              </label>
+            ))}
+            <label style={{ display: "block", fontSize: 12.5, fontWeight: 600 }}>
+              Motivo de la corrección
+              <textarea style={{ ...inputStyle, width: "100%", marginTop: 4 }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} placeholder="Indica el motivo de la corrección" />
+            </label>
+          </>
+        )}
+      </ModalDialog>
       <nav className="v10-desktop-nav" aria-label="Navegación principal">
         <div className="v10-menu-brand">Rancho El Soñado <small>Operación de la granja</small></div>
-        {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => <button key={t.id} className={vista === t.id ? "v10-active" : ""} aria-current={vista === t.id ? "page" : undefined} onClick={() => irA(t.id)}>{t.nombre}</button>)}</div>)}
+        {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => (
+          <button key={t.id} className={vista === t.id ? "v10-active" : ""} aria-current={vista === t.id ? "page" : undefined} onClick={() => irA(t.id)} title={badgePorTab[t.id]?.titulo || t.nombre} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>{t.nombre}</span>
+            {badgePorTab[t.id] && <span className={`v10-badge v10-badge-${badgePorTab[t.id].tipo}`}>{badgePorTab[t.id].texto}</span>}
+          </button>
+        ))}</div>)}
         <button className="v10-menu-search" onClick={() => setBuscadorAbierto(true)}>⌕ Buscar · Ctrl K</button>
       </nav>
       {buscadorAbierto && <div className="v10-overlay" role="presentation" onClick={() => setBuscadorAbierto(false)}><div className="v10-search" role="dialog" aria-modal="true" aria-label="Buscar en la granja" onClick={e => e.stopPropagation()}>
         <div className="v10-search-head"><input autoFocus aria-label="Buscar fecha, galpón, tiquete o actividad" placeholder="Fecha, galpón, tiquete, actividad…" value={busquedaGlobal} onChange={e => setBusquedaGlobal(e.target.value)} /><button onClick={() => setBuscadorAbierto(false)} aria-label="Cerrar búsqueda">✕</button></div>
         {busquedaGlobal.trim().length < 2 ? <p>Escribe al menos dos caracteres.</p> : resultadosBusqueda.length ? resultadosBusqueda.map((r, i) => <button key={i} className="v10-result" onClick={() => abrirResultado(r)}>{r.texto}</button>) : <p>No hay resultados para esta búsqueda.</p>}
       </div></div>}
-      {salidaPendiente && <div className="v10-overlay"><div className="v10-search" role="dialog" aria-modal="true" aria-label="Cambios pendientes" style={{ padding: 22 }}><h3>Hay cambios sin enviar</h3><p>El control seguirá como borrador en este dispositivo y podrás recuperarlo al volver a esta fecha.</p><div style={{ display: "flex", gap: 10 }}><button autoFocus onClick={() => setSalidaPendiente(null)}>Seguir editando</button><button onClick={() => { const id = salidaPendiente; setSalidaPendiente(null); abrirVista(id); }}>Salir y conservar borrador</button></div></div></div>}
-      {revisionGuardado && <div style={{ position: "fixed", inset: 0, zIndex: 110, background: "rgba(20,30,24,.6)", display: "grid", placeItems: "center", padding: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "min(100%,560px)", maxHeight: "85vh", overflowY: "auto" }}>
-          <h3 style={{ marginTop: 0 }}>Revisar antes de guardar · {fechaCaptura}</h3>
-          {activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => { const c = capturas[l.id]; const t = totalesGalpon(c); const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id); return <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}><b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento · {c?.muertas || 0} muertas{anterior && <div style={{ color: C.textoSuave }}>Antes: {anterior.cartones} cartones · {anterior.alimentoKg} kg alimento · {anterior.muertas} muertas</div>}</div>; })}
-          {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6 }}>⚠ {a}</div>)}
-          <div style={{ display: "flex", gap: 8, marginTop: 18 }}><button onClick={() => setRevisionGuardado(null)} style={{ flex: 1 }}>Volver a editar</button><button disabled={guardando} onClick={() => { const id = revisionGuardado; setRevisionGuardado(null); guardarDia(id === "todos" ? null : id); }} style={{ ...btnStyle, flex: 1 }}>Confirmar y guardar</button></div>
-        </div>
-      </div>}
+      <ModalDialog
+        abierto={!!salidaPendiente}
+        titulo="Hay cambios sin enviar"
+        subtitulo="El control diario seguirá guardado como borrador en este dispositivo y podrás recuperarlo al volver a esta fecha."
+        onClose={() => setSalidaPendiente(null)}
+        ancho={480}
+        tono="alerta"
+        pie={
+          <>
+            <button type="button" autoFocus onClick={() => setSalidaPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Seguir editando
+            </button>
+            <button type="button" onClick={() => { const id = salidaPendiente; setSalidaPendiente(null); abrirVista(id); }} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>
+              Salir y conservar borrador
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, color: C.textoSuave }}>Si cambias de pantalla sin enviar, tus datos no se perderán pero no estarán reflejados en los reportes hasta que confirmes el envío.</p>
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!revisionGuardado}
+        titulo={`Revisar antes de guardar · ${fechaCaptura}`}
+        subtitulo="Verifica los totales calculados antes de enviar los datos a la base compartida"
+        onClose={() => setRevisionGuardado(null)}
+        ancho={560}
+        pie={
+          <>
+            <button type="button" onClick={() => setRevisionGuardado(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Volver a editar
+            </button>
+            <button type="button" disabled={guardando} onClick={() => { const id = revisionGuardado; setRevisionGuardado(null); guardarDia(id === "todos" ? null : id); }} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              Confirmar y guardar
+            </button>
+          </>
+        }
+      >
+        {activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => {
+          const c = capturas[l.id];
+          const t = totalesGalpon(c);
+          const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id);
+          return (
+            <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
+              <b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento · {c?.muertas || 0} muertas
+              {anterior && <div style={{ color: C.textoSuave, fontSize: 11.5, marginTop: 2 }}>Antes: {anterior.cartones} cartones · {anterior.alimentoKg} kg alimento · {anterior.muertas} muertas</div>}
+            </div>
+          );
+        })}
+        {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => (
+          <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>⚠ {a}</div>
+        ))}
+      </ModalDialog>
       {modalAdv && (
         <div onClick={() => setModalAdv(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 99, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
@@ -3429,6 +3893,20 @@ export default function App() {
       </header>
 
       <main className="v10-main" style={{ maxWidth: 880, margin: "0 auto", padding: 16 }}>
+        <MigasPan
+          vista={vista}
+          tabs={tabs}
+          gruposMenu={gruposMenu}
+          lotes={lotes}
+          galponActivo={galponActivo}
+          fechaCaptura={fechaCaptura}
+          bodegaFechaInput={bodegaFechaInput}
+          recActiva={recActiva}
+          fPeso={fPeso}
+          histFecha={histFecha}
+          irA={irA}
+          avisar={avisar}
+        />
         {miRol === "sin_acceso" && <div role="alert" className="v10-security-alert">Tu cuenta no tiene un rol activo. Solicita acceso a un administrador.</div>}
         {miRol === "consulta" && <div className="v10-security-alert">Acceso de consulta: los cambios están bloqueados por la base de datos.</div>}
         {vista === "inicio" && <>
@@ -6567,86 +7045,169 @@ export default function App() {
           </>
         )}
       </main>
-      <nav className="v10-mobile-nav" aria-label="Navegación móvil">{["inicio", "captura", "bodega", "revision"].filter(id => tabsVisibles.some(t => t.id === id)).map(id => { const t = tabs.find(x => x.id === id); return <button key={id} aria-current={vista === id ? "page" : undefined} onClick={() => irA(id)}>{t.nombre}</button>; })}<button aria-expanded={menuMovil} onClick={() => setMenuMovil(v => !v)}>Más</button></nav>
-      {menuMovil && <div className="v10-mobile-more" role="dialog" aria-label="Más apartados">{tabsVisibles.filter(t => !["inicio", "captura", "bodega", "revision"].includes(t.id)).map(t => <button key={t.id} onClick={() => irA(t.id)}>{t.nombre}</button>)}</div>}
-
-      {conflictosPesaje && <div role="dialog" aria-modal="true" aria-label="Pesajes ya registrados" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
-        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(680px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
-          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Fechas con pesajes existentes</h2>
-          <p style={{ fontSize: 13 }}>Los pesajes nuevos ya se agregaron. Los actuales se conservarán, salvo los que selecciones para reemplazar. Revisa cantidad de aves y promedio antes de decidir.</p>
-          <FiltrosLista filtro={filtroConfPesajes} setFiltro={setFiltroConfPesajes} lotes={lotes} total={conflictosPesaje.items.length} visibles={filasConfPesajes.length} />
-          <button type="button" onClick={() => setConflictosPesaje(c => ({ ...c, elegidos: [...new Set([...c.elegidos, ...filasConfPesajes.map(x => x.clave)])] }))}>Marcar visibles</button>
-          <button type="button" onClick={() => { const ids = new Set(filasConfPesajes.map(x => x.clave)); setConflictosPesaje(c => ({ ...c, elegidos: c.elegidos.filter(k => !ids.has(k)) })); }} style={{ marginLeft: 8 }}>Desmarcar visibles</button>
-          {filasConfPesajes.map(x => {
-            const promedio = a => a?.pesos?.length ? Math.round(a.pesos.reduce((s, v) => s + Number(v), 0) / a.pesos.length) : 0;
-            return <label key={x.clave} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}`, alignItems: "flex-start" }}>
-              <input type="checkbox" checked={conflictosPesaje.elegidos.includes(x.clave)} onChange={e => setConflictosPesaje(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.clave] : c.elegidos.filter(k => k !== x.clave) }))} />
-              <span><b>G{x.galpon} · {x.nuevo.fecha}</b><br /><small>Actual: {x.actual.pesos?.length || 0} aves · {promedio(x.actual)} g. Excel: {x.nuevo.pesos.length} aves · {promedio(x.nuevo)} g.</small><br /><small>Marcar para reemplazar el pesaje actual.</small></span>
-            </label>;
+      <nav className="v10-mobile-nav" aria-label="Navegación móvil">
+        {["inicio", "captura", "bodega", "revision"].filter(id => tabsVisibles.some(t => t.id === id)).map(id => {
+          const t = tabs.find(x => x.id === id);
+          const b = badgePorTab[id];
+          return (
+            <button key={id} aria-current={vista === id ? "page" : undefined} onClick={() => irA(id)} style={{ position: "relative" }}>
+              {t.nombre}
+              {b && <span className={`v10-badge v10-badge-${b.tipo}`} style={{ marginLeft: 3 }}>{b.texto}</span>}
+            </button>
+          );
+        })}
+        <button aria-expanded={menuMovil} onClick={() => setMenuMovil(v => !v)}>Más</button>
+      </nav>
+      {menuMovil && (
+        <div className="v10-mobile-more" role="dialog" aria-label="Más apartados">
+          {tabsVisibles.filter(t => !["inicio", "captura", "bodega", "revision"].includes(t.id)).map(t => {
+            const b = badgePorTab[t.id];
+            return (
+              <button key={t.id} onClick={() => irA(t.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>{t.nombre}</span>
+                {b && <span className={`v10-badge v10-badge-${b.tipo}`}>{b.texto}</span>}
+              </button>
+            );
           })}
-          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-            <button disabled={importandoPesajes} onClick={aplicarConflictosPesaje} style={btnStyle}>{conflictosPesaje.elegidos.length ? `Reemplazar ${conflictosPesaje.elegidos.length} seleccionados` : "Conservar todos"}</button>
-            <button disabled={importandoPesajes} onClick={() => { setConflictosPesaje(null); setExcelPesajes([]); }}>Cerrar y conservar</button>
-          </div>
         </div>
-      </div>}
+      )}
 
-      {conflictosRespaldo && <div role="dialog" aria-modal="true" aria-label="Fechas existentes del respaldo" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
-        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(700px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
-          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Fechas que ya tienen datos</h2>
-          <p style={{ fontSize: 13 }}>Los registros faltantes del respaldo ya se agregaron. Las fechas existentes conservan los datos actuales, a menos que marques cada reemplazo.</p>
-          <FiltrosLista filtro={filtroConfRespaldo} setFiltro={setFiltroConfRespaldo} lotes={lotes} estados={["Pesaje", "Control diario"]} total={conflictosRespaldo.items.length} visibles={filasConfRespaldo.length} />
-          <button type="button" onClick={() => setConflictosRespaldo(c => ({ ...c, elegidos: [...new Set([...c.elegidos, ...filasConfRespaldo.filter(x => x.duplicados === 1).map(x => x.token)])] }))}>Marcar visibles</button>
-          <button type="button" onClick={() => { const ids = new Set(filasConfRespaldo.map(x => x.token)); setConflictosRespaldo(c => ({ ...c, elegidos: c.elegidos.filter(k => !ids.has(k)) })); }} style={{ marginLeft: 8 }}>Desmarcar visibles</button>
-          {filasConfRespaldo.map(x => <label key={x.token} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}` }}>
-            <input type="checkbox" disabled={x.duplicados !== 1} checked={conflictosRespaldo.elegidos.includes(x.token)} onChange={e => setConflictosRespaldo(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.token] : c.elegidos.filter(k => k !== x.token) }))} />
-            <span style={{ fontSize: 13 }}><b>{x.tabla === "pesajes" ? "Pesaje" : "Control diario"} · {x.lote} · {x.fecha}</b><br />
-              {x.tabla === "pesajes" ? `Actual: ${x.actual.data.pesos?.length || 0} aves · Respaldo: ${x.nuevo.pesos?.length || 0} aves` : `Actual: ${x.actual.data.cartones ?? "—"} cartones · Respaldo: ${x.nuevo.cartones ?? "—"} cartones`}
-              {x.duplicados !== 1 && <span style={{ color: C.alerta }}> · Hay {x.duplicados} registros actuales: revisar manualmente</span>}
-            </span>
-          </label>)}
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <button disabled={guardando} onClick={resolverConflictosRespaldo} style={btnStyle}>{conflictosRespaldo.elegidos.length ? `Reemplazar ${conflictosRespaldo.elegidos.length} fechas` : "Conservar todas"}</button>
-            <button disabled={guardando} onClick={() => { setConflictosRespaldo(null); location.reload(); }}>Cerrar y conservar</button>
-          </div>
-        </div>
-      </div>}
+      <ModalDialog
+        abierto={!!conflictosPesaje}
+        titulo="Fechas con pesajes existentes"
+        subtitulo="Los pesajes nuevos ya se agregaron. Los actuales se conservarán, salvo los que selecciones para reemplazar. Revisa cantidad de aves y promedio antes de decidir."
+        onClose={() => { setConflictosPesaje(null); setExcelPesajes([]); }}
+        ancho={680}
+        pie={
+          <>
+            <button type="button" disabled={importandoPesajes} onClick={() => { setConflictosPesaje(null); setExcelPesajes([]); }} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cerrar y conservar
+            </button>
+            <button type="button" disabled={importandoPesajes} onClick={aplicarConflictosPesaje} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              {conflictosPesaje?.elegidos?.length ? `Reemplazar ${conflictosPesaje.elegidos.length} seleccionados` : "Conservar todos"}
+            </button>
+          </>
+        }
+      >
+        {conflictosPesaje && (
+          <>
+            <FiltrosLista filtro={filtroConfPesajes} setFiltro={setFiltroConfPesajes} lotes={lotes} total={conflictosPesaje.items.length} visibles={filasConfPesajes.length} />
+            <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
+              <button type="button" onClick={() => setConflictosPesaje(c => ({ ...c, elegidos: [...new Set([...c.elegidos, ...filasConfPesajes.map(x => x.clave)])] }))}>Marcar visibles</button>
+              <button type="button" onClick={() => { const ids = new Set(filasConfPesajes.map(x => x.clave)); setConflictosPesaje(c => ({ ...c, elegidos: c.elegidos.filter(k => !ids.has(k)) })); }}>Desmarcar visibles</button>
+            </div>
+            {filasConfPesajes.map(x => {
+              const promedio = a => a?.pesos?.length ? Math.round(a.pesos.reduce((s, v) => s + Number(v), 0) / a.pesos.length) : 0;
+              return (
+                <label key={x.clave} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}`, alignItems: "flex-start", cursor: "pointer" }}>
+                  <input type="checkbox" checked={conflictosPesaje.elegidos.includes(x.clave)} onChange={e => setConflictosPesaje(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.clave] : c.elegidos.filter(k => k !== x.clave) }))} />
+                  <span><b>G{x.galpon} · {x.nuevo.fecha}</b><br /><small>Actual: {x.actual.pesos?.length || 0} aves · {promedio(x.actual)} g. Excel: {x.nuevo.pesos.length} aves · {promedio(x.nuevo)} g.</small><br /><small>Marcar para reemplazar el pesaje actual.</small></span>
+                </label>
+              );
+            })}
+          </>
+        )}
+      </ModalDialog>
 
-      {editarPesaje && <div role="dialog" aria-modal="true" aria-label="Corregir pesaje" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
-        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(620px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
-          <h2 style={{ margin: "0 0 12px", color: C.verde }}>Corregir pesaje</h2>
-          <p style={{ fontSize: 13 }}>Se modificará solo este registro. Una fecha existente del mismo lote no se puede duplicar.</p>
-          <label style={{ display: "block", marginBottom: 10 }}>Galera / lote
-            <select value={editarPesaje.lote} onChange={e => setEditarPesaje(p => ({ ...p, lote: e.target.value }))} style={inputStyle}>
-              {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.lote || l.id} · nac. {l.nac}</option>)}
-            </select>
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>Fecha
-            <input type="date" max={hoyISO()} value={editarPesaje.fechaISO} onChange={e => setEditarPesaje(p => ({ ...p, fechaISO: e.target.value }))} style={inputStyle} />
-          </label>
-          <label style={{ display: "block", marginBottom: 12 }}>Pesos (gramos o kg; uno por línea)
-            <textarea rows={8} value={editarPesaje.pesosTexto} onChange={e => setEditarPesaje(p => ({ ...p, pesosTexto: e.target.value }))} style={{ ...inputStyle, resize: "vertical" }} />
-          </label>
-          <button disabled={guardando} onClick={guardarEdicionPesaje} style={btnStyle}>Guardar corrección</button>
-          <button disabled={guardando} onClick={() => setEditarPesaje(null)} style={{ marginLeft: 8 }}>Cancelar</button>
-        </div>
-      </div>}
+      <ModalDialog
+        abierto={!!conflictosRespaldo}
+        titulo="Fechas que ya tienen datos"
+        subtitulo="Los registros faltantes del respaldo ya se agregaron. Las fechas existentes conservan los datos actuales, a menos que marques cada reemplazo."
+        onClose={() => { setConflictosRespaldo(null); location.reload(); }}
+        ancho={700}
+        pie={
+          <>
+            <button type="button" disabled={guardando} onClick={() => { setConflictosRespaldo(null); location.reload(); }} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cerrar y conservar
+            </button>
+            <button type="button" disabled={guardando} onClick={resolverConflictosRespaldo} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              {conflictosRespaldo?.elegidos?.length ? `Reemplazar ${conflictosRespaldo.elegidos.length} fechas` : "Conservar todas"}
+            </button>
+          </>
+        }
+      >
+        {conflictosRespaldo && (
+          <>
+            <FiltrosLista filtro={filtroConfRespaldo} setFiltro={setFiltroConfRespaldo} lotes={lotes} estados={["Pesaje", "Control diario"]} total={conflictosRespaldo.items.length} visibles={filasConfRespaldo.length} />
+            <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
+              <button type="button" onClick={() => setConflictosRespaldo(c => ({ ...c, elegidos: [...new Set([...c.elegidos, ...filasConfRespaldo.filter(x => x.duplicados === 1).map(x => x.token)])] }))}>Marcar visibles</button>
+              <button type="button" onClick={() => { const ids = new Set(filasConfRespaldo.map(x => x.token)); setConflictosRespaldo(c => ({ ...c, elegidos: c.elegidos.filter(k => !ids.has(k)) })); }}>Desmarcar visibles</button>
+            </div>
+            {filasConfRespaldo.map(x => (
+              <label key={x.token} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}`, cursor: "pointer" }}>
+                <input type="checkbox" disabled={x.duplicados !== 1} checked={conflictosRespaldo.elegidos.includes(x.token)} onChange={e => setConflictosRespaldo(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.token] : c.elegidos.filter(k => k !== x.token) }))} />
+                <span style={{ fontSize: 13 }}><b>{x.tabla === "pesajes" ? "Pesaje" : "Control diario"} · {x.lote} · {x.fecha}</b><br />
+                  {x.tabla === "pesajes" ? `Actual: ${x.actual.data.pesos?.length || 0} aves · Respaldo: ${x.nuevo.pesos?.length || 0} aves` : `Actual: ${x.actual.data.cartones ?? "—"} cartones · Respaldo: ${x.nuevo.cartones ?? "—"} cartones`}
+                  {x.duplicados !== 1 && <span style={{ color: C.alerta }}> · Hay {x.duplicados} registros actuales: revisar manualmente</span>}
+                </span>
+              </label>
+            ))}
+          </>
+        )}
+      </ModalDialog>
 
-      {pesajeEliminar && <div role="dialog" aria-modal="true" aria-label="Confirmar eliminación de pesaje" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
-        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(440px, 100%)" }}>
-          <h2 style={{ margin: "0 0 12px", color: C.alerta }}>Eliminar pesaje</h2>
-          <p>¿Eliminar definitivamente el pesaje del {pesajeEliminar.fecha} de la galera {lotes.find(l => l.id === pesajeEliminar.lote)?.galpon ?? pesajeEliminar.lote} ({pesajeEliminar.pesos?.length || 0} aves)?</p>
-          <p style={{ fontSize: 13, color: C.textoSuave }}>Se borrará solo este registro.</p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button disabled={guardando} onClick={confirmarEliminarPesaje} style={{ ...btnStyle, background: C.alerta }}>{guardando ? "Eliminando…" : "Eliminar este pesaje"}</button>
-            <button disabled={guardando} onClick={() => setPesajeEliminar(null)}>Cancelar</button>
-          </div>
-        </div>
-      </div>}
+      <ModalDialog
+        abierto={!!editarPesaje}
+        titulo="Corregir pesaje"
+        subtitulo="Se modificará solo este registro. Una fecha existente del mismo lote no se puede duplicar."
+        onClose={() => setEditarPesaje(null)}
+        ancho={620}
+        pie={
+          <>
+            <button type="button" disabled={guardando} onClick={() => setEditarPesaje(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cancelar
+            </button>
+            <button type="button" disabled={guardando} onClick={guardarEdicionPesaje} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              Guardar corrección
+            </button>
+          </>
+        }
+      >
+        {editarPesaje && (
+          <>
+            <label style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>Galera / lote
+              <select value={editarPesaje.lote} onChange={e => setEditarPesaje(p => ({ ...p, lote: e.target.value }))} style={{ ...inputStyle, marginTop: 4, width: "100%" }}>
+                {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.lote || l.id} · nac. {l.nac}</option>)}
+              </select>
+            </label>
+            <label style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>Fecha
+              <input type="date" max={hoyISO()} value={editarPesaje.fechaISO} onChange={e => setEditarPesaje(p => ({ ...p, fechaISO: e.target.value }))} style={{ ...inputStyle, marginTop: 4, width: "100%" }} />
+            </label>
+            <label style={{ display: "block", marginBottom: 12, fontSize: 12.5, fontWeight: 600 }}>Pesos (gramos o kg; uno por línea)
+              <textarea rows={8} value={editarPesaje.pesosTexto} onChange={e => setEditarPesaje(p => ({ ...p, pesosTexto: e.target.value }))} style={{ ...inputStyle, marginTop: 4, width: "100%", resize: "vertical" }} />
+            </label>
+          </>
+        )}
+      </ModalDialog>
+
+      <ModalDialog
+        abierto={!!pesajeEliminar}
+        titulo="Eliminar pesaje"
+        subtitulo="Se borrará solo este registro y no podrá recuperarse automáticamente."
+        onClose={() => setPesajeEliminar(null)}
+        ancho={460}
+        tono="alerta"
+        pie={
+          <>
+            <button type="button" disabled={guardando} onClick={() => setPesajeEliminar(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cancelar
+            </button>
+            <button type="button" disabled={guardando} onClick={confirmarEliminarPesaje} style={{ ...btnStyle, width: "auto", background: C.alerta, padding: "10px 20px", margin: 0 }}>
+              {guardando ? "Eliminando…" : "Eliminar este pesaje"}
+            </button>
+          </>
+        }
+      >
+        {pesajeEliminar && (
+          <p style={{ margin: 0, fontSize: 13.5 }}>
+            ¿Eliminar definitivamente el pesaje del <b>{pesajeEliminar.fecha}</b> de la galera <b>{lotes.find(l => l.id === pesajeEliminar.lote)?.galpon ?? pesajeEliminar.lote}</b> ({pesajeEliminar.pesos?.length || 0} aves)?
+          </p>
+        )}
+      </ModalDialog>
 
       <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
         Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
-        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 28/09/2026
+        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — Etapas A y B
       </footer>
     </div>
   );
