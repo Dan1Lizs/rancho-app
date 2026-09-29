@@ -698,7 +698,7 @@ function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 56
   );
 }
 
-function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, recActiva, fPeso, histFecha, irA, avisar }) {
+function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subPlanta, subPedidoMP, subFormulas, subInsumos, subPesaje, subHistorial, recActiva, fPeso, histFecha, irA, avisar }) {
   if (vista === "inicio") return null;
 
   const tabActual = tabs.find(t => t.id === vista) || { nombre: vista };
@@ -709,24 +709,27 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
     const l = lotes.find(x => x.id === galponActivo);
     subdetalle = `Galpón ${l?.galpon || galponActivo || "1"} · ${fechaCaptura ? fechaCaptura.split("-").reverse().join("/") : "Hoy"}`;
   } else if (vista === "bodega") {
-    const nombresSubBodega = {
-      producido: "Huevo producido",
-      ruta: "Salida a ruta",
-      otros: "Otros movimientos",
-      cierre: "Cierre del día",
-      historial: "Historial",
-      apertura: "Apertura",
-      todo: "Todo",
-    };
+    const nombresSubBodega = { producido: "Huevo producido", ruta: "Salida a ruta", otros: "Otros movimientos", cierre: "Cierre del día", historial: "Historial", apertura: "Apertura", todo: "Todo" };
     const nomSub = nombresSubBodega[subBodega] || "Movimiento";
     subdetalle = `${nomSub} · ${fechaBodega ? fechaBodega.split("-").reverse().join("/") : "Hoy"}`;
-  } else if (vista === "formulas" && recActiva) {
-    subdetalle = `Fórmula ${recActiva}`;
-  } else if (vista === "pesaje" && fPeso?.lote) {
-    const l = lotes.find(x => x.id === fPeso.lote);
-    subdetalle = `Galpón ${l?.galpon || fPeso.lote}`;
-  } else if (vista === "historial" && histFecha) {
-    subdetalle = `Fecha ${histFecha.split("-").reverse().join("/")}`;
+  } else if (vista === "planta") {
+    const nomSub = { baches: "Baches producidos", nucleo: "Núcleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
+    subdetalle = nomSub;
+  } else if (vista === "pedidomp") {
+    const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo físico", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Pedido MP";
+    subdetalle = nomSub;
+  } else if (vista === "formulas") {
+    const nomSub = { recetas: `Fórmulas (${recActiva || "activas"})`, nueva: "Crear fórmula", catalogo: "Catálogo MP", todo: "Todo" }[subFormulas] || "Fórmulas";
+    subdetalle = nomSub;
+  } else if (vista === "insumos") {
+    const nomSub = { catalogo: "Inventario por categoría", conteo: "Conteo general", movimiento: "Registrar movimiento", nuevo: "Agregar insumo", todo: "Todo" }[subInsumos] || "Insumos";
+    subdetalle = nomSub;
+  } else if (vista === "pesaje") {
+    const nomSub = { pesajes: "Pesajes de parvada", histpesajes: "Buscar / corregir", vacunas: "Vacunación", enfermedades: "Expediente médico", necropsias: "Necropsias", todo: "Todo" }[subPesaje] || "Bienestar";
+    subdetalle = nomSub;
+  } else if (vista === "historial") {
+    const nomSub = { dia: `Día ${histFecha ? histFecha.split("-").reverse().join("/") : "Consulta"}`, mes: "Resumen mensual", correcciones: "Correcciones", todo: "Todo" }[subHistorial] || "Historial";
+    subdetalle = nomSub;
   }
 
   const copiarEnlace = () => {
@@ -784,6 +787,37 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
         🔗 Copiar enlace
       </button>
     </nav>
+  );
+}
+
+
+
+function BarraSubmenu({ subsecciones, activo, onChange }) {
+  return (
+    <div className="v10-subnav" style={{ display: "flex", gap: 7, overflowX: "auto", padding: "4px 2px 14px", marginBottom: 14, borderBottom: `1px solid ${C.borde}` }}>
+      {subsecciones.map(sub => (
+        <button
+          key={sub.id}
+          type="button"
+          onClick={() => onChange(sub.id)}
+          style={{
+            padding: "8px 14px",
+            fontSize: 13,
+            fontWeight: 600,
+            borderRadius: 20,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            border: activo === sub.id ? `2px solid ${C.verde}` : `1.5px solid ${C.borde}`,
+            background: activo === sub.id ? C.verdeSuave : C.superficie,
+            color: activo === sub.id ? C.verde : C.texto,
+            fontFamily: "'Inter', sans-serif",
+            transition: "all 0.15s ease",
+          }}
+        >
+          {sub.icono} {sub.nombre}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -867,6 +901,13 @@ export default function App() {
   ]);
   const [obsInv, setObsInv] = useState("");
   const [ajusteBodega, setAjusteBodega] = useState("");
+    const [subPlanta, setSubPlanta] = useState("baches");
+  const [subPedidoMP, setSubPedidoMP] = useState("kardex");
+  const [subFormulas, setSubFormulas] = useState("recetas");
+  const [subInsumos, setSubInsumos] = useState("catalogo");
+  const [subPesaje, setSubPesaje] = useState("pesajes");
+  const [subHistorial, setSubHistorial] = useState("dia");
+  const [editarAjustePlanta, setEditarAjustePlanta] = useState(null);
   const [subBodega, setSubBodega] = useState("producido");
   const [fechaBodega, setFechaBodega] = useState(hoyISO());
   const [movBodegaId, setMovBodegaId] = useState(null);
@@ -1635,6 +1676,47 @@ export default function App() {
       avisar(`✓ Servido calculado registrado: ${nuevos.length} corrales, ${nuevos.reduce((s, m) => s + m.kg, 0).toFixed(1)} kg`);
     } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
     finally { setGuardando(false); }
+  };
+
+  
+  const guardarModificacionAjustePlanta = async () => {
+    if (!editarAjustePlanta) return;
+    const real = Number(editarAjustePlanta.nuevoSaldoReal);
+    if (!Number.isFinite(real) || real < 0) {
+      avisar("⚠ Digita un saldo real válido mayor o igual a cero");
+      return;
+    }
+    setGuardando(true);
+    try {
+      const id = editarAjustePlanta.id;
+      const antReal = Number(editarAjustePlanta.saldoReal ?? editarAjustePlanta.kg ?? 0);
+      const nuevoMov = {
+        ...editarAjustePlanta,
+        saldoReal: real,
+        kg: editarAjustePlanta.categoria === "Núcleo" ? editarAjustePlanta.kg : real,
+        porciones: editarAjustePlanta.categoria === "Núcleo" ? real : editarAjustePlanta.porciones,
+        responsable: editarAjustePlanta.responsable || completadoPor,
+        historialEdiciones: [
+          ...(editarAjustePlanta.historialEdiciones || []),
+          {
+            fechaHora: new Date().toISOString(),
+            por: completadoPor,
+            motivo: editarAjustePlanta.motivoCambio || "Ajuste físico modificado",
+            anterior: { saldoReal: antReal, fecha: editarAjustePlanta.fecha },
+            nuevo: { saldoReal: real, fecha: editarAjustePlanta.fecha },
+          }
+        ]
+      };
+      const lista = plantaMovs.map(m => String(m.id) === String(id) ? nuevoMov : m);
+      if (!(await escribir(K.planta, lista))) throw new Error("No se pudo guardar la modificación");
+      setPlantaMovs(lista);
+      setEditarAjustePlanta(null);
+      avisar("✓ Ajuste de planta modificado y guardado");
+    } catch (e) {
+      avisar(`⚠ ${e.message}`);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const eliminarMovPlanta = async (m) => {
@@ -3672,6 +3754,40 @@ const cssEtapaB = `
   return (
     <div className="app-v10" style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
       <style>{fuentes + cssEtapaB}</style>
+            <ModalDialog
+        abierto={!!editarAjustePlanta}
+        titulo="Modificar ajuste por conteo físico"
+        subtitulo={`Ajuste de ${editarAjustePlanta?.categoria} (${editarAjustePlanta?.formula || "sin fórmula"})`}
+        onClose={() => setEditarAjustePlanta(null)}
+        ancho={500}
+        pie={
+          <>
+            <button type="button" onClick={() => setEditarAjustePlanta(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cancelar
+            </button>
+            <button type="button" disabled={guardando} onClick={guardarModificacionAjustePlanta} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              Guardar cambios
+            </button>
+          </>
+        }
+      >
+        {editarAjustePlanta && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Fecha del ajuste
+              <input type="date" value={editarAjustePlanta.fechaISO || (editarAjustePlanta.fecha ? editarAjustePlanta.fecha.split("/").reverse().join("-") : hoyISO())} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, fechaISO: e.target.value, fecha: e.target.value.split("-").reverse().join("/") })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Saldo real contado ({editarAjustePlanta.categoria === "Núcleo" ? "porciones" : "kg"})
+              <input type="text" inputMode="decimal" value={editarAjustePlanta.nuevoSaldoReal ?? ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, nuevoSaldoReal: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Responsable del conteo
+              <input type="text" value={editarAjustePlanta.responsable || ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, responsable: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Motivo de la modificación
+              <input type="text" placeholder="ej. Error en lectura de báscula / conteo físico corregido" value={editarAjustePlanta.motivoCambio || ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, motivoCambio: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+          </div>
+        )}
+      </ModalDialog>
       <ModalDialog
         abierto={!!editarDetallePlanta}
         titulo="Corregir detalle de planta"
@@ -3926,6 +4042,12 @@ const cssEtapaB = `
           fechaCaptura={fechaCaptura}
           fechaBodega={fechaBodega}
           subBodega={subBodega}
+          subPlanta={subPlanta}
+          subPedidoMP={subPedidoMP}
+          subFormulas={subFormulas}
+          subInsumos={subInsumos}
+          subPesaje={subPesaje}
+          subHistorial={subHistorial}
           recActiva={recActiva}
           fPeso={fPeso}
           histFecha={histFecha}
@@ -4859,6 +4981,22 @@ const cssEtapaB = `
               </>}
             </div>)}
 
+            <BarraSubmenu
+              subsecciones={[
+                { id: "baches", nombre: "1. Baches producidos", icono: "🏗️" },
+                { id: "nucleo", nombre: "2. Núcleo (micros)", icono: "🧪" },
+                { id: "ganado", nombre: "3. Servido a ganado", icono: "🐄" },
+                { id: "ajustes", nombre: "4. Conteo y ajustes", icono: "⚖️" },
+                { id: "facturas", nombre: "5. Facturas MP", icono: "🧾" },
+                { id: "historial", nombre: "Historial", icono: "📋" },
+                { id: "apertura", nombre: "Apertura", icono: "⚙️" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subPlanta}
+              onChange={setSubPlanta}
+            />
+
+            {(subPlanta === "baches" || subPlanta === "todo") && (
             <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
               <select value={fBache.formula} onChange={e => setFBache({ ...fBache, formula: e.target.value })} style={selectStyle}>
                 {Object.keys(recetas.formulas).map(f => <option key={f} value={f}>{f} — {usoFormula(f)}</option>)}
@@ -4878,7 +5016,9 @@ const cssEtapaB = `
                 🖨 Imprimir checklist del bache (básculas 1–4)
               </button>
             </Seccion>
+            )}
 
+            {(subPlanta === "nucleo" || subPlanta === "todo") && (
             <Seccion titulo="Núcleo — premezcla de micros (báscula 4)" sub="Produce porciones por adelantado; cada bache de concentrado descuenta 1 porción automáticamente">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
                 {Object.entries(recetas.formulas).filter(([n2]) => kgNucleoDe(n2) > 0).map(([n2]) => {
@@ -4910,7 +5050,9 @@ const cssEtapaB = `
                 </button>
               </div>
             </Seccion>
+            )}
 
+            {(subPlanta === "ganado" || subPlanta === "todo") && (
             <Seccion titulo="B. Servido a ganado" sub="Calcula el servido de hoy desde animales × kg por animal configurados en Materias primas, o registra el peso real manualmente.">
               {(() => {
                 const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), plantaMovs);
@@ -4954,7 +5096,9 @@ const cssEtapaB = `
               </div>
               <button onClick={guardarServidoGanado} disabled={guardando} style={btnStyle}>Registrar servido a ganado</button>
             </Seccion>
+            )}
 
+            {(subPlanta === "ajustes" || subPlanta === "todo") && (
             <Seccion titulo="C. Ajuste por conteo físico" sub="Cuenta el concentrado real y la app registra la diferencia">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 40%" }}>
@@ -4975,9 +5119,22 @@ const cssEtapaB = `
               <button onClick={guardarAjustePlanta} disabled={guardando} style={btnStyle}>Registrar ajuste</button>
               <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes físicos</div>
               {selectorHistorial("ajustesPlanta")}
-              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}><b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}{m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" · ")}</div>}</div>)}
+              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => (
+                <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                  <div>
+                    <b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}
+                    {m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" · ")}</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button type="button" onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ fontSize: 11, padding: "3px 8px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Editar</button>
+                    <button type="button" onClick={() => eliminarMovPlanta(m)} style={{ fontSize: 11, padding: "3px 8px", background: confirmar === `delplanta:${m.id}` ? C.alerta : "#F1F1EA", color: confirmar === `delplanta:${m.id}` ? "#fff" : C.alerta, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>{confirmar === `delplanta:${m.id}` ? "Confirmar" : "Eliminar"}</button>
+                  </div>
+                </div>
+              ))}
             </Seccion>
+            )}
 
+            {(subPlanta === "facturas" || subPlanta === "todo") && (
             <Seccion titulo="D. Productos y facturas recibidas">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo tercio etiqueta="Proveedor" type="text" placeholder="ej. AVIN" value={fFactura.proveedor} onChange={e => setFFactura({ ...fFactura, proveedor: e.target.value })} />
@@ -5000,9 +5157,10 @@ const cssEtapaB = `
                 ))}
               </div>
             </Seccion>
+            )}
 
-            {movsPlanta.length > 0 && (
-              <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. El detalle se puede corregir con motivo; las cantidades se concilian mediante ajuste físico.">
+            {(subPlanta === "historial" || subPlanta === "todo") && movsPlanta.length > 0 && (
+              <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. Puedes editar cualquier detalle o ajuste, o eliminar movimientos.">
                 <div className="v10-plant-filters">
                   <input aria-label="Buscar movimiento de planta" placeholder="Fórmula, detalle, número o responsable" value={filtroPlanta.texto} onChange={e => setFiltroPlanta(v => ({ ...v, texto: e.target.value }))} />
                   <select aria-label="Tipo de movimiento" value={filtroPlanta.tipo} onChange={e => setFiltroPlanta(v => ({ ...v, tipo: e.target.value }))}><option value="">Todos los tipos</option>{["bache", "nucleo", "servido", "ajuste"].map(t => <option key={t}>{t}</option>)}</select>
@@ -5017,8 +5175,11 @@ const cssEtapaB = `
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                     <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
-                    {m.tipo !== "ajuste" && <button onClick={() => eliminarMovPlanta(m)} title="Eliminar (revierte efectos)" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>}
+                    <button onClick={() => eliminarMovPlanta(m)} title="Eliminar movimiento" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
                     </div>
+                    {m.tipo === "ajuste" && (
+                      <button onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ marginTop: 7, fontSize: 12, marginRight: 8, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 600 }}>Editar ajuste</button>
+                    )}
                     <button onClick={() => { setEditarDetallePlanta({ original: plantaMovs.find(x => String(x.id) === String(m.id)) || m, campos: { detalle: m.detalle || "", numBache: m.numBache || "", numNucleo: m.numNucleo || "", responsable: m.responsable || m.por || completadoPor } }); setMotivoDetallePlanta(""); }} style={{ marginTop: 7, fontSize: 12 }}>Corregir detalle</button>
                     {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} · {mostrarNombre(ed.por)} · {ed.motivo}<div>Antes: {ed.anterior?.detalle || ed.anterior?.numBache || ed.anterior?.numNucleo || "—"} → Después: {ed.nuevo?.detalle || ed.nuevo?.numBache || ed.nuevo?.numNucleo || "—"}</div></div>)}</details>}
                   </div>
@@ -5027,6 +5188,7 @@ const cssEtapaB = `
               </Seccion>
             )}
 
+            {(subPlanta === "apertura" || subPlanta === "todo") && (
             <Seccion titulo="Apertura de planta — inventario inicial" sub="Desde la fecha de apertura corren los balances; baches y consumos anteriores quedan como histórico sin afectar">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo tercio etiqueta="Inicial AVES (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialAves} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialAves: e.target.value })} />
@@ -5038,12 +5200,28 @@ const cssEtapaB = `
               </div>
               {plantaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La planta abre el {plantaCfg.inicialFecha.split("-").reverse().join("/")} con {plantaCfg.inicialAves || 0} kg (aves) y {plantaCfg.inicialGanado || 0} kg (ganado).</div>}
             </Seccion>
+            )}
           </>
         )}
         {/* ══ PEDIDO MATERIA PRIMA ══ */}
         {vista === "pedidomp" && (
           <>
-            <Seccion titulo="📦 Kardex de materias primas" sub="Perpetuo: entradas por facturas − salidas por baches y núcleo = saldo teórico, conciliado contra tu conteo físico">
+                        <BarraSubmenu
+              subsecciones={[
+                { id: "kardex", nombre: "Kardex MP", icono: "📦" },
+                { id: "consumo", nombre: "1. Consumo", icono: "📊" },
+                { id: "inventario", nombre: "2. Inventario", icono: "📋" },
+                { id: "calculado", nombre: "3. Calculado", icono: "🧮" },
+                { id: "proveedor", nombre: "4. Proveedor", icono: "📱" },
+                { id: "pedidos", nombre: "5. Historial", icono: "🚚" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subPedidoMP}
+              onChange={setSubPedidoMP}
+            />
+
+            {(subPedidoMP === "kardex" || subPedidoMP === "todo") && (
+              <Seccion titulo="📦 Kardex de materias primas" sub="Perpetuo: entradas por facturas − salidas por baches y núcleo = saldo teórico, conciliado contra tu conteo físico">
               {kardex.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Aún sin movimientos — se llena solo con las facturas (PDF con líneas) y la producción registrada.</div>}
               {kardex.length > 0 && (() => {
                 const codigos = [...new Set(kardex.map(m2 => m2.mp))];
@@ -5094,6 +5272,7 @@ const cssEtapaB = `
                 );
               })()}
             </Seccion>
+            )}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Consumo diario total" valor={Object.values(consumoFormulas).reduce((a, b) => a + b, 0).toFixed(0)} unidad="kg" sub="Aves (desde Lotes) + ganado" />
@@ -5101,7 +5280,8 @@ const cssEtapaB = `
               <KPI etiqueta="Último conteo" valor={mpFechaConteo ? mpFechaConteo.slice(0, 5) : "—"} unidad="" sub={mpResponsable || "sin responsable"} />
             </div>
 
-            <Seccion titulo="1 · Consumo proyectado" sub="Las aves se calculan solas desde Lotes (aves vivas × ración). Asigna la fórmula de receta de cada lote.">
+            {(subPedidoMP === "consumo" || subPedidoMP === "todo") && (
+              <Seccion titulo="1 · Consumo proyectado" sub="Las aves se calculan solas desde Lotes (aves vivas × ración). Asigna la fórmula de receta de cada lote.">
               {activos.map(l => {
                 const kgDia = l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0;
                 return (
@@ -5135,8 +5315,10 @@ const cssEtapaB = `
                   onChange={e => guardarConfigMP({ ...mpConfig, cobertura: e.target.value })} />
               </div>
             </Seccion>
+            )}
 
-            <Seccion titulo="2 · Inventario físico" sub="El encargado cuenta el jueves: sacos completos + saldo suelto en kg de cada materia prima">
+            {(subPedidoMP === "inventario" || subPedidoMP === "todo") && (
+              <Seccion titulo="2 · Inventario físico" sub="El encargado cuenta el jueves: sacos completos + saldo suelto en kg de cada materia prima">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
@@ -5180,8 +5362,10 @@ const cssEtapaB = `
                 </details>
               )}
             </Seccion>
+            )}
 
-            <Seccion titulo="3 · Pedido calculado" sub={`Consumo × ${mpConfig.cobertura} días − inventario, redondeado a presentación completa (mín. ${mpConfig.minKg1} kg en granel)`}>
+            {(subPedidoMP === "calculado" || subPedidoMP === "todo") && (
+              <Seccion titulo="3 · Pedido calculado" sub={`Consumo × ${mpConfig.cobertura} días − inventario, redondeado a presentación completa (mín. ${mpConfig.minKg1} kg en granel)`}>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                   <thead>
@@ -5205,8 +5389,11 @@ const cssEtapaB = `
                 </table>
               </div>
             </Seccion>
+            )}
 
-            <Seccion titulo="4 · Registrar pedido realizado" sub="El pedido que colocaste al proveedor — al marcarlo recibido, las materias primas entran solas al kardex">
+            {(subPedidoMP === "pedidos" || subPedidoMP === "todo") && (
+              <>
+              <Seccion titulo="4 · Registrar pedido realizado" sub="El pedido que colocaste al proveedor — al marcarlo recibido, las materias primas entran solas al kardex">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del pedido</span>
@@ -5253,8 +5440,11 @@ const cssEtapaB = `
                 </div>
               ))}
             </Seccion>
+              </>
+            )}
 
-            <Seccion titulo="4 · Pedido por proveedor" sub="Envía cada orden por WhatsApp o cópiala">
+            {(subPedidoMP === "proveedor" || subPedidoMP === "todo") && (
+              <Seccion titulo="4 · Pedido por proveedor" sub="Envía cada orden por WhatsApp o cópiala">
               {Object.keys(pedidoPorProveedor).length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 500 }}>✓ Con el inventario actual no hace falta pedir nada.</div>}
               {Object.entries(pedidoPorProveedor).map(([prov, items]) => (
                 <div key={prov} style={{ border: `1px solid ${C.borde}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
@@ -5286,6 +5476,7 @@ const cssEtapaB = `
                 </div>
               )}
             </Seccion>
+            )}
           </>
         )}
 
@@ -5296,7 +5487,19 @@ const cssEtapaB = `
           const dif = total - recetas.bacheKg;
           return (
             <>
-              <Seccion titulo="Fórmulas de concentrado" sub={`Definidas en kg por bache — capacidad del mixer: ${recetas.bacheKg} kg. Todo el cálculo de consumo y pedido sale de aquí.`}>
+                          <BarraSubmenu
+              subsecciones={[
+                { id: "recetas", nombre: "Fórmulas activas", icono: "🥣" },
+                { id: "nueva", nombre: "Crear fórmula", icono: "➕" },
+                { id: "catalogo", nombre: "Catálogo MP", icono: "📦" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subFormulas}
+              onChange={setSubFormulas}
+            />
+
+            {(subFormulas === "recetas" || subFormulas === "todo") && (
+              <><Seccion titulo="Fórmulas de concentrado" sub={`Definidas en kg por bache — capacidad del mixer: ${recetas.bacheKg} kg. Todo el cálculo de consumo y pedido sale de aquí.`}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
                   {Object.entries(recetas.formulas).map(([n, f2]) => (
                     <button key={n} onClick={() => setRecActiva(n)} style={{
@@ -5341,7 +5544,10 @@ const cssEtapaB = `
                   <button onClick={() => eliminarFormula(recActiva)} style={{ marginTop: 16, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, background: "transparent", color: C.alerta, border: `1.5px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Eliminar esta fórmula</button>
                 </Seccion>
               )}
+            </>
+            )}
 
+              {(subFormulas === "nueva" || subFormulas === "todo") && (
               <Seccion titulo="Crear fórmula nueva" sub="Del nutricionista — se define en kg por bache del mixer">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Campo mitad etiqueta="Nombre de la fórmula" type="text" placeholder="ej. Postura F2" value={fNuevaRec.nombre} onChange={e => setFNuevaRec({ ...fNuevaRec, nombre: e.target.value })} />
@@ -5358,7 +5564,9 @@ const cssEtapaB = `
                     onChange={e => persistirRecetas({ ...recetas, bacheKg: Number(e.target.value || BACHE_KG_DEFAULT) })} />
                 </div>
               </Seccion>
+            )}
 
+              {(subFormulas === "catalogo" || subFormulas === "todo") && (
               <Seccion titulo="Catálogo de materias primas" sub="La lista maestra que alimenta fórmulas, inventario y pedido — nombre, presentación y proveedor editables">
                 {mpCat.map(mp => {
                   const enUso = Object.values(recetas.formulas).some(f2 => f2.items[mp.c] !== undefined);
@@ -5390,6 +5598,7 @@ const cssEtapaB = `
                 </div>
                 <button onClick={agregarMP} style={btnStyle}>Agregar al catálogo</button>
               </Seccion>
+            )}
             </>
           );
         })()}
@@ -5405,7 +5614,21 @@ const cssEtapaB = `
                 <KPI etiqueta="Movimientos registrados" valor={insumosMovs.length} unidad="" />
               </div>
 
-              <Seccion titulo="⚡ Balance inicial / conteo general" sub="Digita el saldo real de los productos que tengas hoy y guarda todo de una vez — cada carga queda registrada como movimiento">
+ 
+              <BarraSubmenu
+                subsecciones={[
+                  { id: "catalogo", nombre: "Inventario por categoría", icono: "📦" },
+                  { id: "conteo", nombre: "Balance / conteo general", icono: "⚡" },
+                  { id: "movimiento", nombre: "Registrar movimiento", icono: "🔄" },
+                  { id: "nuevo", nombre: "Agregar nuevo insumo", icono: "➕" },
+                  { id: "todo", nombre: "Ver todo", icono: "☰" },
+                ]}
+                activo={subInsumos}
+                onChange={setSubInsumos}
+              />
+
+             {(subInsumos === "conteo" || subInsumos === "todo") && (
+                <Seccion titulo="⚡ Balance inicial / conteo general" sub="Digita el saldo real de los productos que tengas hoy y guarda todo de una vez — cada carga queda registrada como movimiento">
                 {CATEGORIAS_INSUMOS.map(cat => {
                   const items = insumos.filter(it => it.categoria === cat);
                   if (!items.length) return null;
@@ -5426,8 +5649,10 @@ const cssEtapaB = `
                 <button onClick={guardarAperturaInsumos} disabled={guardando} style={btnStyle}>Guardar balances iniciales</button>
                 <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Solo se actualizan los que tengan un número digitado; los demás quedan igual. Sirve también para conteos generales futuros.</div>
               </Seccion>
+              )}
 
-              <Seccion titulo="Inventario por categoría" sub="Saldo inicial + compras − salidas del control diario = saldo actual. Las salidas se descuentan solas al guardar el día.">
+              {(subInsumos === "catalogo" || subInsumos === "todo") && (
+                <Seccion titulo="Inventario por categoría" sub="Saldo inicial + compras − salidas del control diario = saldo actual. Las salidas se descuentan solas al guardar el día.">
                 {CATEGORIAS_INSUMOS.map(cat => {
                   const items = insumos.filter(it => it.categoria === cat);
                   if (!items.length) return null;
@@ -5459,9 +5684,11 @@ const cssEtapaB = `
                   );
                 })}
               </Seccion>
+              )}
 
               <datalist id="provsIns">{proveedoresIns.map(pv => <option key={pv} value={pv} />)}</datalist>
-              <Seccion titulo="Registrar movimiento" sub="Entrada por compra (con # de factura), salida manual, o ajuste por conteo físico">
+              {(subInsumos === "movimiento" || subInsumos === "todo") && (
+                <Seccion titulo="Registrar movimiento" sub="Entrada por compra (con # de factura), salida manual, o ajuste por conteo físico">
                 <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                   {[["entrada", "+ Entrada"], ["salida", "− Salida"], ["ajuste", "Ajuste"]].map(([t, lbl]) => (
                     <button key={t} onClick={() => setFMovIns({ ...fMovIns, tipo: t })} style={{
@@ -5504,8 +5731,10 @@ const cssEtapaB = `
                   </div>
                 )}
               </Seccion>
+              )}
 
-              <Seccion titulo="Agregar insumo al catálogo" sub="Escribe el nombre TAL CUAL lo anotan en el control diario para que el descuento automático lo reconozca">
+              {(subInsumos === "nuevo" || subInsumos === "todo") && (
+                <Seccion titulo="Agregar insumo al catálogo" sub="Escribe el nombre TAL CUAL lo anotan en el control diario para que el descuento automático lo reconozca">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Campo mitad etiqueta="Nombre del producto" type="text" placeholder="ej. Respinorm" value={fNuevoIns.nombre} onChange={e => setFNuevoIns({ ...fNuevoIns, nombre: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%" }}>
@@ -5530,6 +5759,7 @@ const cssEtapaB = `
                 </div>
                 <button onClick={agregarInsumo} style={btnStyle}>Agregar insumo</button>
               </Seccion>
+              )}
             </>
           );
         })()}
@@ -6031,7 +6261,7 @@ const cssEtapaB = `
           );
         })()}
 
-        {/* ══ HISTORIAL ══ */}
+                {/* ══ HISTORIAL ══ */}
         {vista === "historial" && (() => {
           const aDMY = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
           const fSel = aDMY(histFecha);
@@ -6097,6 +6327,18 @@ const cssEtapaB = `
 
           return (
             <>
+                          <BarraSubmenu
+              subsecciones={[
+                { id: "dia", nombre: "Consultar un día", icono: "📅" },
+                { id: "mes", nombre: "Resumen mensual", icono: "📊" },
+                { id: "correcciones", nombre: "Correcciones", icono: "📝" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subHistorial}
+              onChange={setSubHistorial}
+            />
+
+            {(subHistorial === "dia" || subHistorial === "todo") && (
               <Seccion titulo="Consultar un día" sub="Elige la fecha para ver el día completo">
                 <input type="date" value={histFecha} onChange={e => setHistFecha(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
               <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: aDMY(histFecha) })}
@@ -6160,7 +6402,9 @@ const cssEtapaB = `
                 {medsDia.map((m, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>{m.tipo || "Medicamento"} G{m.galpon}:</b> {m.producto} · {m.dosis}{m.enfermedad && ` · trata: ${m.enfermedad}`}</div>)}
                 {bitDia.map((b, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.yemaSuave, borderRadius: 10 }}><b>Bitácora:</b> {b.texto}</div>)}
               </Seccion>
+            )}
 
+              {(subHistorial === "correcciones" || subHistorial === "todo") && (
               <Seccion titulo="Correcciones de producción" sub="Cambios conservados con responsable, motivo y valores anteriores">
                 {selectorHistorial("correccionesProduccion")}
                 {historialVisible(correccionesProduccion.map(c => ({ ...c, fecha: c.anterior?.fecha })), "correccionesProduccion").map(c => <details key={c.id} style={{ padding: 9, borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
@@ -6172,7 +6416,9 @@ const cssEtapaB = `
                   {c.nuevo && <div>Tiquetes corregidos: {(c.nuevo.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ")}</div>}
                 </details>)}
               </Seccion>
+            )}
 
+              {(subHistorial === "mes" || subHistorial === "todo") && (
               <Seccion titulo="Resumen mensual" sub="Consolidado del mes por gallinero">
                 <input type="month" value={histMes} onChange={e => setHistMes(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
                 {fechasMes.length === 0 && <div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin registros en {nombreMes} {anioM}.</div>}
@@ -6350,328 +6596,7 @@ const cssEtapaB = `
                   Genera un .xlsx con producción, bodega y medicación — útil para tu contador o respaldo
                 </div>
               </Seccion>
-            </>
-          );
-        })()}
-        {/* ══ HISTORIAL ══ */}
-        {vista === "historial" && (() => {
-          const aDMY = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
-          const fSel = aDMY(histFecha);
-          const rsDia = registros.filter(r => r.fecha === fSel);
-          const duplicadosDia = rsDia.filter(r => rsDia.filter(x => x.lote === r.lote).length > 1);
-          const movDia = bodegaMovs.find(m => m.fecha === fSel);
-          const medsDia = medicaciones.filter(m => m.fecha === fSel);
-          const fumsDia = fumigaciones.filter(m => m.fecha === fSel);
-          const bitDia = bitacora.filter(b => b.fecha === fSel);
-          const plantaDia = plantaMovs.filter(m => m.fecha === fSel);
-
-          const [anioM, mesM] = histMes.split("-");
-          const claveMes = `${mesM}/${anioM}`;
-          const nombreMes = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][Number(mesM)];
-          const fechasMes = fechas.filter(f => mesDe(f) === claveMes);
-          const rsMes = registros.filter(r => fechasMes.includes(r.fecha));
-          const resMesLote = lotes.map(l => {
-            const rs = rsMes.filter(r => r.lote === l.id);
-            const cart = rs.reduce((s, r) => s + r.cartones, 0);
-            const alim = rs.reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
-            const masa = rs.reduce((s, r) => s + Number(r.pesoKg || 0), 0);
-            const muertas = rs.reduce((s, r) => s + Number(r.muertas || 0), 0);
-            const dias = new Set(rs.map(r => r.fecha)).size;
-            return { l, cart, huevos: cart * HXC, alim, muertas, dias, conv: masa > 0 ? alim / masa : 0, postura: dias && l.aves ? (cart * HXC / (l.aves * dias)) * 100 : 0 };
-          });
-          const totMes = {
-            cart: resMesLote.reduce((s, x) => s + x.cart, 0),
-            alim: resMesLote.reduce((s, x) => s + x.alim, 0),
-            muertas: resMesLote.reduce((s, x) => s + x.muertas, 0),
-          };
-
-          const exportar = () => {
-            try {
-              const wb = XLSX.utils.book_new();
-              const filasProd = (rsMes.length ? rsMes : registros).map(r => ({
-                Fecha: r.fecha, Gallinero: r.lote, Cartones: r.cartones, Huevos: r.cartones * HXC,
-                "Peso (kg)": r.pesoKg, Quebrados: r.quebrados, Muertas: r.muertas, Diagnóstico: r.dx,
-                "Alimento 6am (kg)": r.alimento6am ?? "", "Alimento 1pm (kg)": r.alimento1pm ?? "",
-                "Alimento total (kg)": r.alimentoKg, "Capturado por": mostrarNombre(r.por),
-              }));
-              XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasProd), "Produccion");
-              const filasBod = bodegaMovs.filter(m => !rsMes.length || mesDe(m.fecha) === claveMes).map(m => ({
-                Fecha: m.fecha, "Producido": m.producido, "Comprado": m.comprado, "Ruta neta": m.rutaNeta,
-                "Vendido granja": m.vendGranja, "Destruido": m.destruido, "Regalado": m.regalado, "Saldo final": m.saldoFinal, Observaciones: m.obs,
-              }));
-              if (filasBod.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasBod), "Bodega");
-              const filasMed = medicaciones.filter(m => !rsMes.length || mesDe(m.fecha) === claveMes).map(m => ({
-                Fecha: m.fecha, Tipo: m.tipo || "Medicamento", Gallinero: m.galpon, Producto: m.producto, Dosis: m.dosis, "Enfermedad tratada": m.enfermedad || "",
-              }));
-              if (filasMed.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasMed), "Medicacion");
-              const filasVac = vacunas.map(v => { const lv = lotes.find(x => x.id === v.lote); return { Fecha: v.fecha, Gallinero: lv ? `G${lv.galpon}` : v.lote, Vacuna: v.vacuna, Cepa: v.cepa || "", Vía: v.via || "", Proveedor: v.proveedor || "", "Registrado por": mostrarNombre(v.por) }; });
-              if (filasVac.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasVac), "Vacunacion");
-              const filasEnf = enfermedades.map(e2 => { const le = lotes.find(x => x.id === e2.lote); return { Fecha: e2.fecha, Gallinero: le ? `G${le.galpon}` : e2.lote, Enfermedad: e2.enfermedad, Tratamiento: e2.tratamiento || "", Estado: e2.estado, "Fecha alta": e2.fechaAlta || "" }; });
-              if (filasEnf.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasEnf), "Enfermedades");
-              const filasNec = necropsias.map(n2 => { const ln = lotes.find(x => x.id === n2.lote); return { Fecha: n2.fecha, Gallinero: ln ? `G${ln.galpon}` : n2.lote, Tipo: n2.tipo, Laboratorio: n2.laboratorio || "", Hallazgos: n2.hallazgos || "", Fotos: n2.numFotos || 0 }; });
-              if (filasNec.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasNec), "Necropsias");
-              const filasIns = insumosMovs.map(m => { const it = insumos.find(x => x.id === m.itemId); return { Fecha: m.fecha, Insumo: it?.nombre || "", Categoría: it?.categoria || "", Tipo: m.tipo, Cantidad: m.cantidad, Unidad: it?.unidad || "", Presentación: it?.presentacion || "", Dosis: it?.dosis || "", Proveedor: it?.proveedor || "", Detalle: m.detalle || "", Automático: m.auto ? "Sí" : "" }; });
-              if (filasIns.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasIns), "Insumos");
-              XLSX.writeFile(wb, `RanchoElSonado_${claveMes.replace("/", "-")}.xlsx`);
-              avisar("✓ Excel exportado");
-            } catch { avisar("⚠ No se pudo exportar"); }
-          };
-
-          return (
-            <>
-              <Seccion titulo="Consultar un día" sub="Elige la fecha para ver el día completo">
-                <input type="date" value={histFecha} onChange={e => setHistFecha(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
-              <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: aDMY(histFecha) })}
-                style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
-                🖨 Imprimir reporte diario de esta fecha
-              </button>
-                {rsDia.length === 0 && <div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin registros para el {fSel}.</div>}
-                {!!duplicadosDia.length && <div role="alert" style={{ padding: 12, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>⚠ Hay {duplicadosDia.length} registros en conflicto. Compara sus tiquetes y corrige o retira la fila incorrecta; no se puede decidir automáticamente cuál es válida.</div>}
-                {rsDia.length > 0 && (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ color: C.textoSuave, textAlign: "right", fontSize: 12 }}>
-                          <th style={{ textAlign: "left", padding: "6px 4px" }}>Gallinero</th>
-                          <th style={{ padding: "6px 4px" }}>Cartones</th>
-                          <th style={{ padding: "6px 4px" }}>Quebrados</th>
-                          <th style={{ padding: "6px 4px" }}>Muertas</th>
-                          <th style={{ padding: "6px 4px" }}>Alimento kg</th>
-                          <th style={{ padding: "6px 4px" }}>Acción</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rsDia.map((r, i) => (
-                          <tr key={i} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
-                            <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>{r.lote}{r.dx && <div style={{ fontSize: 11, color: C.alerta, fontWeight: 400 }}>Dx: {r.dx}</div>}</td>
-                            <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{r.cartones}</td>
-                            <td style={{ padding: "8px 4px" }}>{r.quebrados}</td>
-                            <td style={{ padding: "8px 4px", color: r.muertas > 3 ? C.alerta : C.texto }}>{r.muertas}</td>
-                            <td style={{ padding: "8px 4px" }}>{r.alimentoKg}</td>
-                            <td><button onClick={() => { setEditarProduccion({ ...r, tiquetes: (r.tiquetes || []).map(t => ({ ...t })) }); setMotivoProduccion(""); }} style={{ fontSize: 11 }}>Corregir</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {editarProduccion && editarProduccion.fecha === fSel && <div style={{ background: C.yemaSuave, padding: 14, borderRadius: 12, marginTop: 12 }}>
-                  <b>Corregir G{lotes.find(l => l.id === editarProduccion.lote)?.galpon || editarProduccion.lote} · {fSel}</b>
-                  <div style={{ fontSize: 12, margin: "6px 0 10px" }}>Registro {String(editarProduccion.id).slice(0, 8)} · los cartones y el peso se calculan a partir de los tiquetes. Revisa cuál fila conservar si hay duplicados.</div>
-                  {editarProduccion.tiquetes.map((t, j) => <div key={j} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {[["num", "Tiquete"], ["cartones", "Cartones"], ["peso", "Peso kg"]].map(([campo, etiqueta]) => <label key={campo} style={{ flex: "1 1 85px", fontSize: 11 }}>{etiqueta}<input value={t[campo] ?? ""} onChange={e => setEditarProduccion(v => ({ ...v, tiquetes: v.tiquetes.map((x, i) => i === j ? { ...x, [campo]: e.target.value } : x) }))} style={{ ...inputStyle, width: "100%" }} /></label>)}
-                    <button onClick={() => setEditarProduccion(v => ({ ...v, tiquetes: v.tiquetes.filter((_, i) => i !== j) }))}>Quitar tiquete</button>
-                  </div>)}
-                  <details style={{ margin: "8px 0", fontSize: 12 }}><summary>Pegar varios tiquetes de Excel</summary><p>Una fila por tiquete: número, cartones y peso, separados por tabulación o punto y coma. Reemplaza la lista mostrada; el cambio queda auditado al guardar.</p><textarea rows={4} style={{ ...inputStyle, width: "100%" }} onPaste={e => { const texto = e.clipboardData.getData("text"); const filas = texto.trim().split(/\r?\n/).map(f => f.split(/\t|;/).map(x => x.trim())).filter(x => x.length >= 3).map(([num, cartones, peso]) => ({ num, cartones, peso })); if (filas.length) { e.preventDefault(); setEditarProduccion(v => ({ ...v, tiquetes: filas })); } }} placeholder="Pega aquí las filas de Excel" /></details>
-                  <button onClick={() => setEditarProduccion(v => ({ ...v, tiquetes: [...v.tiquetes, { num: "", cartones: "", peso: "" }] }))}>+ Tiquete</button>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                    {[["quebrados", "Quebrados"], ["muertas", "Muertas"], ["alimento6am", "Alimento 6 a. m. kg"], ["alimento1pm", "Alimento 1 p. m. kg"]].map(([campo, etiqueta]) => <label key={campo} style={{ flex: "1 1 120px", fontSize: 11 }}>{etiqueta}<input type="number" min="0" step="any" value={editarProduccion[campo] ?? 0} onChange={e => setEditarProduccion(v => ({ ...v, [campo]: e.target.value }))} style={{ ...inputStyle, width: "100%" }} /></label>)}
-                  </div>
-                  <label style={{ fontSize: 12 }}>Motivo obligatorio<input value={motivoProduccion} onChange={e => setMotivoProduccion(e.target.value)} placeholder="Qué ocurrió y cuál dato se comprobó" style={{ ...inputStyle, width: "100%" }} /></label>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button disabled={guardando} onClick={() => guardarCorreccionProduccion(false)} style={btnStyle}>Guardar corrección</button>
-                    <button disabled={guardando} onClick={() => { if (window.confirm("¿Retirar este registro? Se conservará una copia en la auditoría y se ajustarán los acumulados del lote.")) guardarCorreccionProduccion(true); }} style={{ color: C.alerta }}>Retirar registro</button>
-                    <button onClick={() => setEditarProduccion(null)}>Cancelar</button>
-                  </div>
-                </div>}
-                {movDia && <div style={{ fontSize: 13, marginTop: 10, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}>
-                  <b>Bodega:</b> +{movDia.producido} producido · −{(movDia.rutaNeta || 0).toFixed(1)} ruta · saldo final <b style={{ color: C.verde }}>{movDia.saldoFinal} cart</b>
-                </div>}
-                {plantaDia.map((p, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Planta:</b> {p.baches} bache(s) de {p.formula} · {p.kg} kg</div>)}
-                {fumsDia.map((f, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Fumigación G{f.galpon}:</b> {f.producto} · {f.dosis} {f.hora && `· ${f.hora}`}</div>)}
-                {medsDia.map((m, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>{m.tipo || "Medicamento"} G{m.galpon}:</b> {m.producto} · {m.dosis}{m.enfermedad && ` · trata: ${m.enfermedad}`}</div>)}
-                {bitDia.map((b, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.yemaSuave, borderRadius: 10 }}><b>Bitácora:</b> {b.texto}</div>)}
-              </Seccion>
-
-              <Seccion titulo="Correcciones de producción" sub="Cambios conservados con responsable, motivo y valores anteriores">
-                {selectorHistorial("correccionesProduccion")}
-                {historialVisible(correccionesProduccion.map(c => ({ ...c, fecha: c.anterior?.fecha })), "correccionesProduccion").map(c => <details key={c.id} style={{ padding: 9, borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
-                  <summary>{c.anterior?.fecha} · G{lotes.find(l => l.id === c.anterior?.lote)?.galpon || c.anterior?.lote} · {c.accion === "eliminar" ? "Registro retirado" : "Editado"} · {mostrarNombre(c.por)} {c.estado !== "aplicado" && `· ${c.estado}`}</summary>
-                  <div>{new Date(c.instante).toLocaleString()} · Motivo: {c.motivo}</div>
-                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados · {c.anterior?.alimentoKg} kg alimento</div>
-                  {c.nuevo && <div>Después: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados · {c.nuevo.alimentoKg} kg alimento</div>}
-                  <div>Tiquetes anteriores: {(c.anterior?.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ") || "Ninguno"}</div>
-                  {c.nuevo && <div>Tiquetes corregidos: {(c.nuevo.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ")}</div>}
-                </details>)}
-              </Seccion>
-
-              <Seccion titulo="Resumen mensual" sub="Consolidado del mes por gallinero">
-                <input type="month" value={histMes} onChange={e => setHistMes(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
-                {fechasMes.length === 0 && <div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin registros en {nombreMes} {anioM}.</div>}
-                {fechasMes.length > 0 && (
-                  <>
-                    <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 8 }}>{nombreMes} {anioM} · {fechasMes.length} días con registro</div>
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                        <thead>
-                          <tr style={{ color: C.textoSuave, textAlign: "right", fontSize: 12 }}>
-                            <th style={{ textAlign: "left", padding: "6px 4px" }}>Gallinero</th>
-                            <th style={{ padding: "6px 4px" }}>Cartones</th>
-                            <th style={{ padding: "6px 4px" }}>% Post. prom</th>
-                            <th style={{ padding: "6px 4px" }}>Muertas</th>
-                            <th style={{ padding: "6px 4px" }}>Alimento kg</th>
-                            <th style={{ padding: "6px 4px" }}>Conv.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {resMesLote.map((x, i) => (
-                            <tr key={i} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
-                              <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>G{x.l.galpon}</td>
-                              <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{x.cart.toFixed(1)}</td>
-                              <td style={{ padding: "8px 4px" }}>{x.postura ? `${x.postura.toFixed(1)}%` : "—"}</td>
-                              <td style={{ padding: "8px 4px" }}>{x.muertas}</td>
-                              <td style={{ padding: "8px 4px" }}>{x.alim.toFixed(0)}</td>
-                              <td style={{ padding: "8px 4px" }}>{x.conv ? x.conv.toFixed(2) : "—"}</td>
-                            </tr>
-                          ))}
-                          <tr style={{ borderTop: `2px solid ${C.verde}`, textAlign: "right", fontWeight: 700 }}>
-                            <td style={{ textAlign: "left", padding: "8px 4px" }}>TOTAL</td>
-                            <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif" }}>{totMes.cart.toFixed(1)}</td>
-                            <td style={{ padding: "8px 4px" }}>—</td>
-                            <td style={{ padding: "8px 4px" }}>{totMes.muertas}</td>
-                            <td style={{ padding: "8px 4px" }}>{totMes.alim.toFixed(0)}</td>
-                            <td style={{ padding: "8px 4px" }}>—</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-                <button onClick={exportar} style={{ ...btnStyle, marginTop: 14 }}>
-                  Exportar {fechasMes.length ? `${nombreMes} ${anioM}` : "todo"} a Excel
-                </button>
-                <button onClick={exportarTodoJSON} disabled={guardando} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>
-                  💾 Exportar TODOS los datos (respaldo / migración)
-                </button>
-                <label style={{ display: "block", marginTop: 8 }}>
-                  <span style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, display: "block", textAlign: "center", cursor: "pointer" }}>📥 Importar respaldo JSON</span>
-                  <small style={{ color: C.textoSuave }}>Solo agrega registros faltantes; conserva los registros y ajustes que ya existen. Selecciona dos veces el mismo archivo para confirmar.</small>
-                  <input type="file" accept="application/json" style={{ display: "none" }}
-                    onChange={async e => {
-                      const file = e.target.files?.[0]; e.target.value = "";
-                      if (!file) return;
-                      if (cargandoFondo || guardando) { avisar("⏳ Espera a que termine la operación actual"); return; }
-                      if (confirmar !== "importar") { setConfirmar("importar"); avisar("Revisa el archivo: se agregarán solo registros faltantes. Los existentes conservarán sus valores. Selecciona el archivo otra vez para confirmar."); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
-                      setConfirmar(null); setGuardando(true); avisar("⏳ Leyendo el respaldo…");
-                      try {
-                        const doc = JSON.parse(await file.text());
-                        const datos = doc.datos || doc;
-                        if (!datos || typeof datos !== "object" || Array.isArray(datos)) throw new Error("Formato de respaldo inválido");
-                        const respaldo = Object.fromEntries(Object.entries(datos).filter(([, v]) => v !== null && v !== undefined));
-                        const conflictos = await detectarFechasRespaldo(respaldo);
-                        const r = await agregarRespaldoFaltante(respaldo);
-                        if (conflictos.length) setConflictosRespaldo({ items: conflictos, elegidos: [] });
-                        avisar(`✓ ${r.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar${r.futuros ? `; ${r.futuros} fechas futuras excluidas` : ""}.`);
-                        if (!conflictos.length) setTimeout(() => { try { location.reload(); } catch {} }, 1600);
-                      } catch (error) { console.error(error); avisar(`⚠ Importación interrumpida: ${error.message}. Lo ya agregado permanece; al reintentar se omite.`); }
-                      setGuardando(false);
-                    }} />
-                </label>
-                {esAdmin && (
-                  <div style={{ marginTop: 14, padding: 12, background: C.yemaSuave, borderRadius: 12, border: `1.5px solid ${C.yema}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🔧 Migración a base de datos v6</div>
-                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>
-                      Se hace UNA sola vez, después de correr <b>supabase_v2.sql</b> en Supabase. Copia todo lo que hoy vive en la tabla vieja hacia las tablas nuevas, sin borrar nada de la vieja. Es seguro tocarlo más de una vez: si una tabla nueva ya tiene datos, se salta.
-                    </div>
-                    <button onClick={async () => {
-                      if (confirmar !== "migrarv6") { setConfirmar("migrarv6"); avisar("⚠ Esto copiará tus datos a las tablas nuevas — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "migrarv6" ? null : c2), 15000); return; }
-                      setConfirmar(null); setGuardando(true);
-                      try {
-                        const resumen = await migrarDesdeV1((msg) => avisar(`⏳ ${msg}`));
-                        const partes = [];
-                        if (resumen.migradas.length) partes.push(`✓ Copiadas: ${resumen.migradas.join(", ")}`);
-                        if (resumen.saltadas.length) partes.push(`— Ya existían (sin tocar): ${resumen.saltadas.join(", ")}`);
-                        if (resumen.errores.length) partes.push(`⚠ Con error: ${resumen.errores.join(" | ")}`);
-                        alert(partes.join("\n\n") || "No había nada que migrar.");
-                        if (!resumen.errores.length) { avisar("✓ Migración completa — recargando…"); setTimeout(() => { try { location.reload(); } catch {} }, 1600); }
-                        else avisar("⚠ La migración terminó con errores — revisa el detalle arriba");
-                      } catch (e) {
-                        alert(`⚠ No se pudo migrar: ${e.message}`);
-                      }
-                      setGuardando(false);
-                    }} disabled={guardando} style={{ ...btnStyle, background: C.yema, color: "#fff" }}>
-                      🔧 Migrar datos a la base de datos v6
-                    </button>
-                  </div>
-                )}
-                {esAdmin && <div className="v10-user-admin">
-                  <h3>Usuarios y acceso</h3>
-                  {miRol !== "admin" ? <p>La administración segura de usuarios se activa al aplicar MIGRACION-V10-USUARIOS.sql y desplegar la función invite-user. Hasta entonces, los accesos existentes siguen como antes.</p> : <>
-                    <p>Invita a una persona con un rol. El enlace llega a su correo; no se comparte una contraseña.</p>
-                    <div className="v10-user-form"><input type="email" aria-label="Correo para invitar" placeholder="persona@correo.com" value={correoInvitacion} onChange={e => setCorreoInvitacion(e.target.value)} /><select aria-label="Rol del nuevo usuario" value={rolInvitacion} onChange={e => setRolInvitacion(e.target.value)}>{["encargado", "bodega", "planta", "bienestar", "consulta", "admin"].map(r => <option key={r} value={r}>{r}</option>)}</select><button disabled={gestionUsuarios} onClick={async () => {
-                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoInvitacion.trim())) { avisar("⚠ Escribe un correo válido"); return; }
-                      setGestionUsuarios(true);
-                      const { error } = await supabase.functions.invoke("invite-user", { body: { email: correoInvitacion.trim().toLowerCase(), role: rolInvitacion } });
-                      setGestionUsuarios(false);
-                      if (error) avisar(`⚠ No se pudo invitar: ${error.message}`);
-                      else { setCorreoInvitacion(""); avisar("✓ Invitación enviada"); const { data } = await supabase.from("user_roles").select("user_id,email,role,active").order("email"); if (data) setUsuariosRoles(data); }
-                    }}>Enviar invitación</button></div>
-                    {usuariosRoles.map(u => <div key={u.user_id} className="v10-user-row"><span>{nombresUsuarios[u.email] || u.email}<small>{u.email}</small></span><select aria-label={`Rol de ${u.email}`} value={u.role} disabled={gestionUsuarios} onChange={async e => { const role = e.target.value; setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ role }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, role } : x)); avisar("✓ Rol actualizado"); } }}>{["admin", "encargado", "bodega", "planta", "bienestar", "consulta"].map(r => <option key={r}>{r}</option>)}</select><button disabled={gestionUsuarios || u.email === window.__usuarioEmail?.toLowerCase()} onClick={async () => { setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ active: !u.active }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, active: !x.active } : x)); avisar("✓ Acceso actualizado"); } }}>{u.active ? "Suspender" : "Reactivar"}</button></div>)}
-                  </>}
-                </div>}
-                {esAdmin && (
-                  <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Nombres visibles de usuarios</div>
-                    <p style={{ fontSize: 11.5, color: C.textoSuave, margin: "0 0 10px" }}>El correo se conserva para identificar cada cambio, pero en la app y los reportes se muestra el nombre que asignes aquí.</p>
-                    {Object.entries(nombresUsuarios).sort(([a], [b]) => a.localeCompare(b)).map(([correo, nombre]) => <div key={correo} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
-                      <span><b>{nombre}</b> · {correo}</span>
-                      <span style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => { setCorreoNombre(correo); setNombreNuevo(nombre); }} style={{ fontSize: 11, padding: "4px 8px" }}>Editar</button>
-                        <button onClick={() => borrarNombreVisible(correo)} style={{ fontSize: 11, padding: "4px 8px", color: C.alerta }}>Quitar</button>
-                      </span>
-                    </div>)}
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                      <input type="email" aria-label="Correo del usuario" placeholder="correo exacto del usuario" value={correoNombre} onChange={e => setCorreoNombre(e.target.value)} style={{ ...inputStyle, flex: "1 1 190px", marginBottom: 0 }} />
-                      <input type="text" aria-label="Nombre visible" placeholder="Nombre visible, ej. Jose Daniel" value={nombreNuevo} onChange={e => setNombreNuevo(e.target.value)} style={{ ...inputStyle, flex: "1 1 160px", marginBottom: 0 }} />
-                      <button onClick={() => guardarNombreVisible(correoNombre, nombreNuevo)} style={{ ...btnStyle, flex: "0 0 auto", margin: 0 }}>Guardar nombre</button>
-                    </div>
-                    <button onClick={() => setCorreoNombre(window.__usuarioEmail || "")} style={{ marginTop: 7, fontSize: 11.5, color: C.verde, background: "none", border: "none", cursor: "pointer" }}>Usar mi correo</button>
-                  </div>
-                )}
-                {esAdmin && miRol !== "admin" && (
-                  <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>👑 Administradores</div>
-                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>Solo los correos de esta lista ven la parte económica (Por Pagar). Lista vacía = todos son administradores.</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                      {cfgAdmins.map(a2 => (
-                        <span key={a2} style={{ fontSize: 12, padding: "5px 10px", borderRadius: 16, background: C.verdeSuave, color: C.verde, fontWeight: 600 }}>
-                          {a2} <span onClick={async () => { const l2 = cfgAdmins.filter(x => x !== a2); if (await escribir(K.admins, l2)) { setCfgAdmins(l2); avisar("✓ Administrador quitado"); } else avisar("⚠ No se pudo guardar"); }} style={{ cursor: "pointer", marginLeft: 4 }}>×</span>
-                        </span>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input type="email" placeholder="correo@ejemplo.com" value={nuevoAdmin} onChange={e => setNuevoAdmin(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }} />
-                      <button onClick={async () => {
-                        const em = nuevoAdmin.trim().toLowerCase();
-                        if (!em || !em.includes("@")) { avisar("⚠ Escribe un correo válido"); return; }
-                        if (cfgAdmins.includes(em)) { avisar("— Ya está en la lista"); return; }
-                        const l2 = [...cfgAdmins, em];
-                        if (await escribir(K.admins, l2)) { setCfgAdmins(l2); setNuevoAdmin(""); avisar("✓ Administrador agregado"); } else avisar("⚠ No se pudo guardar — revisa la conexión con la base de datos");
-                      }} style={{ padding: "10px 14px", fontSize: 13, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>+ Agregar</button>
-                    </div>
-                  </div>
-                )}
-                <button onClick={async () => {
-                  if (confirmar !== "undoimport") { setConfirmar("undoimport"); avisar("⚠ Restaura TODO al estado previo a la última importación — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undoimport" ? null : c2), 8000); return; }
-                  setConfirmar(null); setGuardando(true);
-                  const bak = await leer("granja2:preImport", null);
-                  if (!bak?.datos) { avisar("— No hay respaldo de importación previa"); setGuardando(false); return; }
-                  let n = 0;
-                  for (const [k, v] of Object.entries(bak.datos)) { if (v !== null && v !== undefined) { await escribir(k, v); n++; } }
-                  avisar(`✓ Restaurado el estado previo a la importación (${n} conjuntos) — recarga la app`);
-                  setGuardando(false);
-                }} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>↩ Deshacer la última importación</button>
-                <button onClick={async () => {
-                  if (confirmar !== "undocxp") { setConfirmar("undocxp"); avisar("⚠ Restaura Por Pagar al estado ANTERIOR al último cambio — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undocxp" ? null : c2), 8000); return; }
-                  setConfirmar(null);
-                  const bak = await leer("granja2:cxpBak", null);
-                  if (!bak) { avisar("— No hay respaldo de Por Pagar todavía"); return; }
-                  if (await escribir(K.cxp, bak)) { setCxp({ facturas: [], pagos: [], notas: [], ...bak }); avisar("✓ Por Pagar restaurado al estado anterior"); }
-                }} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>↩ Deshacer último cambio en Por Pagar</button>
-                <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>
-                  Genera un .xlsx con producción, bodega y medicación — útil para tu contador o respaldo
-                </div>
-              </Seccion>
+            )}
             </>
           );
         })()}
@@ -6880,7 +6805,21 @@ const cssEtapaB = `
         {/* ══ BIENESTAR ANIMAL ══ */}
         {vista === "pesaje" && (
           <>
-            <Seccion titulo="Pesaje de la parvada" sub="Usualmente 200 aves por gallinero — pega o escribe los pesos en gramos, separados por coma, espacio o salto de línea">
+                        <BarraSubmenu
+              subsecciones={[
+                { id: "pesajes", nombre: "Pesajes de parvada", icono: "⚖️" },
+                { id: "histpesajes", nombre: "Buscar y corregir pesajes", icono: "🔍" },
+                { id: "vacunas", nombre: "Vacunación", icono: "💉" },
+                { id: "enfermedades", nombre: "Expediente médico", icono: "🩺" },
+                { id: "necropsias", nombre: "Necropsias y laboratorio", icono: "🔬" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subPesaje}
+              onChange={setSubPesaje}
+            />
+
+            {(subPesaje === "pesajes" || subPesaje === "todo") && (
+              <Seccion titulo="Pesaje de la parvada" sub="Usualmente 200 aves por gallinero — pega o escribe los pesos en gramos, separados por coma, espacio o salto de línea">
               <select value={fPeso.lote} onChange={e => setFPeso({ ...fPeso, lote: e.target.value })} style={selectStyle}>
                 {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza} ({semanasDe(l.nac).toFixed(0)} sem)</option>)}
               </select>
@@ -6950,8 +6889,10 @@ const cssEtapaB = `
               </div>}
               <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de pesajes (Dr. / nutricionista)</button>
             </Seccion>
+            )}
 
-            <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
+            {(subPesaje === "histpesajes" || subPesaje === "todo") && (
+              <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
               {selectorHistorial("pesajes")}
               {(() => {
                 const filas = historialVisible(pesajes, "pesajes").map(p => {
@@ -6977,8 +6918,10 @@ const cssEtapaB = `
                 </>;
               })()}
             </Seccion>
+            )}
 
-            <Seccion titulo="Vacunación — programa y aplicación" sub="Plan del Dr. Heiner Hernández Ávila (C.M.V #666) por día de edad. Marca cada vacuna aplicada con su fecha.">
+            {(subPesaje === "vacunas" || subPesaje === "todo") && (
+              <Seccion titulo="Vacunación — programa y aplicación" sub="Plan del Dr. Heiner Hernández Ávila (C.M.V #666) por día de edad. Marca cada vacuna aplicada con su fecha.">
               <button onClick={() => setPrintDoc({ tipo: "vacunas", lote: fVac.lote })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de vacunación</button>
               <select value={fVac.lote} onChange={e => setFVac({ ...fVac, lote: e.target.value })} style={selectStyle}>
                 {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza} ({semanasDe(l.nac).toFixed(0)} sem · {Math.floor(semanasDe(l.nac) * 7)} días)</option>)}
@@ -7034,8 +6977,10 @@ const cssEtapaB = `
                 Para quitar una vacuna del programa del doctor, avísame y la removemos — así evitamos borrados accidentales del plan oficial.
               </div>
             </Seccion>
+            )}
 
-            <Seccion titulo="Expediente médico — Enfermedades y tratamientos" sub="Diagnósticos por gallinero con su tratamiento y estado">
+            {(subPesaje === "enfermedades" || subPesaje === "todo") && (
+              <Seccion titulo="Expediente médico — Enfermedades y tratamientos" sub="Diagnósticos por gallinero con su tratamiento y estado">
               <button onClick={() => setPrintDoc({ tipo: "enfermedades" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir expediente</button>
               <select value={fEnf.lote} onChange={e => setFEnf({ ...fEnf, lote: e.target.value })} style={selectStyle}>
                 {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza}</option>)}
@@ -7064,8 +7009,10 @@ const cssEtapaB = `
                 {enfermedades.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin diagnósticos registrados.</div>}
               </div>
             </Seccion>
+            )}
 
-            <Seccion titulo="Necropsias y laboratorio" sub="Resultados de necropsias, coprológicos, bromatológicos y otros análisis">
+            {(subPesaje === "necropsias" || subPesaje === "todo") && (
+              <Seccion titulo="Necropsias y laboratorio" sub="Resultados de necropsias, coprológicos, bromatológicos y otros análisis">
               <button onClick={() => setPrintDoc({ tipo: "necropsias" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir registro</button>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <select value={fNec.lote} onChange={e => setFNec({ ...fNec, lote: e.target.value })} style={{ ...inputStyle, flex: "1 1 45%", marginBottom: 12 }}>
@@ -7122,6 +7069,7 @@ const cssEtapaB = `
                 {necropsias.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin resultados registrados.</div>}
               </div>
             </Seccion>
+            )}
           </>
         )}
       </main>
