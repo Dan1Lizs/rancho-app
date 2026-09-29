@@ -19,6 +19,8 @@ import { Campo } from "./components/Campo";
 import { ModalDialog } from "./components/ModalDialog";
 import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
 import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
+import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
+import { vistasPermitidas } from "./permisos";
 import "./v10.css";
 
 // ─── Tokens ─────────────────────────────────────────────────────
@@ -63,16 +65,6 @@ const sumarDias = (dmy, dias) => {
   return `${String(f.getDate()).padStart(2, "0")}/${String(f.getMonth() + 1).padStart(2, "0")}/${f.getFullYear()}`;
 };
 const aDate = (dmy) => { const [d, m, y] = dmy.split("/").map(Number); return new Date(y, m - 1, d); };
-const f2Dec = (val, def = "—") => {
-  if (val == null || val === "" || isNaN(Number(val))) return def;
-  const num = Number(val);
-  const r = Math.round((num + Number.EPSILON) * 100) / 100;
-  return r.toString();
-};
-const n2Dec = (val) => {
-  if (val == null || val === "" || isNaN(Number(val))) return 0;
-  return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
-};
 const fechaVacuna = (nacISO, dias) => {
   const [y, m, d] = nacISO.split("-").map(Number);
   const f = new Date(y, m - 1, d + Number(dias));
@@ -328,7 +320,7 @@ function FiltrosLista({ filtro, setFiltro, lotes, estados = [], total, visibles 
 
 // ── Componente Matriz "Qué falta hoy" (Punto 11) ──
 // ── Componente Modal para Pegar Tiquetes desde Excel (Punto 22) ──
-function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subPlanta, subPedidoMP, subFormulas, subInsumos, subPesaje, subHistorial, recActiva, fPeso, histFecha, irA, avisar }) {
+function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, subPlanta, subPedidoMP, subFormulas, subInsumos, subPesaje, subHistorial, recActiva, fPeso, histFecha, irA, avisar }) {
   if (vista === "inicio") return null;
 
   const tabActual = tabs.find(t => t.id === vista) || { nombre: vista };
@@ -342,6 +334,8 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
     const nombresSubBodega = { producido: "Huevo producido", ruta: "Salida a ruta", otros: "Otros movimientos", cierre: "Cierre del día", historial: "Historial", apertura: "Apertura", todo: "Todo" };
     const nomSub = nombresSubBodega[subBodega] || "Movimiento";
     subdetalle = `${nomSub} · ${fechaBodega ? fechaBodega.split("-").reverse().join("/") : "Hoy"}`;
+  } else if (vista === "reporte") {
+    subdetalle = ({ resumen: "Resumen", comparativo: "Comparativo", decisiones: "Decisiones", bitacora: "Bitácora", auditoria: "Auditoría", kpis: "KPIs técnicos", economia: "Economía", todo: "Ver todo" })[subReporte] || "Ver todo";
   } else if (vista === "planta") {
     const nomSub = { baches: "Baches producidos", nucleo: "Núcleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
     subdetalle = nomSub;
@@ -472,6 +466,7 @@ export default function App() {
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [menuMovil, setMenuMovil] = useState(false);
   const [salidaPendiente, setSalidaPendiente] = useState(null);
+  const [accesoDenegado, setAccesoDenegado] = useState(null);
   const [modalPegarTiquetes, setModalPegarTiquetes] = useState(false);
   useEffect(() => { localStorage.setItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`, vista); }, [vista]);
   useEffect(() => {
@@ -538,6 +533,7 @@ export default function App() {
   const [subRevision, setSubRevision] = useState("excepciones");
   const [subPesaje, setSubPesaje] = useState("resumen");
   const [subHistorial, setSubHistorial] = useState("dia");
+  const [subReporte, setSubReporte] = useState("todo");
   const [editarAjustePlanta, setEditarAjustePlanta] = useState(null);
   const [subBodega, setSubBodega] = useState("producido");
   const [fechaBodega, setFechaBodega] = useState(hoyISO());
@@ -2282,25 +2278,30 @@ export default function App() {
     { nombre: "Salud y lotes", ids: ["pesaje", "lotes"] },
     { nombre: "Administración", ids: ["historial", "cxp"] },
   ];
-  const vistasPorRol = {
-    admin: tabs.map(t => t.id),
-    encargado: tabs.filter(t => t.id !== "cxp").map(t => t.id),
-    bodega: ["inicio", "bodega", "reporte", "historial"],
-    planta: ["inicio", "planta", "pedidomp", "formulas", "revision", "reporte"],
-    bienestar: ["inicio", "pesaje", "reporte", "revision"],
-    consulta: ["inicio", "reporte", "bodega", "planta", "pesaje", "insumos", "lotes", "pedidomp", "formulas", "historial"],
-  };
-  const tabsVisibles = tabs.filter(t => (vistasPorRol[miRol] || []).includes(t.id));
+  const idsVistas = tabs.map(t => t.id);
+  const idsPermitidos = vistasPermitidas(miRol, idsVistas);
+  const tabsVisibles = tabs.filter(t => idsPermitidos.includes(t.id));
   useEffect(() => { if (!tabsVisibles.some(t => t.id === vista)) setVista("inicio"); }, [vista, esAdmin, miRol]);
   const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
-  const irA = (id) => { if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id); else abrirVista(id); };
+  const irA = (id) => {
+    const destino = tabs.find(t => t.id === id);
+    if (!destino) return;
+    if (miRol !== "cargando" && !idsPermitidos.includes(id)) {
+      setAccesoDenegado(destino.nombre);
+      setMenuMovil(false);
+      setBuscadorAbierto(false);
+      return;
+    }
+    if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id);
+    else abrirVista(id);
+  };
 
 
 
   useEffect(() => {
     const h = leerHashRuta();
     if (!h) return;
-    if (h.ruta && tabsVisibles.some(t => t.id === h.ruta) && h.ruta !== vista) {
+    if (h.ruta && tabs.some(t => t.id === h.ruta) && h.ruta !== vista) {
       irA(h.ruta);
     }
     const g = h.params.get("galpon") || h.params.get("lote");
@@ -2317,12 +2318,13 @@ export default function App() {
     if (subParam && h.ruta === "bodega") {
       setSubBodega(subParam);
     }
+    if (subParam && h.ruta === "reporte") setSubReporte(subParam);
     if (f && h.ruta === "historial") setHistFecha(f);
     const form = h.params.get("formula");
     if (form && recetas.formulas && recetas.formulas[form]) {
       setRecActiva(form);
     }
-  }, [lotes.length]);
+  }, [lotes.length, miRol]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -2332,6 +2334,8 @@ export default function App() {
     } else if (vista === "bodega") {
       if (fechaBodega && fechaBodega !== hoyISO()) params.set("fecha", fechaBodega);
       if (subBodega && subBodega !== "producido") params.set("sub", subBodega);
+    } else if (vista === "reporte") {
+      if (subReporte && subReporte !== "todo") params.set("sub", subReporte);
     } else if (vista === "formulas") {
       if (recActiva) params.set("formula", recActiva);
     } else if (vista === "pesaje") {
@@ -2344,13 +2348,13 @@ export default function App() {
     if (window.location.hash !== nuevoHash) {
       window.history.replaceState(null, "", nuevoHash);
     }
-  }, [vista, galponActivo, fechaCaptura, fechaBodega, subBodega, recActiva, fPeso.lote, histFecha]);
+  }, [vista, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, recActiva, fPeso.lote, histFecha]);
 
   useEffect(() => {
     const onHashChange = () => {
       const h = leerHashRuta();
       if (!h) return;
-      if (h.ruta && tabsVisibles.some(t => t.id === h.ruta) && h.ruta !== vista) {
+      if (h.ruta && tabs.some(t => t.id === h.ruta) && h.ruta !== vista) {
         irA(h.ruta);
       }
       const g = h.params.get("galpon") || h.params.get("lote");
@@ -2367,14 +2371,15 @@ export default function App() {
       if (subParam && h.ruta === "bodega" && subParam !== subBodega) {
         setSubBodega(subParam);
       }
+      if (subParam && h.ruta === "reporte" && subParam !== subReporte) setSubReporte(subParam);
       if (f && h.ruta === "historial" && f !== histFecha) setHistFecha(f);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, [vista, tabsVisibles, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, histFecha]);
+  }, [vista, miRol, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, histFecha]);
   const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
     ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
-    ...registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })),
+    ...(idsPermitidos.includes("historial") ? registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })) : []),
     ...bodegaMovs.map(m => ({ texto: `Bodega ${m.fecha} · ${m.responsable || m.por || ""}`, vista: "bodega", fecha: fechaHistorialISO(m.fecha) })),
     ...pesajes.map(p => ({ texto: `Pesaje ${p.fecha} · ${lotes.find(l => l.id === p.lote)?.galpon ? `G${lotes.find(l => l.id === p.lote).galpon}` : p.lote}`, vista: "pesaje", fecha: fechaHistorialISO(p.fecha) })),
     ...tareasProgramadas.map(t => ({ texto: `Actividad ${t.nombre} · ${t.responsable || ""}`, vista: "pesaje" })),
@@ -2704,6 +2709,17 @@ export default function App() {
     cxp: facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
     pesaje: vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
   };
+  const verReporte = (...secciones) => subReporte === "todo" || secciones.includes(subReporte);
+  const nombreSeccionReporte = {
+    todo: "Reporte gerencial completo",
+    resumen: "Resumen del día",
+    comparativo: "Comparativo y genética",
+    decisiones: "Decisiones",
+    bitacora: "Bitácora",
+    auditoria: "Auditoría de gestión",
+    kpis: "KPIs técnicos",
+    economia: "Economía",
+  }[subReporte] || "Reporte gerencial";
 
   if (printDoc) {
     const l = printDoc.lote ? lotes.find(x => x.id === printDoc.lote) : null;
@@ -2728,7 +2744,7 @@ export default function App() {
           {printDoc.tipo === "pesajes" && "Reporte de pesaje corporal — todos los gallineros"}
           {printDoc.tipo === "lotes" && "Estado de lotes — inventario y desempeño de parvadas"}
           {printDoc.tipo === "bodega" && (printDoc.movimientoId ? "Historial de bodega de huevo" : "Movimiento de bodega de huevo")}
-          {printDoc.tipo === "reporte" && `Reporte gerencial diario — ${hoyStr()}`}
+          {printDoc.tipo === "reporte" && `${({ todo: "Reporte gerencial completo", resumen: "Resumen del día", comparativo: "Comparativo y genética", decisiones: "Decisiones", bitacora: "Bitácora", auditoria: "Auditoría de gestión", kpis: "KPIs técnicos", economia: "Economía" })[printDoc.seccion || "todo"] || "Reporte gerencial"} — ${hoyStr()}`}
           {printDoc.tipo === "bache" && `Checklist de producción de concentrado — ${printDoc.formula}`}
           {printDoc.tipo === "controldiario" && `Reporte diario de operación — ${printDoc.fecha}`}
           {printDoc.tipo === "cxp" && `Estado de Cuentas por Pagar — al ${hoyStr()}`}
@@ -3007,10 +3023,22 @@ export default function App() {
         {printDoc.tipo === "reporte" && (() => {
           const avesTot = activos.reduce((a, x) => a + x.aves, 0);
           const colorNivel = { rojo: "#B3402A", amarillo: "#9A6605" };
+          const seccion = printDoc.seccion || "todo";
+          const incluye = (...ids) => seccion === "todo" || ids.includes(seccion);
+          const notasHoy = bitacora.filter(b => b.fecha === fHoy);
+          const filasComparativo = dHoy ? [
+            ["Producción", dHoy.cartones, dAyer?.cartones, dFechaCercana?.cartones, " cart"],
+            ["% Postura", dHoy.postura, dAyer?.postura, dFechaCercana?.postura, "%"],
+            ["Consumo", dHoy.consumo, dAyer?.consumo, dFechaCercana?.consumo, " g/ave"],
+            ["Conversión", dHoy.conv, dAyer?.conv, dFechaCercana?.conv, ""],
+            ["Mortalidad", dHoy.muertas, dAyer?.muertas, dFechaCercana?.muertas, " aves"],
+            ["% Quebrado", dHoy.pctQueb, dAyer?.pctQueb, dFechaCercana?.pctQueb, "%"],
+            ["Peso huevo", dHoy.pesoH, dAyer?.pesoH, dFechaCercana?.pesoH, " g"],
+          ] : [];
           return (
             <>
               {!dHoy && <div style={{ fontSize: 13.5, marginBottom: 14 }}>Sin registro de producción para hoy — el reporte muestra el último estado disponible.</div>}
-              {dHoy && (
+              {incluye("resumen") && dHoy && (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Resumen del día ({fHoy}) — {avesTot.toLocaleString()} aves en {activos.length} gallineros</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
@@ -3025,7 +3053,16 @@ export default function App() {
                   </table>
                 </>
               )}
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Semáforo técnico por gallinero</div>
+              {incluye("comparativo") && dHoy && <>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Comparativo del día</div>
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                  <thead><tr><th style={th}>Indicador</th><th style={th}>{fHoy}</th><th style={th}>{fAyer || "Anterior"}</th><th style={th}>{fechaComparacion || "Comparación"}</th></tr></thead>
+                  <tbody>{filasComparativo.map(([nombre, actual, anterior, otra, unidad]) => <tr key={nombre}><td style={{ ...celda, fontWeight: 600 }}>{nombre}</td><td style={celda}>{f2Dec(actual)}{unidad}</td><td style={celda}>{anterior == null ? "—" : `${f2Dec(anterior)}${unidad}`}</td><td style={celda}>{otra == null ? "—" : `${f2Dec(otra)}${unidad}`}</td></tr>)}</tbody>
+                </table>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Postura vs genética por gallinero</div>
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}><thead><tr><th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta genética</th><th style={th}>Brecha</th></tr></thead><tbody>{activos.map(l2 => { const r = registros.find(x => x.fecha === fHoy && x.lote === l2.id); const postura = r && l2.aves ? (r.cartones * HXC / l2.aves) * 100 : null; const meta = metaPosturaLote(l2, fHoy); return <tr key={l2.id}><td style={celda}>G{l2.galpon} · {l2.raza}</td><td style={celda}>{postura == null ? "—" : `${f2Dec(postura)}%`}</td><td style={celda}>{meta == null ? "—" : `${f2Dec(meta)}%`}</td><td style={celda}>{postura == null || meta == null ? "—" : `${postura - meta > 0 ? "+" : ""}${f2Dec(postura - meta)} pts`}</td></tr>; })}</tbody></table>
+              </>}
+              {incluye("kpis") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>KPIs técnicos y semáforo por gallinero</div>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                 <thead><tr><th style={th}>Gall.</th><th style={th}>Postura (vs tabla)</th><th style={th}>Consumo vs ración</th><th style={th}>Agua:alim</th><th style={th}>Mort. 7d</th><th style={th}>Peso vs tabla</th><th style={th}>Uniformidad</th></tr></thead>
                 <tbody>
@@ -3058,22 +3095,33 @@ export default function App() {
                   })}
                 </tbody>
               </table>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Auditoría de gestión ({auditoriaVisibles.length} hallazgo{auditoriaVisibles.length === 1 ? "" : "s"})</div>
+              </>}
+              {incluye("auditoria") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Auditoría de gestión ({auditoriaVisibles.length} hallazgo{auditoriaVisibles.length === 1 ? "" : "s"})</div>
               {auditoriaVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 12 }}>✓ Sin hallazgos — tareas y controles al día.</div>}
               {auditoriaVisibles.map((a, i) => (
                 <div key={"au" + i} style={{ fontSize: 12, padding: "5px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
                   <b style={{ color: colorNivel[a.nivel] || "#333" }}>{a.nivel === "rojo" ? "🔴" : "🟡"}</b> {a.textoAjustado || a.texto}
                   {a.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(a.ajuste.responsable)}: {a.ajuste.razon}]</span>}
                 </div>
-              ))}
-              <div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Para decidir hoy ({decisionesVisibles.length} punto{decisionesVisibles.length === 1 ? "" : "s"})</div>
+              ))}</>}
+              {incluye("decisiones") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Para decidir hoy ({decisionesVisibles.length} punto{decisionesVisibles.length === 1 ? "" : "s"})</div>
               {decisionesVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 14 }}>✓ Sin alertas — operación dentro de parámetros.</div>}
               {decisionesVisibles.map((d, i) => (
                 <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
                   <b style={{ color: colorNivel[d.nivel] || "#333" }}>{d.nivel === "rojo" ? "🔴" : "🟡"}</b> {d.textoAjustado || d.texto}
                   {d.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(d.ajuste.responsable)}: {d.ajuste.razon}]</span>}
                 </div>
-              ))}
+              ))}</>}
+              {incluye("bitacora") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Bitácora del día</div>{notasHoy.length ? notasHoy.map((n, i) => <div key={i} style={{ fontSize: 12.5, padding: "7px 0", borderBottom: "1px solid #ddd" }}>{n.texto}{n.por ? ` — ${mostrarNombre(n.por)}` : ""}</div>) : <div style={{ fontSize: 12.5 }}>Sin novedades registradas.</div>}</>}
+              {incluye("economia") && (() => {
+                const precioCarton = Number(costos._precioVenta || 0);
+                const registrosDia = ultDia ? registros.filter(r => r.fecha === ultDia) : [];
+                const cartones = registrosDia.reduce((a, r) => a + Number(r.cartones || 0), 0);
+                const costoAlimento = registrosDia.reduce((a, r) => { const lote = lotes.find(x => x.id === r.lote); return a + Number(r.alimentoKg || 0) * Number(costos[lote?.formula] || 0); }, 0);
+                const ingreso = precioCarton * cartones;
+                const margen = precioCarton > 0 && costoAlimento > 0 ? ingreso - costoAlimento : null;
+                return <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Economía — margen sobre alimento</div><table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr><td style={celda}>Cartones del día</td><td style={celda}>{f2Dec(cartones, "0")}</td></tr><tr><td style={celda}>Ingreso estimado</td><td style={celda}>{precioCarton > 0 ? colones(ingreso) : "Falta precio de venta"}</td></tr><tr><td style={celda}>Costo de alimento</td><td style={celda}>{costoAlimento > 0 ? colones(costoAlimento) : "Faltan costos por fórmula"}</td></tr><tr><td style={{ ...celda, fontWeight: 700 }}>Margen sobre alimento</td><td style={{ ...celda, fontWeight: 700 }}>{margen == null ? "—" : colones(margen)}</td></tr></tbody></table></>;
+              })()}
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span>_______________________________<br />Encargado de granja</span>
                 <span>_______________________________<br />Gerencia</span>
@@ -3505,6 +3553,23 @@ export default function App() {
         <p style={{ margin: 0, color: C.textoSuave }}>Si cambias de pantalla sin enviar, tus datos no se perderán pero no estarán reflejados en los reportes hasta que confirmes el envío.</p>
       </ModalDialog>
       <ModalDialog
+        abierto={!!accesoDenegado}
+        titulo="Acceso restringido"
+        subtitulo={`Tu rol actual no tiene permiso para entrar a ${accesoDenegado || "este módulo"}.`}
+        onClose={() => setAccesoDenegado(null)}
+        ancho={460}
+        tono="alerta"
+        pie={
+          <button type="button" autoFocus onClick={() => setAccesoDenegado(null)} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+            Entendido
+          </button>
+        }
+      >
+        <p style={{ margin: 0, color: C.textoSuave, lineHeight: 1.55 }}>
+          Solicita al administrador que revise o cambie tus permisos si necesitas trabajar en esta sección.
+        </p>
+      </ModalDialog>
+      <ModalDialog
         abierto={!!revisionGuardado}
         titulo={`Revisar antes de guardar · ${fechaCaptura}`}
         subtitulo="Verifica los totales calculados antes de enviar los datos a la base compartida"
@@ -3696,6 +3761,7 @@ export default function App() {
           fechaCaptura={fechaCaptura}
           fechaBodega={fechaBodega}
           subBodega={subBodega}
+          subReporte={subReporte}
           subPlanta={subPlanta}
           subPedidoMP={subPedidoMP}
           subFormulas={subFormulas}
@@ -3728,7 +3794,7 @@ export default function App() {
           registros.forEach(r => { const k = `${r.fecha}|${r.lote}`; conteo.set(k, (conteo.get(k) || 0) + 1); });
           const conflictos = [...conteo].filter(([, n]) => n > 1);
           return conflictos.length ? <div role="alert" style={{ padding: 12, marginBottom: 12, borderRadius: 10, background: C.alertaSuave, color: C.alerta, fontSize: 13 }}>
-            ⚠ {conflictos.length} fecha(s) con producción duplicada. Los totales pueden estar inflados. <button onClick={() => { const fecha = conflictos[0][0].split("|")[0]; setHistFecha(fechaHistorialISO(fecha)); setVista("historial"); }} style={{ marginLeft: 8 }}>Revisar en Historial</button>
+            ⚠ {conflictos.length} fecha(s) con producción duplicada. Los totales pueden estar inflados. <button onClick={() => { const fecha = conflictos[0][0].split("|")[0]; setHistFecha(fechaHistorialISO(fecha)); irA("historial"); }} style={{ marginLeft: 8 }}>Revisar en Historial</button>
           </div> : null;
         })()}
         {vista === "revision" && (
@@ -3863,17 +3929,17 @@ export default function App() {
                 <div style={{ background: C.verdeSuave, border: `1px solid #C4DBC7`, borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12.5, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <span style={{ fontSize: 10.5, fontWeight: 700, color: C.verde, textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 2 }}>Referencia del último control registrado ({prev.fecha}):</span>
-                    <b>{prev.cartones} cart</b> ({(prev.cartones * 30).toLocaleString()} huevos) · <b>{prev.alimentoKg} kg alimento</b> ({prev.alimento6am || 0} am / {prev.alimento1pm || 0} pm) · <b>{prev.muertas || 0} muertas</b> · {prev.aguaL ? `${prev.aguaL} L agua` : "sin dato agua"}
-                    <div style={{ color: C.textoSuave, fontSize: 11, marginTop: 2 }}>Actual en este formulario: {actual.cartones.toFixed(1)} cartones · {actual.huevos.toLocaleString()} huevos</div>
+                    <b>{f2Dec(prev.cartones, "0")} cart</b> ({Math.round(Number(prev.cartones || 0) * 30).toLocaleString()} huevos) · <b>{f2Dec(prev.alimentoKg, "0")} kg alimento</b> ({f2Dec(prev.alimento6am, "0")} am / {f2Dec(prev.alimento1pm, "0")} pm) · <b>{f2Dec(prev.muertas, "0")} muertas</b> · {Number(prev.aguaL || 0) ? `${f2Dec(prev.aguaL)} L agua` : "sin dato agua"}
+                    <div style={{ color: C.textoSuave, fontSize: 11, marginTop: 2 }}>Actual en este formulario: {f2Dec(actual.cartones, "0")} cartones · {actual.huevos.toLocaleString()} huevos</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       // Carga sugerencias de alimento y agua sin sobreescribir tiquetes de huevos que deben ser nuevos
                       setCap({
-                        alimento6am: String(prev.alimento6am || ""),
-                        alimento1pm: String(prev.alimento1pm || ""),
-                        aguaL: String(prev.aguaL || ""),
+                        alimento6am: Number(prev.alimento6am || 0) ? f2Dec(prev.alimento6am, "") : "",
+                        alimento1pm: Number(prev.alimento1pm || 0) ? f2Dec(prev.alimento1pm, "") : "",
+                        aguaL: Number(prev.aguaL || 0) ? f2Dec(prev.aguaL, "") : "",
                         muertas: cap.muertas !== "" ? cap.muertas : "0",
                       });
                       avisar(`✓ Raciones de referencia del ${prev.fecha} cargadas como sugerencia — revisa y ajusta`);
@@ -4266,7 +4332,23 @@ export default function App() {
         )}
         {/* ══ REPORTE ══ */}
         {vista === "reporte" && (
-          <button onClick={() => setPrintDoc({ tipo: "reporte" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte gerencial</button>
+          <>
+            <BarraSubmenu
+              subsecciones={[
+                { id: "resumen", nombre: "Resumen", icono: "📌" },
+                { id: "comparativo", nombre: "Comparativo", icono: "↔" },
+                { id: "decisiones", nombre: "Decisiones", icono: "⚠️" },
+                { id: "bitacora", nombre: "Bitácora", icono: "📝" },
+                { id: "auditoria", nombre: "Auditoría", icono: "🔍" },
+                { id: "kpis", nombre: "KPIs técnicos", icono: "📊" },
+                { id: "economia", nombre: "Economía", icono: "₡" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subReporte}
+              onChange={setSubReporte}
+            />
+            <button onClick={() => setPrintDoc({ tipo: "reporte", seccion: subReporte })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir: {nombreSeccionReporte}</button>
+          </>
         )}
         {vista === "reporte" && dHoy && (() => {
           const Delta = ({ hoy, contra, invertir, unidad = "", dec = 1 }) => {
@@ -4290,7 +4372,7 @@ export default function App() {
           const notasHoy = bitacora.filter(b => b.fecha === fHoy);
           return (
             <>
-              <div style={{ background: C.verde, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 14 }}>
+              {verReporte("resumen") && <div style={{ background: C.verde, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 14 }}>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>Reporte del día · {fHoy}</div>
                 <div style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.6, opacity: 0.95 }}>
                   Se produjeron <b>{dHoy.cartones.toFixed(1)} cartones</b> con postura de <b>{dHoy.postura.toFixed(1)}%</b>
@@ -4298,9 +4380,9 @@ export default function App() {
                   {brechaGen != null && <> a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta genética ({metaGenetica.toFixed(1)}%).</>}
                   Mortalidad: <b>{dHoy.muertas}</b>. Quebrado: <b>{dHoy.pctQueb.toFixed(1)}%</b>. Concentrado en planta: <b>{saldoPlanta.toFixed(0)} kg</b>.
                 </div>
-              </div>
+              </div>}
 
-              <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} día(s) ${diasDiferencia < 0 ? "antes" : "después"}`}` : ""}). ${fechasDescartadas ? `${fechasDescartadas} control(es) con producción superior a las aves alojadas excluido(s).` : ""}`}>
+              {verReporte("comparativo") && <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} día(s) ${diasDiferencia < 0 ? "antes" : "después"}`}` : ""}). ${fechasDescartadas ? `${fechasDescartadas} control(es) con producción superior a las aves alojadas excluido(s).` : ""}`}>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                     <thead>
@@ -4323,9 +4405,9 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-              </Seccion>
+              </Seccion>}
 
-              <Seccion titulo="vs Genética — por gallinero" sub="Postura del día contra la tabla de la casa genética">
+              {verReporte("comparativo") && <Seccion titulo="vs Genética — por gallinero" sub="Postura del día contra la tabla de la casa genética">
                 {activos.map(l => {
                   const r = registros.find(x => x.fecha === fHoy && x.lote === l.id);
                   const p = r ? (r.cartones * HXC / l.aves) * 100 : null;
@@ -4339,9 +4421,9 @@ export default function App() {
                     </div>
                   );
                 })}
-              </Seccion>
+              </Seccion>}
 
-              <Seccion titulo="⚖️ Peso corporal vs tabla genética" sub="Tu medida crítica — del último pesaje de cada gallinero">
+              {verReporte("comparativo") && <Seccion titulo="⚖️ Peso corporal vs tabla genética" sub="Tu medida crítica — del último pesaje de cada gallinero">
                 {activos.map(l => {
                   const pes = pesajes.find(p2 => p2.lote === l.id);
                   if (!pes || !pes.pesos?.length) return (
@@ -4371,9 +4453,9 @@ export default function App() {
                     </div>
                   );
                 })}
-              </Seccion>
+              </Seccion>}
 
-              <Seccion titulo="Para decidir hoy" sub={decisiones.length ? "Generado automáticamente con los datos del día — puedes modificar o descartar cada punto" : ""}>
+              {verReporte("decisiones") && <Seccion titulo="Para decidir hoy" sub={decisiones.length ? "Generado automáticamente con los datos del día — puedes modificar o descartar cada punto" : ""}>
                 {decisionesVisibles.length === 0 && <div style={{ fontSize: 14, color: C.verde, fontWeight: 500 }}>✓ Sin alertas — el día se comportó dentro de los rangos esperados.</div>}
                 {decisionesVisibles.map((d, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: d.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5 }}>
@@ -4394,9 +4476,9 @@ export default function App() {
                     </div>
                   </div>
                 ))}
-              </Seccion>
+              </Seccion>}
 
-              {notasHoy.length > 0 && (
+              {verReporte("bitacora") && notasHoy.length > 0 && (
                 <Seccion titulo="Bitácora del día">
                   {notasHoy.map((n, i) => (
                     <div key={i} style={{ fontSize: 13.5, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
@@ -4405,10 +4487,11 @@ export default function App() {
                   ))}
                 </Seccion>
               )}
+              {verReporte("bitacora") && notasHoy.length === 0 && <Seccion titulo="Bitácora del día"><div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin novedades registradas para esta fecha.</div></Seccion>}
             </>
           );
         })()}
-        {vista === "reporte" && !dHoy && (
+        {vista === "reporte" && !dHoy && verReporte("resumen", "comparativo", "decisiones", "bitacora") && (
           <Seccion titulo="Reporte del día">
             <div style={{ fontSize: 14, color: C.textoSuave }}>Aún no hay registros. Captura el control diario y el reporte se genera solo.</div>
           </Seccion>
@@ -5482,7 +5565,7 @@ export default function App() {
           const mort7Pct = avesTot > 0 ? (mort7 / avesTot) * 100 : 0;
           return (
             <>
-              <Seccion titulo="🔍 Auditoría de gestión" sub="Tareas sin realizar, patrones anómalos y controles vencidos — lo que NO está pasando">
+              {verReporte("auditoria") && <Seccion titulo="🔍 Auditoría de gestión" sub="Tareas sin realizar, patrones anómalos y controles vencidos — lo que NO está pasando">
                 {auditoriaVisibles.length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>✓ Gestión al día — sin hallazgos de auditoría.</div>}
                 {auditoriaVisibles.map((a, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 9, padding: "9px 12px", background: a.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 6, fontSize: 13, lineHeight: 1.5 }}>
@@ -5503,7 +5586,7 @@ export default function App() {
                     </div>
                   </div>
                 ))}
-                {ajustesAuditoria.length > 0 && (
+                {idsPermitidos.includes("historial") && ajustesAuditoria.length > 0 && (
                   <details style={{ marginTop: 12, padding: "8px 10px", background: C.fondo, borderRadius: 10 }}>
                     <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: C.texto }}>
                       📋 Historial de advertencias gestionadas / descartadas ({ajustesAuditoria.length})
@@ -5535,8 +5618,9 @@ export default function App() {
                     </div>
                   </details>
                 )}
-              </Seccion>
+              </Seccion>}
 
+              {verReporte("kpis") && <>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, color: C.verde, margin: "18px 0 10px", borderTop: `2px solid ${C.borde}`, paddingTop: 16 }}>📊 KPIs técnicos de la granja</div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
                 <KPI etiqueta="Masa de huevo" valor={masaHuevo ? masaHuevo.toFixed(1) : "—"} unidad="g/ave/día" tono={masaHuevo && masaHuevo < 45 ? "alerta" : "ok"} sub="Meta en pico: 55–60" />
@@ -5597,11 +5681,13 @@ export default function App() {
                   </table>
                 </div>
               </Seccion>
+              </>}
             </>
           );
         })()}
-        {vista === "reporte" && (
+        {vista === "reporte" && (verReporte("kpis") || verReporte("economia")) && (
           <>
+            {verReporte("kpis") && <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="% Postura" valor={posturaDia.toFixed(1)} unidad="%" tono={posturaDia < 80 ? "alerta" : "ok"} sub={`${huevosDia.toLocaleString()} huevos · Est.: ≥85%`} />
               <KPI etiqueta="Conversión (7d)" valor={conversion ? conversion.toFixed(2) : "—"} unidad="kg/kg" tono={conversion > 2.2 ? "alerta" : "ok"} sub="Est. industria: ≤2.2" />
@@ -5676,7 +5762,9 @@ export default function App() {
                 </table>
               </div>
             </Seccion>
+            </>}
 
+            {verReporte("economia") && <>
             <Seccion titulo="Economía — margen sobre alimento (IOFC)" sub="El indicador que une lo técnico con la plata: ingreso del huevo menos costo del alimento">
               {(() => {
                 const precioCart = Number(costos._precioVenta || 0);
@@ -5723,6 +5811,7 @@ export default function App() {
                 ))}
               </div>
             </Seccion>
+            </>}
           </>
         )}
         {/* ══ POR PAGAR ══ */}
@@ -7373,7 +7462,7 @@ export default function App() {
 
       <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
         Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
-        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 28/09/2026
+        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 29/09/2026
       </footer>
     </div>
   );
