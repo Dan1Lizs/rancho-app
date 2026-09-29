@@ -698,7 +698,7 @@ function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 56
   );
 }
 
-function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, recActiva, fPeso, histFecha, irA, avisar }) {
+function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, recActiva, fPeso, histFecha, irA, avisar }) {
   if (vista === "inicio") return null;
 
   const tabActual = tabs.find(t => t.id === vista) || { nombre: vista };
@@ -708,8 +708,18 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
   if (vista === "captura") {
     const l = lotes.find(x => x.id === galponActivo);
     subdetalle = `Galpón ${l?.galpon || galponActivo || "1"} · ${fechaCaptura ? fechaCaptura.split("-").reverse().join("/") : "Hoy"}`;
-  } else if (vista === "bodega" && fechaBodega) {
-    subdetalle = `Fecha ${fechaBodega.split("-").reverse().join("/")}`;
+  } else if (vista === "bodega") {
+    const nombresSubBodega = {
+      producido: "Huevo producido",
+      ruta: "Salida a ruta",
+      otros: "Otros movimientos",
+      cierre: "Cierre del día",
+      historial: "Historial",
+      apertura: "Apertura",
+      todo: "Todo",
+    };
+    const nomSub = nombresSubBodega[subBodega] || "Movimiento";
+    subdetalle = `${nomSub} · ${fechaBodega ? fechaBodega.split("-").reverse().join("/") : "Hoy"}`;
   } else if (vista === "formulas" && recActiva) {
     subdetalle = `Fórmula ${recActiva}`;
   } else if (vista === "pesaje" && fPeso?.lote) {
@@ -857,6 +867,7 @@ export default function App() {
   ]);
   const [obsInv, setObsInv] = useState("");
   const [ajusteBodega, setAjusteBodega] = useState("");
+  const [subBodega, setSubBodega] = useState("producido");
   const [fechaBodega, setFechaBodega] = useState(hoyISO());
   const [movBodegaId, setMovBodegaId] = useState(null);
   const fechaBodegaRef = useRef(hoyISO());
@@ -2479,6 +2490,10 @@ export default function App() {
     if (f) {
       if (h.ruta === "captura") setFechaCaptura(f);
       if (h.ruta === "bodega") cambiarFechaBodega(f);
+    }
+    const subParam = h.params.get("sub");
+    if (subParam && h.ruta === "bodega") {
+      setSubBodega(subParam);
       if (h.ruta === "historial") setHistFecha(f);
     }
     const form = h.params.get("formula");
@@ -2494,6 +2509,7 @@ export default function App() {
       if (fechaCaptura && fechaCaptura !== hoyISO()) params.set("fecha", fechaCaptura);
     } else if (vista === "bodega") {
       if (fechaBodega && fechaBodega !== hoyISO()) params.set("fecha", fechaBodega);
+      if (subBodega && subBodega !== "producido") params.set("sub", subBodega);
     } else if (vista === "formulas") {
       if (recActiva) params.set("formula", recActiva);
     } else if (vista === "pesaje") {
@@ -2506,7 +2522,7 @@ export default function App() {
     if (window.location.hash !== nuevoHash) {
       window.history.replaceState(null, "", nuevoHash);
     }
-  }, [vista, galponActivo, fechaCaptura, fechaBodega, recActiva, fPeso.lote, histFecha]);
+  }, [vista, galponActivo, fechaCaptura, fechaBodega, subBodega, recActiva, fPeso.lote, histFecha]);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -2524,12 +2540,16 @@ export default function App() {
       if (f) {
         if (h.ruta === "captura" && f !== fechaCaptura) setFechaCaptura(f);
         if (h.ruta === "bodega" && f !== fechaBodega) cambiarFechaBodega(f);
+      }
+      const subParam = h.params.get("sub");
+      if (subParam && h.ruta === "bodega" && subParam !== subBodega) {
+        setSubBodega(subParam);
         if (h.ruta === "historial" && f !== histFecha) setHistFecha(f);
       }
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, [vista, tabsVisibles, lotes, galponActivo, fechaCaptura, fechaBodega, histFecha]);
+  }, [vista, tabsVisibles, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, histFecha]);
   const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
     ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
     ...registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })),
@@ -3905,6 +3925,7 @@ const cssEtapaB = `
           galponActivo={galponActivo}
           fechaCaptura={fechaCaptura}
           fechaBodega={fechaBodega}
+          subBodega={subBodega}
           recActiva={recActiva}
           fPeso={fPeso}
           histFecha={histFecha}
@@ -4591,6 +4612,41 @@ const cssEtapaB = `
               <KPI etiqueta="Saldo proyectado" valor={saldoFinal.toFixed(1)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : "= inicial + entradas − salidas"} />
             </div>
 
+            {/* Sub-menú de funciones de Bodega */}
+            <div className="v10-subnav" style={{ display: "flex", gap: 7, overflowX: "auto", padding: "4px 2px 14px", marginBottom: 14, borderBottom: `1px solid ${C.borde}` }}>
+              {[
+                { id: "producido", nombre: "1. Huevo producido", icono: "🥚" },
+                { id: "ruta", nombre: "2. Salida a ruta", icono: "🚚" },
+                { id: "otros", nombre: "3. Otros movimientos", icono: "📦" },
+                { id: "cierre", nombre: "4. Cierre del día", icono: "🔒" },
+                { id: "historial", nombre: "Historial", icono: "📋" },
+                { id: "apertura", nombre: "Apertura", icono: "⚙️" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ].map(sub => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setSubBodega(sub.id)}
+                  style={{
+                    padding: "8px 14px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: 20,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    border: subBodega === sub.id ? `2px solid ${C.verde}` : `1.5px solid ${C.borde}`,
+                    background: subBodega === sub.id ? C.verdeSuave : C.superficie,
+                    color: subBodega === sub.id ? C.verde : C.texto,
+                    fontFamily: "'Inter', sans-serif",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {sub.icono} {sub.nombre}
+                </button>
+              ))}
+            </div>
+
+            {(subBodega === "producido" || subBodega === "todo") && (
             <Seccion num="1" titulo="Huevo producido por gallinero" sub={`Automático desde el Control diario del ${fechaB}`}>
               {producidoPorGalpon.map(g => (
                 <div key={g.galpon} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 14 }}>
@@ -4604,8 +4660,15 @@ const cssEtapaB = `
                 <b>Total granja</b>
                 <b style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.verde }}>{producidoHoyCart.toFixed(1)} cartones</b>
               </div>
+              {subBodega !== "todo" && (
+                <button type="button" onClick={() => setSubBodega("ruta")} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 12, padding: "10px", fontSize: 13.5 }}>
+                  Siguiente: 2. Salida a ruta por repartidor ›
+                </button>
+              )}
             </Seccion>
+            )}
 
+            {(subBodega === "ruta" || subBodega === "todo") && (
             <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Salida menos devoluciones = salida neta de ruta">
               {repartos.map((r, i) => {
                 const neto = Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0);
@@ -4684,7 +4747,9 @@ const cssEtapaB = `
               <button onClick={() => setRepartos([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
                 style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Agregar repartidor</button>
             </Seccion>
+            )}
 
+            {(subBodega === "otros" || subBodega === "todo") && (
             <Seccion num="3" titulo="Otros movimientos del día" sub="Solo si aplica — en cartones">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta="Huevo comprado (+)" type="text" inputMode="decimal" placeholder="0" value={movBodega.comprado} onChange={e => setMovBodega({ ...movBodega, comprado: e.target.value })} />
@@ -4692,8 +4757,16 @@ const cssEtapaB = `
                 <Campo mitad etiqueta="Destruido/quebrado en bodega (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => setMovBodega({ ...movBodega, destruido: e.target.value })} />
                 <Campo mitad etiqueta="Regalado / salida gratis (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => setMovBodega({ ...movBodega, regalado: e.target.value })} />
               </div>
+              {subBodega !== "todo" && (
+                <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => setSubBodega("ruta")} style={{ padding: "10px 14px", fontSize: 13, background: "transparent", border: `1px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>‹ 2. Salida a ruta</button>
+                  <button type="button" onClick={() => setSubBodega("cierre")} style={{ ...btnStyle, flex: 1, margin: 0, padding: "10px", fontSize: 13.5 }}>Siguiente: 4. Cierre del día ›</button>
+                </div>
+              )}
             </Seccion>
+            )}
 
+            {(subBodega === "cierre" || subBodega === "todo") && (
             <Seccion num="4" titulo="Cierre del día" sub="Revisa el movimiento completo, ajusta si contaste, y guarda">
               <div style={{ fontSize: 14, marginBottom: 12, display: "grid", gap: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del día (=)</span><b>{saldoBase.toFixed(1)}</b></div>
@@ -4722,7 +4795,9 @@ const cssEtapaB = `
               </details>
               <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>Los cambios de movimientos existentes conservan la versión anterior y el motivo en el historial.</div>
             </Seccion>
+            )}
 
+            {(subBodega === "apertura" || subBodega === "todo") && (
             <Seccion titulo="Apertura de bodega — saldo inicial" sub="El punto de arranque oficial: desde esta fecha corren los balances; lo anterior queda como histórico sin afectar">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta="Cartones iniciales" type="text" inputMode="decimal" placeholder="ej. 1470" value={bodegaCfg.inicialCart}
@@ -4734,8 +4809,9 @@ const cssEtapaB = `
               </div>
               {bodegaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La bodega abre el {bodegaCfg.inicialFecha.split("-").reverse().join("/")} con {bodegaCfg.inicialCart || 0} cartones.</div>}
             </Seccion>
+            )}
 
-            {bodegaMovs.length > 0 && (
+            {(subBodega === "historial" || subBodega === "todo") && bodegaMovs.length > 0 && (
               <Seccion titulo="Historial de bodega">
                 {selectorHistorial("bodega")}
                 {historialVisible(bodegaMovs, "bodega").map(m => {
@@ -4746,7 +4822,7 @@ const cssEtapaB = `
                       <b style={{ color: C.verde }}>= {m.saldoFinal} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
-                      <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
+                      <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); setSubBodega("cierre"); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
                       <button onClick={() => setPrintDoc({ tipo: "bodega", movimientoId: m.id })} style={{ padding: "5px 9px", fontSize: 11.5, background: "#fff", color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>🖨 Imprimir</button>
                     </div>
                     {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
