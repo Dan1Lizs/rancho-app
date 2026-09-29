@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirDetallePlanta } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
@@ -21,7 +21,12 @@ import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
 import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
 import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
 import { vistasPermitidas } from "./permisos";
+import { DEFAULT_PREFERENCES, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
+import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
 import "./v10.css";
+
+const PreferenciasView = lazy(() => import("./views/PreferenciasView"));
+const AdministracionView = lazy(() => import("./views/AdministracionView"));
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -457,6 +462,7 @@ export default function App() {
     const params = new URLSearchParams(queryStr || "");
     return { ruta, params };
   };
+  const rutaInicialExplicitaRef = useRef(typeof window !== "undefined" && !!window.location.hash);
   const [vista, setVista] = useState(() => {
     const h = leerHashRuta();
     if (h && h.ruta) return h.ruta;
@@ -468,7 +474,23 @@ export default function App() {
   const [salidaPendiente, setSalidaPendiente] = useState(null);
   const [accesoDenegado, setAccesoDenegado] = useState(null);
   const [modalPegarTiquetes, setModalPegarTiquetes] = useState(false);
+  const [preferencias, setPreferencias] = useState(DEFAULT_PREFERENCES);
+  const [preferenciasCargadas, setPreferenciasCargadas] = useState(false);
+  const [guardandoPreferencias, setGuardandoPreferencias] = useState(false);
+  const [configOrganizacion, setConfigOrganizacion] = useState({ nombre: "Rancho El Soñado" });
+  const vistaInicialAplicadaRef = useRef(false);
   useEffect(() => { localStorage.setItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`, vista); }, [vista]);
+  useEffect(() => {
+    let activo = true;
+    leerPreferencias().then(p => { if (activo) { setPreferencias(p); setPreferenciasCargadas(true); } });
+    return () => { activo = false; };
+  }, []);
+  useEffect(() => {
+    const actualizar = e => setConfigOrganizacion(v => ({ ...v, ...(e.detail || {}) }));
+    supabase.from("organization_settings").select("settings").eq("id", "rancho").maybeSingle().then(({ data }) => { if (data?.settings) actualizar({ detail: data.settings }); });
+    addEventListener("rancho:organization-settings", actualizar);
+    return () => removeEventListener("rancho:organization-settings", actualizar);
+  }, []);
   useEffect(() => {
     const atajo = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setBuscadorAbierto(true); } if (e.key === "Escape") { setBuscadorAbierto(false); setMenuMovil(false); setModalPegarTiquetes(false); } };
     addEventListener("keydown", atajo); return () => removeEventListener("keydown", atajo);
@@ -598,6 +620,17 @@ export default function App() {
   const [fechasAplicar, setFechasAplicar] = useState({});
   const [fechaCaptura, setFechaCaptura] = useState(hoyISO());
   useEffect(() => {
+    if (!preferenciasCargadas) return;
+    leerBorrador(fechaCaptura, preferencias.borradores.almacenamiento).then(b => {
+      const vigente = b?.fecha === fechaCaptura && Date.now() - b.guardadoEl < 7 * 86400000 ? b : null;
+      if (vigente && preferencias.borradores.recuperarAutomaticamente) {
+        suciosRef.current = Object.fromEntries(Object.keys(vigente.capturas || {}).map(id => [id, true]));
+        setCapturas(v => ({ ...v, ...vigente.capturas }));
+        if (vigente.nota) { notaSuciaRef.current = true; setNotaDia(vigente.nota); }
+      } else setBorradorDisponible(vigente);
+    });
+  }, [preferenciasCargadas, preferencias.borradores.almacenamiento]);
+  useEffect(() => {
     if (vista !== "captura") return;
     const revisar = async () => {
       if (!Object.keys(suciosRef.current).length) return;
@@ -640,7 +673,7 @@ export default function App() {
     };
   };
 
-  const cambiarFechaCaptura = (iso) => {
+  const cambiarFechaCaptura = async (iso) => {
     setFechaCaptura(iso);
     fechaCapturaRef.current = iso;
     suciosRef.current = {};
@@ -653,18 +686,25 @@ export default function App() {
     }));
     setCapturas(nuevas);
     try {
-      const clave = `borrador-control:${window.__usuarioEmail || "local"}:${iso}`;
-      const borrador = JSON.parse(localStorage.getItem(clave) || "null");
-      setBorradorDisponible(borrador?.fecha === iso && Date.now() - borrador.guardadoEl < 7 * 86400000 ? borrador : null);
+      const borrador = await leerBorrador(iso, preferencias.borradores.almacenamiento);
+      const vigente = borrador?.fecha === iso && Date.now() - borrador.guardadoEl < 7 * 86400000 ? borrador : null;
+      if (vigente && preferencias.borradores.recuperarAutomaticamente) {
+        suciosRef.current = Object.fromEntries(Object.keys(vigente.capturas || {}).map(id => [id, true]));
+        setCapturas(v => ({ ...v, ...vigente.capturas }));
+        if (vigente.nota) { notaSuciaRef.current = true; setNotaDia(vigente.nota); }
+        setBorradorDisponible(null);
+      } else setBorradorDisponible(vigente);
     } catch { setBorradorDisponible(null); }
     if (cargados > 0) avisar(`✓ Se cargó lo guardado del ${dmy} (${cargados} gallinero(s)) — edita solo lo necesario`);
   };
   useEffect(() => {
-    if (!Object.keys(suciosRef.current).length && !notaSuciaRef.current) return;
-    const clave = `borrador-control:${window.__usuarioEmail || "local"}:${fechaCaptura}`;
-    try { localStorage.setItem(clave, JSON.stringify({ fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() })); }
-    catch { /* el guardado principal sigue disponible */ }
-  }, [capturas, notaDia, fechaCaptura]);
+    if (!preferencias.borradores.autoguardado || (!Object.keys(suciosRef.current).length && !notaSuciaRef.current)) return;
+    const timer = setTimeout(() => {
+      guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento)
+        .catch(() => setEstadoSync("Borrador local"));
+    }, preferencias.borradores.intervaloSegundos * 1000);
+    return () => clearTimeout(timer);
+  }, [capturas, notaDia, fechaCaptura, preferencias.borradores]);
   const [fNecFotos, setFNecFotos] = useState([]);
   const [fotosVista, setFotosVista] = useState({});
   const [printDoc, setPrintDoc] = useState(null);
@@ -896,6 +936,15 @@ export default function App() {
   }, []);
 
   const avisar = (m) => { setGuardado(m); setTimeout(() => setGuardado(""), 3000); };
+  const guardarMisPreferencias = async (nuevas) => {
+    setGuardandoPreferencias(true);
+    try {
+      const { preferencias: guardadas, nube } = await guardarPreferencias(nuevas);
+      setPreferencias(guardadas);
+      avisar(nube ? "✓ Preferencias guardadas y sincronizadas" : "✓ Preferencias guardadas en este dispositivo");
+    } catch (error) { avisar(`⚠ No se pudieron sincronizar: ${error.message}`); }
+    setGuardandoPreferencias(false);
+  };
   useEffect(() => {
     const setterNativo = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
     const normalizar = (e) => {
@@ -1081,9 +1130,8 @@ export default function App() {
       else suciosRef.current = {};
       if (!soloLoteId || notaDia.trim()) notaSuciaRef.current = false;
       try {
-        const clave = `borrador-control:${window.__usuarioEmail || "local"}:${fechaCaptura}`;
-        if (Object.keys(suciosRef.current).length || notaSuciaRef.current) localStorage.setItem(clave, JSON.stringify({ fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }));
-        else localStorage.removeItem(clave);
+        if (Object.keys(suciosRef.current).length || notaSuciaRef.current) await guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento);
+        else await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento);
         setBorradorDisponible(null);
       } catch { /* sin espacio local */ }
       avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}`);
@@ -2271,17 +2319,25 @@ export default function App() {
     { id: "lotes", nombre: "Lotes" }, { id: "pedidomp", nombre: "Pedido MP" },
     { id: "formulas", nombre: "Fórmulas" },
     { id: "cxp", nombre: "Por Pagar" }, { id: "historial", nombre: "Historial" },
+    { id: "administracion", nombre: "Administración" }, { id: "preferencias", nombre: "Preferencias" },
   ];
   const gruposMenu = [
-    { nombre: "Operación", ids: ["inicio", "captura", "revision", "reporte"] },
+    { nombre: "Operación", ids: ["inicio", "captura", "revision", "reporte", "historial"] },
     { nombre: "Inventarios", ids: ["bodega", "planta", "insumos", "pedidomp", "formulas"] },
     { nombre: "Salud y lotes", ids: ["pesaje", "lotes"] },
-    { nombre: "Administración", ids: ["historial", "cxp"] },
+    { nombre: "Administración", ids: ["administracion", "cxp", "preferencias"] },
   ];
   const idsVistas = tabs.map(t => t.id);
   const idsPermitidos = vistasPermitidas(miRol, idsVistas);
-  const tabsVisibles = tabs.filter(t => idsPermitidos.includes(t.id));
+  const tabsVisibles = ordenarPorPreferencia(tabs.filter(t => idsPermitidos.includes(t.id)), preferencias.ordenNavegacion);
   useEffect(() => { if (!tabsVisibles.some(t => t.id === vista)) setVista("inicio"); }, [vista, esAdmin, miRol]);
+  useEffect(() => {
+    if (!preferenciasCargadas || vistaInicialAplicadaRef.current || miRol === "cargando") return;
+    vistaInicialAplicadaRef.current = true;
+    if (rutaInicialExplicitaRef.current) return;
+    const destino = preferencias.pantallaInicio;
+    if (destino && destino !== vista && idsPermitidos.includes(destino)) abrirVista(destino);
+  }, [preferenciasCargadas, miRol]);
   const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
   const irA = (id) => {
     const destino = tabs.find(t => t.id === id);
@@ -2667,6 +2723,7 @@ export default function App() {
   const historialVisible = (items, clave) => filtrarHistorial(items, periodosHistorial[clave] || "30");
   const guardarCorreccionProduccion = async (eliminar = false) => {
     if (!editarProduccion || !motivoProduccion.trim()) { avisar("⚠ Escribe el motivo de la corrección."); return; }
+    if (!eliminar && preferencias.confirmaciones.correcciones && !pideConfirm(`corregir-produccion-${editarProduccion.id}`, "⚠ Toca guardar corrección otra vez para confirmar")) return;
     const original = registros.find(r => String(r.id) === String(editarProduccion.id));
     if (!original) { avisar("⚠ Actualiza los datos antes de corregir."); return; }
     const tiquetes = editarProduccion.tiquetes.map(t => ({ num: String(t.num || "").trim(), cartones: String(t.cartones || ""), peso: String(t.peso || "") })).filter(t => t.num || t.cartones || t.peso);
@@ -2703,11 +2760,11 @@ export default function App() {
   const vacsAtrasadas = activos.reduce((acc, l) => acc + planVac.filter(p => estadoVacunaLote(l, p).estado === "atrasada").length, 0);
 
   const badgePorTab = {
-    captura: faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" },
-    revision: numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditoría` } : null,
-    bodega: !bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "●", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "✓", tipo: "ok", titulo: "Cierre de bodega verificado" },
-    cxp: facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
-    pesaje: vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
+    captura: preferencias.notificaciones.faltantesDiarios ? (faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" }) : null,
+    revision: preferencias.notificaciones.faltantesDiarios && numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditoría` } : null,
+    bodega: preferencias.notificaciones.inventarioBajo ? (!bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "●", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "✓", tipo: "ok", titulo: "Cierre de bodega verificado" }) : null,
+    cxp: preferencias.notificaciones.cuentasPorPagar && facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
+    pesaje: preferencias.notificaciones.bienestar && vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
   };
   const verReporte = (...secciones) => subReporte === "todo" || secciones.includes(subReporte);
   const nombreSeccionReporte = {
@@ -3448,9 +3505,17 @@ export default function App() {
     avisar(`✓ ${nuevosTiq.length} tiquete(s) insertado(s) desde Excel`);
   };
 
+  const tabsMovil = [...tabsVisibles].sort((a, b) => {
+    const ia = preferencias.favoritos.indexOf(a.id); const ib = preferencias.favoritos.indexOf(b.id);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return 0;
+  });
+
   
   return (
-    <div className="app-v10" style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
+    <div className={`app-v10 v10-theme-${preferencias.tema} v10-density-${preferencias.densidad} v10-text-${preferencias.tamanoTexto}`} style={{ fontFamily: "'Inter', sans-serif", background: "var(--v10-bg, #F6F6F1)", minHeight: "100vh", color: "var(--v10-text, #1C1F1A)" }}>
       <style>{fuentes}</style>
             <ModalDialog
         abierto={!!editarAjustePlanta}
@@ -3519,7 +3584,7 @@ export default function App() {
         )}
       </ModalDialog>
       <nav className="v10-desktop-nav" aria-label="Navegación principal">
-        <div className="v10-menu-brand">Rancho El Soñado <small>Operación de la granja</small></div>
+        <div className="v10-menu-brand">{configOrganizacion.nombre || "Rancho El Soñado"} <small>Operación de la granja</small></div>
         {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => (
           <button key={t.id} className={vista === t.id ? "v10-active" : ""} aria-current={vista === t.id ? "page" : undefined} onClick={() => irA(t.id)} title={badgePorTab[t.id]?.titulo || t.nombre} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>{t.nombre}</span>
@@ -3779,10 +3844,11 @@ export default function App() {
         {vista === "inicio" && <>
           <Seccion titulo={`Hoy · ${hoyISO()}`} sub="Lo que necesita atención antes de cerrar el día">
             <div className="v10-home-grid">
-              <button onClick={() => irA("captura")}><b>Control diario</b><span>{activos.filter(l => registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length}/{activos.length} gallineros guardados</span></button>
-              <button onClick={() => irA("revision")}><b>Revisión</b><span>{hallazgosOperacion.length} asuntos por revisar</span></button>
-              <button onClick={() => irA("bodega")}><b>Bodega</b><span>Movimientos y cierre del día</span></button>
-              <button onClick={() => irA("pesaje")}><b>Bienestar</b><span>Pesajes y actividades</span></button>
+              {preferencias.favoritos.filter(id => idsPermitidos.includes(id)).slice(0, 6).map(id => {
+                const t = tabs.find(x => x.id === id); if (!t) return null;
+                const detalle = id === "captura" ? `${activos.filter(l => registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length}/${activos.length} gallineros guardados` : id === "revision" ? `${hallazgosOperacion.length} asuntos por revisar` : ({ reporte: "Indicadores y reportes", bodega: "Movimientos y cierre del día", pesaje: "Pesajes y actividades", historial: "Consulta y auditoría", planta: "Producción y movimientos", insumos: "Existencias y consumos" })[id] || "Abrir módulo";
+                return <button key={id} onClick={() => irA(id)}><b>{t.nombre}</b><span>{detalle}</span></button>;
+              })}
             </div>
           </Seccion>
           {!!retirosActivos.length && <Seccion titulo="Retiros activos">{retirosActivos.map((m, i) => <p key={i}>G{m.galpon} · {m.producto} · hasta {m.retiroHasta}</p>)}</Seccion>}
@@ -3869,7 +3935,7 @@ export default function App() {
         {/* ══ CONTROL DIARIO ══ */}
         {vista === "captura" && (
           <>
-            {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay un borrador sin guardar de esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.nota) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={() => { try { localStorage.removeItem(`borrador-control:${window.__usuarioEmail || "local"}:${fechaCaptura}`); } catch {} setBorradorDisponible(null); }} style={{ marginLeft: 8 }}>Descartar</button></div>}
+            {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay un borrador sin guardar de esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.nota) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={async () => { await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento); setBorradorDisponible(null); }} style={{ marginLeft: 8 }}>Descartar</button></div>}
             {conflictoEdicion && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>{conflictoEdicion} <button onClick={() => cargarTodo(false)}>Actualizar</button></div>}
             {!!retirosActivos.length && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>⚠ Retiro de huevo activo: {retirosActivos.map(m => `G${m.galpon} hasta ${m.retiroHasta} (${m.producto})`).join(" · ")}. Evita comercializar ese huevo.</div>}
             <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: (fechaCaptura || hoyISO()).split("-").reverse().join("/") })}
@@ -6272,7 +6338,7 @@ export default function App() {
                       const file = e.target.files?.[0]; e.target.value = "";
                       if (!file) return;
                       if (cargandoFondo || guardando) { avisar("⏳ Espera a que termine la operación actual"); return; }
-                      if (confirmar !== "importar") { setConfirmar("importar"); avisar("Revisa el archivo: se agregarán solo registros faltantes. Los existentes conservarán sus valores. Selecciona el archivo otra vez para confirmar."); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
+                      if (preferencias.confirmaciones.reemplazos && confirmar !== "importar") { setConfirmar("importar"); avisar("Revisa el archivo: se agregarán solo registros faltantes. Los existentes conservarán sus valores. Selecciona el archivo otra vez para confirmar."); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
                       setConfirmar(null); setGuardando(true); avisar("⏳ Leyendo el respaldo…");
                       try {
                         const doc = JSON.parse(await file.text());
@@ -6289,7 +6355,7 @@ export default function App() {
                     }} />
                 </label>
 
-                {esAdmin && <div className="v10-user-admin">
+                {false && esAdmin && <div className="v10-user-admin">
                   <h3>Usuarios y acceso</h3>
                   {miRol !== "admin" ? <p>La administración segura de usuarios se activa al aplicar MIGRACION-V10-USUARIOS.sql y desplegar la función invite-user. Hasta entonces, los accesos existentes siguen como antes.</p> : <>
                     <p>Invita a una persona con un rol. El enlace llega a su correo; no se comparte una contraseña.</p>
@@ -6304,7 +6370,7 @@ export default function App() {
                     {usuariosRoles.map(u => <div key={u.user_id} className="v10-user-row"><span>{nombresUsuarios[u.email] || u.email}<small>{u.email}</small></span><select aria-label={`Rol de ${u.email}`} value={u.role} disabled={gestionUsuarios} onChange={async e => { const role = e.target.value; setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ role }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, role } : x)); avisar("✓ Rol actualizado"); } }}>{["admin", "encargado", "bodega", "planta", "bienestar", "consulta"].map(r => <option key={r}>{r}</option>)}</select><button disabled={gestionUsuarios || u.email === window.__usuarioEmail?.toLowerCase()} onClick={async () => { setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ active: !u.active }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, active: !x.active } : x)); avisar("✓ Acceso actualizado"); } }}>{u.active ? "Suspender" : "Reactivar"}</button></div>)}
                   </>}
                 </div>}
-                {esAdmin && (
+                {false && esAdmin && (
                   <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Nombres visibles de usuarios</div>
                     <p style={{ fontSize: 11.5, color: C.textoSuave, margin: "0 0 10px" }}>El correo se conserva para identificar cada cambio, pero en la app y los reportes se muestra el nombre que asignes aquí.</p>
@@ -6323,7 +6389,7 @@ export default function App() {
                     <button onClick={() => setCorreoNombre(window.__usuarioEmail || "")} style={{ marginTop: 7, fontSize: 11.5, color: C.verde, background: "none", border: "none", cursor: "pointer" }}>Usar mi correo</button>
                   </div>
                 )}
-                {esAdmin && miRol !== "admin" && (
+                {false && esAdmin && miRol !== "admin" && (
                   <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>👑 Administradores</div>
                     <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>Solo los correos de esta lista ven la parte económica (Por Pagar). Lista vacía = todos son administradores.</div>
@@ -7101,6 +7167,8 @@ export default function App() {
             )}
           </>
         )}
+        {vista === "preferencias" && <Suspense fallback={<div className="v10-loading-view">Cargando preferencias…</div>}><PreferenciasView preferencias={preferencias} tabs={tabsVisibles} onGuardar={guardarMisPreferencias} guardando={guardandoPreferencias} /></Suspense>}
+        {vista === "administracion" && <Suspense fallback={<div className="v10-loading-view">Cargando administración…</div>}><AdministracionView nombresUsuarios={nombresUsuarios} onGuardarNombre={guardarNombreVisible} onBorrarNombre={borrarNombreVisible} avisar={avisar} /></Suspense>}
       </main>
       <nav className="v10-mobile-nav" aria-label="Navegación móvil" style={{
         position: "fixed",
@@ -7142,7 +7210,7 @@ export default function App() {
           <span>☰</span>
           <span>{menuMovil ? "Cerrar" : "Todos"}</span>
         </button>
-        {tabsVisibles.map(t => {
+        {tabsMovil.map(t => {
           const act = vista === t.id;
           const b = badgePorTab[t.id];
           return (
@@ -7225,7 +7293,7 @@ export default function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, borderBottom: `1px solid ${C.borde}`, paddingBottom: 10 }}>
               <div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>
-                  Rancho El Soñado
+                  {configOrganizacion.nombre || "Rancho El Soñado"}
                 </div>
                 <div style={{ fontSize: 11.5, color: C.textoSuave }}>
                   Módulos de la granja · {mostrarNombre(window.__usuarioEmail)}
@@ -7457,13 +7525,3 @@ export default function App() {
           <p style={{ margin: 0, fontSize: 13.5 }}>
             ¿Eliminar definitivamente el pesaje del <b>{pesajeEliminar.fecha}</b> de la galera <b>{lotes.find(l => l.id === pesajeEliminar.lote)?.galpon ?? pesajeEliminar.lote}</b> ({pesajeEliminar.pesos?.length || 0} aves)?
           </p>
-        )}
-      </ModalDialog>
-
-      <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
-        Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
-        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 29/09/2026
-      </footer>
-    </div>
-  );
-}
