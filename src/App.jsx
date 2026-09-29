@@ -5,7 +5,6 @@ import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPe
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
-import { migrarDesdeV1 } from "./migracion";
 import { supabase } from "./supabase";
 import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgramada, eliminarTareaProgramada } from "./tareasProgramadas";
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
@@ -905,7 +904,8 @@ export default function App() {
   const [subPedidoMP, setSubPedidoMP] = useState("kardex");
   const [subFormulas, setSubFormulas] = useState("recetas");
   const [subInsumos, setSubInsumos] = useState("catalogo");
-  const [subPesaje, setSubPesaje] = useState("pesajes");
+  const [subRevision, setSubRevision] = useState("excepciones");
+  const [subPesaje, setSubPesaje] = useState("resumen");
   const [subHistorial, setSubHistorial] = useState("dia");
   const [editarAjustePlanta, setEditarAjustePlanta] = useState(null);
   const [subBodega, setSubBodega] = useState("producido");
@@ -1537,7 +1537,12 @@ export default function App() {
         nuevo: snapshotBodega(nuevoMov),
       }];
     }
-    const recalculados = reconstruirBodega([nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)], bodegaCfg.inicialCart, bodegaCfg.inicialFecha);
+    const recalculados = reconstruirBodega([nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)], bodegaCfg.inicialCart, bodegaCfg.inicialFecha).map(m => {
+      if (m.ajusteConteo != null && !isNaN(Number(m.ajusteConteo))) {
+        return { ...m, saldoFinal: Number(m.ajusteConteo) };
+      }
+      return m;
+    });
     const nuevos = recalculados.map(m => {
       if (String(m.id) === String(nuevoMov.id) && elegido) {
         const eventos = [...m.historialEdiciones];
@@ -1587,8 +1592,30 @@ export default function App() {
   const desdeApertura = (fechaDmy) => !aperturaP || aDate(fechaDmy) >= aperturaP;
   const servidoAvesTotal = registros.filter(r => desdeApertura(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
   const sumaMovs = (cat, tipo) => movsPlanta.filter(m => m.categoria === cat && m.tipo === tipo && desdeApertura(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0);
-  const saldoAves = Number(plantaCfg.inicialAves || 0) + sumaMovs("Aves", "bache") + sumaMovs("Aves", "ajuste") - servidoAvesTotal;
-  const saldoGanado = Number(plantaCfg.inicialGanado || 0) + sumaMovs("Ganado", "bache") + sumaMovs("Ganado", "ajuste") - sumaMovs("Ganado", "servido");
+  const saldoAves = (() => {
+    const ajustesAves = movsPlanta.filter(m => m.tipo === "ajuste" && (m.categoria === "Aves" || usoFormula(m.formula) === "Aves"));
+    if (ajustesAves.length > 0) {
+      const ultAjuste = [...ajustesAves].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
+      const baseReal = Number(ultAjuste.saldoReal != null ? ultAjuste.saldoReal : (ultAjuste.kg || 0));
+      const fAjDate = aDate(ultAjuste.fecha);
+      const bachesPost = movsPlanta.filter(m => m.tipo === "bache" && (m.categoria === "Aves" || usoFormula(m.formula) === "Aves") && aDate(m.fecha) > fAjDate).reduce((s, m) => s + Number(m.kg || 0), 0);
+      const servidoPost = registros.filter(r => aDate(r.fecha) > fAjDate).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
+      return Math.max(0, +(baseReal + bachesPost - servidoPost).toFixed(1));
+    }
+    return Math.max(0, +(Number(plantaCfg.inicialAves || 0) + sumaMovs("Aves", "bache") + sumaMovs("Aves", "ajuste") - servidoAvesTotal).toFixed(1));
+  })();
+  const saldoGanado = (() => {
+    const ajustesGanado = movsPlanta.filter(m => m.tipo === "ajuste" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado"));
+    if (ajustesGanado.length > 0) {
+      const ultAjuste = [...ajustesGanado].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
+      const baseReal = Number(ultAjuste.saldoReal != null ? ultAjuste.saldoReal : (ultAjuste.kg || 0));
+      const fAjDate = aDate(ultAjuste.fecha);
+      const bachesPost = movsPlanta.filter(m => m.tipo === "bache" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado") && aDate(m.fecha) > fAjDate).reduce((s, m) => s + Number(m.kg || 0), 0);
+      const servidoPost = movsPlanta.filter(m => m.tipo === "servido" && (m.categoria === "Ganado" || usoFormula(m.formula) === "Ganado") && aDate(m.fecha) > fAjDate).reduce((s, m) => s + Number(m.kg || 0), 0);
+      return Math.max(0, +(baseReal + bachesPost - servidoPost).toFixed(1));
+    }
+    return Math.max(0, +(Number(plantaCfg.inicialGanado || 0) + sumaMovs("Ganado", "bache") + sumaMovs("Ganado", "ajuste") - sumaMovs("Ganado", "servido")).toFixed(1));
+  })();
   const saldoPlanta = saldoAves;
 
   const kgNucleoDe = (formula) => {
@@ -4077,22 +4104,75 @@ const cssEtapaB = `
             ⚠ {conflictos.length} fecha(s) con producción duplicada. Los totales pueden estar inflados. <button onClick={() => { const fecha = conflictos[0][0].split("|")[0]; setHistFecha(fechaHistorialISO(fecha)); setVista("historial"); }} style={{ marginLeft: 8 }}>Revisar en Historial</button>
           </div> : null;
         })()}
-        {vista === "revision" && <>
-          <Seccion titulo="Excepciones por revisar" sub="Duplicados, controles pendientes, saldos y retiros activos; se actualiza con los datos cargados">
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}><label>Tipo <select value={filtroExcepciones} onChange={e => setFiltroExcepciones(e.target.value)} style={inputStyle}><option>Todas</option>{[...new Set(hallazgosOperacion.map(h => h.tipo))].map(t => <option key={t}>{t}</option>)}</select></label><button onClick={() => window.print()}>Imprimir revisión</button></div>
-            {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => <div key={i} style={{ padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}><b>{h.tipo}</b> · {h.texto}</div>)}
-            {!hallazgosOperacion.length && <p>Sin excepciones detectadas.</p>}
-          </Seccion>
-          <Seccion titulo="Cobertura de concentrado por fórmula" sub="Existencias verificadas divididas entre el consumo diario promedio de los últimos siete días con datos">
-            {[["Aves", saldosAvesFormula], ["Ganado", saldosGanadoFormula]].map(([categoria, saldos]) => <div key={categoria} style={{ marginBottom: 12 }}><b>{categoria}</b>{saldos ? Object.entries(saldos).map(([formula, kg]) => { const consumo = categoria === "Aves" ? registros.filter(r => r.formulaConcentrado === formula && fechas.slice(0, 7).includes(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0) / Math.max(1, fechas.slice(0, 7).length) : plantaMovs.filter(m => m.tipo === "servido" && m.formula === formula && [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].sort().reverse().slice(0, 7).includes(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0) / Math.max(1, [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].slice(0, 7).length); return <div key={formula} style={{ padding: 7, borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>{formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : "sin consumo suficiente para estimar"}`}</div>; }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por fórmula.</p>}</div>)}
-          </Seccion>
-          <Seccion titulo="Conciliación de planta" sub="La diferencia muestra concentrado sin distribución o movimientos que necesitan revisión">
-            {[["Aves", saldoAves, saldosAvesFormula], ["Ganado", saldoGanado, saldosGanadoFormula]].map(([categoria, total, saldos]) => <div key={categoria} style={{ padding: 8, fontSize: 13 }}><b>{categoria}</b> · total {total.toFixed(1)} kg · fórmulas {saldos ? Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0).toFixed(1) : "sin conteo"} kg · diferencia {saldos ? (total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0)).toFixed(1) : "—"} kg</div>)}
-          </Seccion>
-          <Seccion titulo="Exportar auditoría" sub="Producción, bodega, conteos de planta y advertencias">
-            {selectorHistorial("auditoria")}<button onClick={descargarAuditoria} style={btnStyle}>Descargar CSV del período</button>
-          </Seccion>
-        </>}
+        {vista === "revision" && (
+          <>
+            <BarraSubmenu
+              subsecciones={[
+                { id: "excepciones", nombre: "Excepciones y alertas", icono: "⚠️" },
+                { id: "cobertura", nombre: "Cobertura concentrado", icono: "⏳" },
+                { id: "conciliacion", nombre: "Conciliación de planta", icono: "⚖️" },
+                { id: "auditoria", nombre: "Exportar auditoría", icono: "📋" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subRevision}
+              onChange={setSubRevision}
+            />
+
+            {(subRevision === "excepciones" || subRevision === "todo") && (
+              <Seccion titulo="Excepciones por revisar" sub="Duplicados, controles pendientes, saldos y retiros activos; se actualiza con los datos cargados">
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                  <label>Tipo <select value={filtroExcepciones} onChange={e => setFiltroExcepciones(e.target.value)} style={inputStyle}><option>Todas</option>{[...new Set(hallazgosOperacion.map(h => h.tipo))].map(t => <option key={t}>{t}</option>)}</select></label>
+                  <button onClick={() => window.print()}>Imprimir revisión</button>
+                </div>
+                {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => (
+                  <div key={i} style={{ padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
+                    <b>{h.tipo}</b> · {h.texto}
+                  </div>
+                ))}
+                {!hallazgosOperacion.length && <p>Sin excepciones detectadas.</p>}
+              </Seccion>
+            )}
+
+            {(subRevision === "cobertura" || subRevision === "todo") && (
+              <Seccion titulo="Cobertura de concentrado por fórmula" sub="Existencias verificadas divididas entre el consumo diario promedio de los últimos siete días con datos">
+                {[["Aves", saldosAvesFormula], ["Ganado", saldosGanadoFormula]].map(([categoria, saldos]) => (
+                  <div key={categoria} style={{ marginBottom: 12 }}>
+                    <b>{categoria}</b>
+                    {saldos ? Object.entries(saldos).map(([formula, kg]) => {
+                      const consumo = categoria === "Aves" ? registros.filter(r => r.formulaConcentrado === formula && fechas.slice(0, 7).includes(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0) / Math.max(1, fechas.slice(0, 7).length) : plantaMovs.filter(m => m.tipo === "servido" && m.formula === formula && [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].sort().reverse().slice(0, 7).includes(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0) / Math.max(1, [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].slice(0, 7).length);
+                      return (
+                        <div key={formula} style={{ padding: 7, borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
+                          {formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : "sin consumo suficiente para estimar"}`}
+                        </div>
+                      );
+                    }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por fórmula.</p>}
+                  </div>
+                ))}
+              </Seccion>
+            )}
+
+            {(subRevision === "conciliacion" || subRevision === "todo") && (
+              <Seccion titulo="Conciliación de planta" sub="La diferencia muestra concentrado sin distribución o movimientos que necesitan revisión">
+                {[["Aves", saldoAves, saldosAvesFormula], ["Ganado", saldoGanado, saldosGanadoFormula]].map(([categoria, total, saldos]) => {
+                  const sumaF = saldos ? Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0) : null;
+                  const dif = sumaF != null ? +(total - sumaF).toFixed(1) : null;
+                  return (
+                    <div key={categoria} style={{ padding: 8, fontSize: 13 }}>
+                      <b>{categoria}</b> · total {total.toFixed(1)} kg · fórmulas {sumaF != null ? `${sumaF.toFixed(1)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${dif} kg` : "—"}
+                    </div>
+                  );
+                })}
+              </Seccion>
+            )}
+
+            {(subRevision === "auditoria" || subRevision === "todo") && (
+              <Seccion titulo="Exportar auditoría" sub="Producción, bodega, conteos de planta y advertencias">
+                {selectorHistorial("auditoria")}
+                <button onClick={descargarAuditoria} style={btnStyle}>Descargar CSV del período</button>
+              </Seccion>
+            )}
+          </>
+        )}
         {/* ══ CONTROL DIARIO ══ */}
         {vista === "captura" && (
           <>
@@ -6491,33 +6571,7 @@ const cssEtapaB = `
                       setGuardando(false);
                     }} />
                 </label>
-                {esAdmin && (
-                  <div style={{ marginTop: 14, padding: 12, background: C.yemaSuave, borderRadius: 12, border: `1.5px solid ${C.yema}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🔧 Migración a base de datos v6</div>
-                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>
-                      Se hace UNA sola vez, después de correr <b>supabase_v2.sql</b> en Supabase. Copia todo lo que hoy vive en la tabla vieja hacia las tablas nuevas, sin borrar nada de la vieja. Es seguro tocarlo más de una vez: si una tabla nueva ya tiene datos, se salta.
-                    </div>
-                    <button onClick={async () => {
-                      if (confirmar !== "migrarv6") { setConfirmar("migrarv6"); avisar("⚠ Esto copiará tus datos a las tablas nuevas — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "migrarv6" ? null : c2), 15000); return; }
-                      setConfirmar(null); setGuardando(true);
-                      try {
-                        const resumen = await migrarDesdeV1((msg) => avisar(`⏳ ${msg}`));
-                        const partes = [];
-                        if (resumen.migradas.length) partes.push(`✓ Copiadas: ${resumen.migradas.join(", ")}`);
-                        if (resumen.saltadas.length) partes.push(`— Ya existían (sin tocar): ${resumen.saltadas.join(", ")}`);
-                        if (resumen.errores.length) partes.push(`⚠ Con error: ${resumen.errores.join(" | ")}`);
-                        alert(partes.join("\n\n") || "No había nada que migrar.");
-                        if (!resumen.errores.length) { avisar("✓ Migración completa — recargando…"); setTimeout(() => { try { location.reload(); } catch {} }, 1600); }
-                        else avisar("⚠ La migración terminó con errores — revisa el detalle arriba");
-                      } catch (e) {
-                        alert(`⚠ No se pudo migrar: ${e.message}`);
-                      }
-                      setGuardando(false);
-                    }} disabled={guardando} style={{ ...btnStyle, background: C.yema, color: "#fff" }}>
-                      🔧 Migrar datos a la base de datos v6
-                    </button>
-                  </div>
-                )}
+
                 {esAdmin && <div className="v10-user-admin">
                   <h3>Usuarios y acceso</h3>
                   {miRol !== "admin" ? <p>La administración segura de usuarios se activa al aplicar MIGRACION-V10-USUARIOS.sql y desplegar la función invite-user. Hasta entonces, los accesos existentes siguen como antes.</p> : <>
@@ -6807,7 +6861,8 @@ const cssEtapaB = `
           <>
                         <BarraSubmenu
               subsecciones={[
-                { id: "pesajes", nombre: "Pesajes de parvada", icono: "⚖️" },
+                { id: "resumen", nombre: "Uniformidad y peso corporal", icono: "📊" },
+                { id: "pesajes", nombre: "Registrar pesaje", icono: "⚖️" },
                 { id: "histpesajes", nombre: "Buscar y corregir pesajes", icono: "🔍" },
                 { id: "vacunas", nombre: "Vacunación", icono: "💉" },
                 { id: "enfermedades", nombre: "Expediente médico", icono: "🩺" },
@@ -6817,6 +6872,119 @@ const cssEtapaB = `
               activo={subPesaje}
               onChange={setSubPesaje}
             />
+
+            {(subPesaje === "resumen" || subPesaje === "todo") && (() => {
+              const resumenLotes = activos.map(l => {
+                const delLote = pesajes.filter(p2 => p2.lote === l.id);
+                const ult = delLote[0];
+                const ant = delLote[1];
+                const st = ult && ult.pesos?.length ? statsPesaje(ult) : null;
+                const stAnt = ant && ant.pesos?.length ? statsPesaje(ant) : null;
+                const meta = ult ? metaPesoLote(l, ult.fecha, ult) : metaPesoLote(l, hoyStr());
+                const brechaG = st && meta ? +(st.prom - meta).toFixed(0) : null;
+                const brechaP = st && meta ? +(((st.prom - meta) / meta) * 100).toFixed(1) : null;
+                const ganancia = st && stAnt ? +(st.prom - stAnt.prom).toFixed(0) : null;
+                const [pd2, pm2, py2] = ult?.fecha ? ult.fecha.split("/").map(Number) : [1, 1, 1970];
+                const diasPesaje = ult?.fecha ? Math.round((new Date() - new Date(py2, pm2 - 1, pd2)) / 86400000) : null;
+                return { l, ult, ant, st, stAnt, meta, brechaG, brechaP, ganancia, diasPesaje };
+              });
+
+              const pesadosConDatos = resumenLotes.filter(x => x.st);
+              const promGranja = pesadosConDatos.length ? Math.round(pesadosConDatos.reduce((s, x) => s + x.st.prom, 0) / pesadosConDatos.length) : null;
+              const unifGranja = pesadosConDatos.length ? +(pesadosConDatos.reduce((s, x) => s + x.st.unif, 0) / pesadosConDatos.length).toFixed(1) : null;
+              const cvGranja = pesadosConDatos.length ? +(pesadosConDatos.reduce((s, x) => s + x.st.cv, 0) / pesadosConDatos.length).toFixed(1) : null;
+              const totalAvesMuestreadas = pesadosConDatos.reduce((s, x) => s + x.st.n, 0);
+
+              return (
+                <Seccion titulo="Evaluación técnica de peso corporal y uniformidad" sub="Tu medida crítica de lote — peso promedio, uniformidad (>85%), CV y comparación vs tabla genética">
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+                    <KPI etiqueta="Peso prom. parvada" valor={promGranja != null ? promGranja : "—"} unidad="g" sub="Promedio de galeras" />
+                    <KPI etiqueta="Uniformidad global" valor={unifGranja != null ? `${unifGranja}%` : "—"} unidad="" tono={unifGranja >= 85 ? "ok" : unifGranja >= 80 ? undefined : "alerta"} sub="Meta recomendada: >85%" />
+                    <KPI etiqueta="Variabilidad (CV)" valor={cvGranja != null ? `${cvGranja}%` : "—"} unidad="" tono={cvGranja <= 8 ? "ok" : cvGranja <= 10 ? undefined : "alerta"} sub="Meta: <8% excelente" />
+                    <KPI etiqueta="Muestra total" valor={totalAvesMuestreadas} unidad="aves" sub={`${pesadosConDatos.length} de ${activos.length} galeras pesadas`} />
+                  </div>
+
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+                      <thead>
+                        <tr style={{ color: C.textoSuave, fontSize: 11.5, textAlign: "right", borderBottom: `2px solid ${C.borde}` }}>
+                          <th style={{ textAlign: "left", padding: "8px 6px" }}>Gallinero / Genética</th>
+                          <th style={{ padding: "8px 6px" }}>Último control</th>
+                          <th style={{ padding: "8px 6px" }}>Peso prom.</th>
+                          <th style={{ padding: "8px 6px" }}>Meta tabla</th>
+                          <th style={{ padding: "8px 6px" }}>Brecha vs tabla</th>
+                          <th style={{ padding: "8px 6px" }}>Uniformidad</th>
+                          <th style={{ padding: "8px 6px" }}>CV</th>
+                          <th style={{ padding: "8px 6px" }}>Ganancia</th>
+                          <th style={{ padding: "8px 6px" }}>Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resumenLotes.map(({ l, ult, ant, st, stAnt, meta, brechaG, brechaP, ganancia, diasPesaje }) => {
+                          const colBrecha = brechaP == null ? C.textoSuave : Math.abs(brechaP) <= 4 ? C.verde : Math.abs(brechaP) <= 8 ? "#9A6605" : C.alerta;
+                          const colUnif = !st ? C.textoSuave : st.unif >= 85 ? C.verde : st.unif >= 80 ? "#9A6605" : C.alerta;
+                          return (
+                            <tr key={l.id} style={{ borderBottom: `1px solid ${C.borde}`, textAlign: "right" }}>
+                              <td style={{ textAlign: "left", padding: "10px 6px" }}>
+                                <b>Gallinero {l.galpon}</b> <span style={{ fontSize: 11.5, color: C.textoSuave }}>({l.raza} · {semanasDe(l.nac).toFixed(0)} sem)</span>
+                              </td>
+                              <td style={{ padding: "10px 6px" }}>
+                                {ult ? (
+                                  <div>
+                                    <b>{ult.fecha.slice(0, 5)}</b> <span style={{ fontSize: 11, color: C.textoSuave }}>({ult.pesos.length} aves)</span>
+                                    {diasPesaje > 21 && <div style={{ fontSize: 10.5, color: C.alerta, fontWeight: 600 }}>⚠ {diasPesaje} días sin pesar</div>}
+                                  </div>
+                                ) : <span style={{ color: C.textoSuave }}>Sin pesaje</span>}
+                              </td>
+                              <td style={{ padding: "10px 6px", fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, fontWeight: 700 }}>
+                                {st ? `${st.prom.toFixed(0)} g` : "—"}
+                              </td>
+                              <td style={{ padding: "10px 6px", color: C.textoSuave }}>
+                                {meta ? `${meta} g` : "—"}
+                              </td>
+                              <td style={{ padding: "10px 6px", fontWeight: 700, color: colBrecha }}>
+                                {brechaG != null ? `${brechaG >= 0 ? "+" : ""}${brechaG} g (${brechaP >= 0 ? "+" : ""}${brechaP}%)` : "—"}
+                              </td>
+                              <td style={{ padding: "10px 6px" }}>
+                                {st ? (
+                                  <span style={{ padding: "3px 8px", borderRadius: 10, background: st.unif >= 85 ? C.verdeSuave : st.unif >= 80 ? C.yemaSuave : C.alertaSuave, color: colUnif, fontWeight: 700 }}>
+                                    {st.unif.toFixed(1)}%
+                                  </span>
+                                ) : "—"}
+                              </td>
+                              <td style={{ padding: "10px 6px", color: st && st.cv <= 8 ? C.verde : st && st.cv <= 10 ? "#9A6605" : C.alerta, fontWeight: 600 }}>
+                                {st ? `${st.cv.toFixed(1)}%` : "—"}
+                              </td>
+                              <td style={{ padding: "10px 6px", fontSize: 12 }}>
+                                {ganancia != null ? (
+                                  <span style={{ color: ganancia >= 0 ? C.verde : C.alerta, fontWeight: 600 }}>
+                                    {ganancia >= 0 ? "+" : ""}{ganancia} g
+                                  </span>
+                                ) : ant ? "—" : <span style={{ color: C.textoSuave, fontSize: 11 }}>1er pesaje</span>}
+                              </td>
+                              <td style={{ padding: "10px 6px" }}>
+                                <button type="button" onClick={() => { setFPeso(prev => ({ ...prev, lote: l.id })); setSubPesaje("pesajes"); }} style={{ padding: "5px 9px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, cursor: "pointer" }}>
+                                  + Pesar
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={() => setSubPesaje("pesajes")} style={{ ...btnStyle, flex: "1 1 200px", padding: "10px 14px", fontSize: 13.5 }}>
+                      ➕ Registrar nuevo pesaje
+                    </button>
+                    <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ flex: "1 1 200px", padding: "10px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                      🖨 Imprimir reporte de pesajes
+                    </button>
+                  </div>
+                </Seccion>
+              );
+            })()}
 
             {(subPesaje === "pesajes" || subPesaje === "todo") && (
               <Seccion titulo="Pesaje de la parvada" sub="Usualmente 200 aves por gallinero — pega o escribe los pesos en gramos, separados por coma, espacio o salto de línea">
@@ -6835,6 +7003,30 @@ const cssEtapaB = `
                   onChange={e => setFPeso({ ...fPeso, pesos: e.target.value })}
                   style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
               </label>
+              {(() => {
+                const pesosArr = fPeso.pesos.split(/[\s,]+/).map(pesoEnGramos).filter(x => x > 0);
+                if (!pesosArr.length) return null;
+                const nLive = pesosArr.length;
+                const promLive = pesosArr.reduce((a, b) => a + b, 0) / nLive;
+                const dentroLive = pesosArr.filter(v => Math.abs(v - promLive) <= promLive * 0.1).length;
+                const unifLive = (dentroLive / nLive) * 100;
+                const sdLive = nLive > 1 ? Math.sqrt(pesosArr.reduce((s, v) => s + (v - promLive) ** 2, 0) / (nLive - 1)) : 0;
+                const cvLive = nLive > 1 && promLive > 0 ? (sdLive / promLive) * 100 : 0;
+                const loteSel = lotes.find(l => l.id === fPeso.lote);
+                const metaLive = loteSel ? metaPesoLote(loteSel, fPeso.fecha) : null;
+                const brechaLive = metaLive ? promLive - metaLive : null;
+                return (
+                  <div style={{ margin: "6px 0 14px", padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, border: `1px solid #ECD7A0` }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#9A6605", marginBottom: 6 }}>Cálculo preliminar en vivo ({nLive} aves digitadas):</div>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
+                      <div><b>Promedio:</b> <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{promLive.toFixed(0)} g</span> {metaLive ? `(meta: ${metaLive} g · ${brechaLive >= 0 ? "+" : ""}${brechaLive.toFixed(0)} g)` : ""}</div>
+                      <div><b>Uniformidad:</b> <span style={{ fontWeight: 700, color: unifLive >= 85 ? C.verde : unifLive >= 80 ? "#9A6605" : C.alerta }}>{unifLive.toFixed(1)}%</span> {unifLive >= 85 ? "✓ Buena" : "(meta >85%)"}</div>
+                      <div><b>CV:</b> {cvLive.toFixed(1)}%</div>
+                      <div><b>Rango:</b> {Math.min(...pesosArr)} g – {Math.max(...pesosArr)} g</div>
+                    </div>
+                  </div>
+                );
+              })()}
               <button disabled={guardando || importandoPesajes || cargandoFondo} onClick={guardarPesaje} style={btnStyle}>Calcular y guardar pesaje</button>
               <label style={{ display: "block", marginTop: 12, fontSize: 13, fontWeight: 600 }}>
                 Importar historial de pesajes desde Excel (.xlsx / .xls)
