@@ -124,3 +124,45 @@
   transition: background 0.15s ease;
 }
 .v10-copy-link-btn:hover { background: #D4E6D6; }
+
+/* Preferencias v10: variables, densidad y vistas desacopladas */
+.app-v10 { --v10-bg: #f6f6f1; --v10-surface: #fff; --v10-text: #1c1f1a; --v10-border: #e4e4dc; }
+.app-v10.v10-text-pequeno { font-size: 14px; }
+.app-v10.v10-text-normal { font-size: 16px; }
+.app-v10.v10-text-grande { font-size: 18px; }
+.app-v10.v10-density-compacta .v10-main { line-height: 1.3; }
+.app-v10.v10-density-compacta :is(input, select, textarea, button) { min-height: 34px; }
+.app-v10.v10-density-comoda :is(input, select, textarea, button) { min-height: 40px; }
+.app-v10.v10-density-campo :is(input, select, textarea, button) { min-height: 48px; }
+.app-v10.v10-density-campo .v10-main { line-height: 1.55; }
+.app-v10.v10-theme-oscuro { --v10-bg: #111a15; --v10-surface: #1b2921; --v10-text: #edf4ef; --v10-border: #3b5143; color-scheme: dark; }
+.app-v10.v10-theme-contraste { --v10-bg: #000; --v10-surface: #000; --v10-text: #fff; --v10-border: #fff; color-scheme: dark; }
+.app-v10.v10-theme-oscuro .v10-main, .app-v10.v10-theme-contraste .v10-main { color: var(--v10-text); }
+.app-v10.v10-theme-oscuro .v10-settings-card, .app-v10.v10-theme-oscuro .v10-preferences-view section,
+.app-v10.v10-theme-contraste .v10-settings-card, .app-v10.v10-theme-contraste .v10-preferences-view section { background: var(--v10-surface) !important; border-color: var(--v10-border) !important; }
+@media (prefers-color-scheme: dark) {
+  .app-v10.v10-theme-automatico { --v10-bg: #111a15; --v10-surface: #1b2921; --v10-text: #edf4ef; --v10-border: #3b5143; color-scheme: dark; }
+}
+.v10-view-heading { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.v10-view-heading h2 { margin: 0; color: #14432a; }
+.v10-theme-oscuro .v10-view-heading h2, .v10-theme-contraste .v10-view-heading h2 { color: #f5b845; }
+.v10-view-heading p, .v10-help { margin: 4px 0 0; color: #6b7266; font-size: 13px; }
+.v10-theme-oscuro .v10-view-heading p, .v10-theme-oscuro .v10-help, .v10-theme-contraste .v10-view-heading p, .v10-theme-contraste .v10-help { color: #c5d0c8; }
+.v10-settings-card { background: var(--v10-surface); border: 1px solid var(--v10-border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+.v10-settings-card h3, .v10-preferences-view h3 { margin: 0 0 10px; }
+.v10-preference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0; }
+.v10-preference-grid label { display: grid; gap: 5px; font-size: 13px; font-weight: 600; }
+.v10-preference-toggle { display: flex !important; align-items: center; gap: 9px; padding: 8px 0; font-size: 13px; font-weight: 500 !important; }
+.v10-preference-toggle input { width: 20px; height: 20px; flex: 0 0 auto; }
+.v10-preference-modules { border-top: 1px solid var(--v10-border); margin-top: 10px; }
+.v10-preference-module { display: flex; justify-content: space-between; gap: 10px; align-items: center; border-bottom: 1px solid var(--v10-border); }
+.v10-preference-module > span { display: flex; gap: 5px; }
+.v10-preference-module button { border: 1px solid var(--v10-border); background: var(--v10-surface); color: inherit; border-radius: 8px; padding: 5px 11px; }
+.v10-primary-action { width: 100%; border: 0; border-radius: 11px; padding: 13px 16px; background: #14432a; color: #fff; font: 700 15px inherit; cursor: pointer; }
+.v10-admin-subnav { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; }
+.v10-admin-subnav button { border: 1px solid var(--v10-border); background: var(--v10-surface); color: inherit; padding: 10px 14px; border-radius: 20px; font: 600 13px inherit; white-space: nowrap; }
+.v10-admin-subnav button.active { background: #14432a; color: white; border-color: #14432a; }
+.v10-user-row button.danger { background: #c4442a; }
+.v10-loading-view { padding: 24px; text-align: center; color: #6b7266; }
+@media (max-width: 620px) { .v10-preference-grid { grid-template-columns: 1fr; } }
+

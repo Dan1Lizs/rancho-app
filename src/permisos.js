@@ -1,9 +1,9 @@
 const VISTAS_BASE_POR_ROL = {
-  encargado: ["inicio", "reporte", "captura", "revision", "bodega", "planta", "pesaje", "insumos", "lotes", "pedidomp", "formulas", "historial"],
-  bodega: ["inicio", "bodega", "reporte"],
-  planta: ["inicio", "planta", "pedidomp", "formulas", "revision", "reporte"],
-  bienestar: ["inicio", "pesaje", "reporte", "revision"],
-  consulta: ["inicio", "reporte", "bodega", "planta", "pesaje", "insumos", "lotes", "pedidomp", "formulas"],
+  encargado: ["inicio", "reporte", "captura", "revision", "bodega", "planta", "pesaje", "insumos", "lotes", "pedidomp", "formulas", "historial", "preferencias"],
+  bodega: ["inicio", "bodega", "reporte", "preferencias"],
+  planta: ["inicio", "planta", "pedidomp", "formulas", "revision", "reporte", "preferencias"],
+  bienestar: ["inicio", "pesaje", "reporte", "revision", "preferencias"],
+  consulta: ["inicio", "reporte", "bodega", "planta", "pesaje", "insumos", "lotes", "pedidomp", "formulas", "preferencias"],
 };
 
 export const vistasPermitidas = (rol, todasLasVistas = []) => {
