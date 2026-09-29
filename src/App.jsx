@@ -27,6 +27,7 @@ const C = {
   alerta: "#C4442A", alertaSuave: "#FBEAE6",
   texto: "#1C1F1A", textoSuave: "#6B7266", borde: "#E4E4DC",
 };
+const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
 const VERSION_APP = "10.0";
@@ -697,7 +698,7 @@ function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 56
   );
 }
 
-function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, bodegaFechaInput, recActiva, fPeso, histFecha, irA, avisar }) {
+function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, recActiva, fPeso, histFecha, irA, avisar }) {
   if (vista === "inicio") return null;
 
   const tabActual = tabs.find(t => t.id === vista) || { nombre: vista };
@@ -707,8 +708,8 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
   if (vista === "captura") {
     const l = lotes.find(x => x.id === galponActivo);
     subdetalle = `Galpón ${l?.galpon || galponActivo || "1"} · ${fechaCaptura ? fechaCaptura.split("-").reverse().join("/") : "Hoy"}`;
-  } else if (vista === "bodega" && bodegaFechaInput) {
-    subdetalle = `Fecha ${bodegaFechaInput.split("-").reverse().join("/")}`;
+  } else if (vista === "bodega" && fechaBodega) {
+    subdetalle = `Fecha ${fechaBodega.split("-").reverse().join("/")}`;
   } else if (vista === "formulas" && recActiva) {
     subdetalle = `Fórmula ${recActiva}`;
   } else if (vista === "pesaje" && fPeso?.lote) {
@@ -2477,7 +2478,7 @@ export default function App() {
     const f = h.params.get("fecha");
     if (f) {
       if (h.ruta === "captura") setFechaCaptura(f);
-      if (h.ruta === "bodega") setBodegaFechaInput(f);
+      if (h.ruta === "bodega") cambiarFechaBodega(f);
       if (h.ruta === "historial") setHistFecha(f);
     }
     const form = h.params.get("formula");
@@ -2492,7 +2493,7 @@ export default function App() {
       if (galponActivo) params.set("lote", galponActivo);
       if (fechaCaptura && fechaCaptura !== hoyISO()) params.set("fecha", fechaCaptura);
     } else if (vista === "bodega") {
-      if (bodegaFechaInput && bodegaFechaInput !== hoyISO()) params.set("fecha", bodegaFechaInput);
+      if (fechaBodega && fechaBodega !== hoyISO()) params.set("fecha", fechaBodega);
     } else if (vista === "formulas") {
       if (recActiva) params.set("formula", recActiva);
     } else if (vista === "pesaje") {
@@ -2505,7 +2506,7 @@ export default function App() {
     if (window.location.hash !== nuevoHash) {
       window.history.replaceState(null, "", nuevoHash);
     }
-  }, [vista, galponActivo, fechaCaptura, bodegaFechaInput, recActiva, fPeso.lote, histFecha]);
+  }, [vista, galponActivo, fechaCaptura, fechaBodega, recActiva, fPeso.lote, histFecha]);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -2522,13 +2523,13 @@ export default function App() {
       const f = h.params.get("fecha");
       if (f) {
         if (h.ruta === "captura" && f !== fechaCaptura) setFechaCaptura(f);
-        if (h.ruta === "bodega" && f !== bodegaFechaInput) setBodegaFechaInput(f);
+        if (h.ruta === "bodega" && f !== fechaBodega) cambiarFechaBodega(f);
         if (h.ruta === "historial" && f !== histFecha) setHistFecha(f);
       }
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, [vista, tabsVisibles, lotes, galponActivo, fechaCaptura, bodegaFechaInput, histFecha]);
+  }, [vista, tabsVisibles, lotes, galponActivo, fechaCaptura, fechaBodega, histFecha]);
   const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
     ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
     ...registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })),
@@ -3903,7 +3904,7 @@ const cssEtapaB = `
           lotes={lotes}
           galponActivo={galponActivo}
           fechaCaptura={fechaCaptura}
-          bodegaFechaInput={bodegaFechaInput}
+          fechaBodega={fechaBodega}
           recActiva={recActiva}
           fPeso={fPeso}
           histFecha={histFecha}
@@ -7210,7 +7211,7 @@ const cssEtapaB = `
 
       <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
         Formato: Reporte Diario de Operación · Datos compartidos — todo el equipo ve y edita la misma información.<br />
-        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — Etapas A y B
+        Usa ⟳ para traer lo último guardado. · Versión {VERSION_APP} — 28/09/2026
       </footer>
     </div>
   );
