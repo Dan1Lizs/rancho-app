@@ -30,11 +30,14 @@ class Capturador extends React.Component {
 
 function Raiz() {
   const [sesion, setSesion] = useState(undefined);
+  const [recuperando, setRecuperando] = useState(false);
+  const [nuevaClave, setNuevaClave] = useState("");
+  const [errorClave, setErrorClave] = useState("");
 
   const fijarSesion = (s) => { window.__usuarioEmail = s?.user?.email || null; window.__usuarioNombre = s?.user?.user_metadata?.full_name || s?.user?.user_metadata?.name || ""; setSesion(s ?? null); };
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => fijarSesion(data.session)).catch(() => fijarSesion(null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_ev, s) => fijarSesion(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((evento, s) => { fijarSesion(s); if (evento === "PASSWORD_RECOVERY") setRecuperando(true); });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -42,6 +45,7 @@ function Raiz() {
     return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F6F6F1", fontFamily: "sans-serif", color: "#14432A" }}>Verificando acceso…</div>;
   }
   if (!sesion) return <Login />;
+  if (recuperando) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#F6F6F1", fontFamily: "sans-serif", padding: 20 }}><form onSubmit={async e => { e.preventDefault(); if (nuevaClave.length < 12) { setErrorClave("Usa al menos 12 caracteres."); return; } const { error } = await supabase.auth.updateUser({ password: nuevaClave }); if (error) setErrorClave("No se pudo cambiar la contraseña. Solicita otro enlace."); else { setRecuperando(false); setNuevaClave(""); } }} style={{ background: "white", borderRadius: 14, padding: 24, width: "min(100%,380px)" }}><h1 style={{ fontSize: 22 }}>Nueva contraseña</h1><label htmlFor="nueva-clave">Contraseña nueva</label><input id="nueva-clave" type="password" autoComplete="new-password" value={nuevaClave} onChange={e => setNuevaClave(e.target.value)} required style={{ display: "block", boxSizing: "border-box", width: "100%", padding: 12, margin: "10px 0" }} />{errorClave && <p role="alert">{errorClave}</p>}<button type="submit" style={{ padding: 12 }}>Guardar contraseña</button></form></div>;
 
   return (
     <>

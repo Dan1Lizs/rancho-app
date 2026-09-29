@@ -6,6 +6,19 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [mostrarClave, setMostrarClave] = useState(false);
+  const [mensaje, setMensaje] = useState("");
+
+  const recuperar = async () => {
+    if (!email.trim()) { setError("Escribe tu correo para recibir el enlace de recuperación."); return; }
+    setError(""); setCargando(true);
+    try {
+      const { error: fallo } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: `${location.origin}/` });
+      if (fallo) throw fallo;
+      setMensaje("Si ese correo tiene acceso, recibirás un enlace para cambiar la contraseña.");
+    } catch { setError("No se pudo enviar el enlace. Revisa la conexión e inténtalo de nuevo."); }
+    finally { setCargando(false); }
+  };
 
   const entrar = async (e) => {
     e.preventDefault();
@@ -41,14 +54,17 @@ export default function Login() {
       <form onSubmit={entrar} style={{ width: "100%", maxWidth: 380, background: "#fff", borderRadius: 20, padding: "32px 26px", boxShadow: "0 6px 30px rgba(20,67,42,0.10)" }}>
         <div style={{ textAlign: "center", marginBottom: 6, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 24, color: "#14432A" }}>Rancho El Soñado</div>
         <div style={{ textAlign: "center", fontSize: 13, color: "#6B7266", marginBottom: 22 }}>Granja Avícola y Ganadería Rancho El Soñado LTDA.</div>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Correo electrónico</label>
-        <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={input} placeholder="tucorreo@ejemplo.com" required />
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Contraseña</label>
-        <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={input} required />
-        {error && <div style={{ fontSize: 13, color: "#C4442A", marginBottom: 10, lineHeight: 1.5, background: "#FBEAE6", borderRadius: 10, padding: "9px 12px" }}>{error}</div>}
+        <label htmlFor="login-email" style={{ fontSize: 13, fontWeight: 600 }}>Correo electrónico</label>
+        <input id="login-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={input} placeholder="tucorreo@ejemplo.com" required />
+        <label htmlFor="login-password" style={{ fontSize: 13, fontWeight: 600 }}>Contraseña</label>
+        <input id="login-password" type={mostrarClave ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={input} required />
+        <button type="button" onClick={() => setMostrarClave(v => !v)} style={{ marginBottom: 12 }}> {mostrarClave ? "Ocultar contraseña" : "Mostrar contraseña"}</button>
+        {error && <div role="alert" style={{ fontSize: 13, color: "#C4442A", marginBottom: 10, lineHeight: 1.5, background: "#FBEAE6", borderRadius: 10, padding: "9px 12px" }}>{error}</div>}
+        {mensaje && <div role="status" style={{ fontSize: 13, marginBottom: 10, color: "#14432A" }}>{mensaje}</div>}
         <button type="submit" disabled={cargando} style={{ width: "100%", padding: 14, fontSize: 16, fontWeight: 600, background: "#14432A", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
           {cargando ? "Entrando…" : "Entrar a la granja"}
         </button>
+        <button type="button" onClick={recuperar} disabled={cargando} style={{ display: "block", margin: "12px auto", border: 0, background: "none", color: "#14432A", textDecoration: "underline", cursor: "pointer" }}>Olvidé mi contraseña</button>
         <div style={{ fontSize: 11.5, color: "#6B7266", textAlign: "center", marginTop: 14 }}>
           Acceso solo para el equipo autorizado.
         </div>

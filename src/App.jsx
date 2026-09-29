@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import * as XLSX from "xlsx";
-import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion } from "./storage";
+import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirDetallePlanta } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
@@ -16,6 +16,8 @@ import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
 import { saldosFormulasDesdeConteo, deltaConteoFormula } from "./inventarioFormulas";
 import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
+import { filtroPlantaInicial, filtrarMovimientosPlanta } from "./plantaHistorial";
+import "./v10.css";
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -27,7 +29,7 @@ const C = {
 };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "9.0";
+const VERSION_APP = "10.0";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -327,7 +329,16 @@ export default function App() {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(false);
   const [cargandoFondo, setCargandoFondo] = useState(false);
-  const [vista, setVista] = useState("reporte");
+  const [vista, setVista] = useState(() => localStorage.getItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`) || "inicio");
+  const [busquedaGlobal, setBusquedaGlobal] = useState("");
+  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
+  const [menuMovil, setMenuMovil] = useState(false);
+  const [salidaPendiente, setSalidaPendiente] = useState(null);
+  useEffect(() => { localStorage.setItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`, vista); }, [vista]);
+  useEffect(() => {
+    const atajo = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setBuscadorAbierto(true); } if (e.key === "Escape") { setBuscadorAbierto(false); setMenuMovil(false); } };
+    addEventListener("keydown", atajo); return () => removeEventListener("keydown", atajo);
+  }, []);
   const [lotes, setLotes] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [pesajes, setPesajes] = useState([]);
@@ -335,6 +346,9 @@ export default function App() {
   const [fumigaciones, setFumigaciones] = useState([]);
   const [bodegaMovs, setBodegaMovs] = useState([]);
   const [plantaMovs, setPlantaMovs] = useState([]);
+  const [filtroPlanta, setFiltroPlanta] = useState(filtroPlantaInicial);
+  const [editarDetallePlanta, setEditarDetallePlanta] = useState(null);
+  const [motivoDetallePlanta, setMotivoDetallePlanta] = useState("");
   const [facturas, setFacturas] = useState([]);
   const [vacunas, setVacunas] = useState([]);
   const [enfermedades, setEnfermedades] = useState([]);
@@ -384,7 +398,8 @@ export default function App() {
   const movBodegaIdRef = useRef(null);
   const movBodegaOriginalRef = useRef(null);
   const [motivoEdicionBodega, setMotivoEdicionBodega] = useState("");
-  const [periodosHistorial, setPeriodosHistorial] = useState({});
+  const [periodosHistorial, setPeriodosHistorial] = useState(() => { try { return JSON.parse(localStorage.getItem(`rancho:periodos:${window.__usuarioEmail || "local"}`) || "{}"); } catch { return {}; } });
+  useEffect(() => { localStorage.setItem(`rancho:periodos:${window.__usuarioEmail || "local"}`, JSON.stringify(periodosHistorial)); }, [periodosHistorial]);
   const [nucleoInv, setNucleoInv] = useState({});
   const [cxp, setCxp] = useState({ facturas: [], pagos: [] });
   const [fCxpFac, setFCxpFac] = useState(null);
@@ -392,6 +407,11 @@ export default function App() {
   const [fAbono, setFAbono] = useState({ monto: "", fecha: hoyISO(), medio: "Transferencia", ref: "" });
   const [kardex, setKardex] = useState([]);
   const [esAdmin, setEsAdmin] = useState(true);
+  const [miRol, setMiRol] = useState(null);
+  const [usuariosRoles, setUsuariosRoles] = useState([]);
+  const [correoInvitacion, setCorreoInvitacion] = useState("");
+  const [rolInvitacion, setRolInvitacion] = useState("encargado");
+  const [gestionUsuarios, setGestionUsuarios] = useState(false);
   const [cfgAdmins, setCfgAdmins] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const [correoNombre, setCorreoNombre] = useState("");
@@ -660,6 +680,13 @@ export default function App() {
       {
         const emailSesion = (typeof window !== "undefined" && window.__usuarioEmail || "").toLowerCase();
         if ((adm0 || []).length > 0 && emailSesion) setEsAdmin(adm0.map(x => x.toLowerCase()).includes(emailSesion));
+        const { data: roles, error: errorRoles } = await supabase.from("user_roles").select("user_id,email,role,active").order("email");
+        if (!errorRoles && roles) {
+          const propio = roles.find(x => x.email === emailSesion);
+          setMiRol(propio?.active ? propio.role : "sin_acceso");
+          setEsAdmin(propio?.role === "admin" && propio.active);
+          setUsuariosRoles(roles);
+        }
       }
       if (!silencioso) {
         const elegido = mv.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current && String(m.id) === String(movBodegaIdRef.current))
@@ -1955,7 +1982,7 @@ export default function App() {
   const btnStyle = { width: "100%", padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif", opacity: guardando ? 0.6 : 1 };
 
   const tabs = [
-    { id: "reporte", nombre: "Reporte" }, { id: "captura", nombre: "Control diario" },
+    { id: "inicio", nombre: "Inicio" }, { id: "reporte", nombre: "Reporte" }, { id: "captura", nombre: "Control diario" },
     { id: "revision", nombre: "Revisión" },
     { id: "bodega", nombre: "Bodega" }, { id: "planta", nombre: "Planta" },
     { id: "pesaje", nombre: "Bienestar" }, { id: "insumos", nombre: "Insumos" },
@@ -1963,6 +1990,29 @@ export default function App() {
     { id: "formulas", nombre: "Fórmulas" },
     { id: "cxp", nombre: "Por Pagar" }, { id: "historial", nombre: "Historial" },
   ];
+  const gruposMenu = [
+    { nombre: "Operación", ids: ["inicio", "captura", "revision", "reporte"] },
+    { nombre: "Inventarios", ids: ["bodega", "planta", "insumos", "pedidomp", "formulas"] },
+    { nombre: "Salud y lotes", ids: ["pesaje", "lotes"] },
+    { nombre: "Administración", ids: ["historial", "cxp"] },
+  ];
+  const tabsVisibles = tabs.filter(t => (esAdmin || t.id !== "cxp") && (miRol !== "bodega" || ["inicio", "bodega", "reporte", "historial"].includes(t.id)) && (miRol !== "planta" || ["inicio", "planta", "pedidomp", "formulas", "revision", "reporte"].includes(t.id)) && (miRol !== "bienestar" || ["inicio", "pesaje", "insumos", "lotes", "reporte", "revision"].includes(t.id)));
+  useEffect(() => { if (!tabsVisibles.some(t => t.id === vista)) setVista("inicio"); }, [vista, esAdmin, miRol]);
+  const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
+  const irA = (id) => { if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id); else abrirVista(id); };
+  const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
+    ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
+    ...registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })),
+    ...bodegaMovs.map(m => ({ texto: `Bodega ${m.fecha} · ${m.responsable || m.por || ""}`, vista: "bodega", fecha: fechaHistorialISO(m.fecha) })),
+    ...pesajes.map(p => ({ texto: `Pesaje ${p.fecha} · ${lotes.find(l => l.id === p.lote)?.galpon ? `G${lotes.find(l => l.id === p.lote).galpon}` : p.lote}`, vista: "pesaje", fecha: fechaHistorialISO(p.fecha) })),
+    ...tareasProgramadas.map(t => ({ texto: `Actividad ${t.nombre} · ${t.responsable || ""}`, vista: "pesaje" })),
+    ...Object.keys(recetas.formulas || {}).map(f => ({ texto: `Fórmula ${f}`, vista: "formulas", formula: f })),
+    ...insumos.map(it => ({ texto: `Insumo ${it.nombre || ""} · ${it.categoria || ""}`, vista: "insumos" })),
+    ...mpCat.map(m => ({ texto: `Materia prima ${m.n || ""} · ${m.c || ""}`, vista: "pedidomp" })),
+    ...(esAdmin ? (cxp.facturas || []).map(f => ({ texto: `Factura ${f.proveedor || ""} · ${f.numero || ""}`, vista: "cxp" })) : []),
+  ].filter(x => x.texto.toLocaleLowerCase("es").includes(busquedaGlobal.trim().toLocaleLowerCase("es"))).slice(0, 30);
+  const abrirResultado = r => { if (r.vista === "historial" && r.fecha) setHistFecha(r.fecha); if (r.vista === "bodega" && r.fecha) cambiarFechaBodega(r.fecha); if (r.lote) setGalponActivo(r.lote); if (r.formula) setRecActiva(r.formula); irA(r.vista); };
+  const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta, filtroPlanta);
   const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
     const filas = [
@@ -1970,11 +2020,23 @@ export default function App() {
       ...bodegaMovs.flatMap(m => (m.historialEdiciones || []).map(c => ({ fecha: c.fechaHora, area: "Bodega", accion: "Edición", responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.saldoFinal} cart`, despues: `${c.nuevo?.saldoFinal} cart` }))),
       ...bodegaMovs.filter(m => m.cierreVerificado).map(m => ({ fecha: m.cierreVerificado.fechaHora, area: "Bodega", accion: "Cierre verificado", responsable: m.cierreVerificado.responsable, motivo: "Salidas, devoluciones y conteo", antes: "", despues: `${m.saldoFinal} cart` })),
       ...plantaMovs.filter(m => m.tipo === "ajuste").map(m => ({ fecha: m.registradoEl || m.fecha, area: "Planta", accion: "Conteo físico", responsable: m.responsable || m.por, motivo: m.detalle, antes: m.saldoAnterior, despues: m.saldoReal })),
+      ...plantaMovs.flatMap(m => (m.historialEdiciones || []).map(ed => ({ fecha: ed.fechaHora, area: "Planta", accion: "Corrección de detalle", responsable: ed.responsable || ed.por, motivo: ed.motivo, antes: [ed.anterior?.detalle, ed.anterior?.numBache, ed.anterior?.numNucleo].filter(Boolean).join(" · "), despues: [ed.nuevo?.detalle, ed.nuevo?.numBache, ed.nuevo?.numNucleo].filter(Boolean).join(" · ") }))),
       ...advAjustes.map(a => ({ fecha: a.fecha, area: "Auditoría", accion: a.accion, responsable: a.responsable, motivo: a.razon, antes: a.textoOriginal, despues: a.nuevoTexto })),
       ...tareasProgramadas.flatMap(t => (t.historialRealizaciones || []).map(h => ({ fecha: h.registradoEl || h.fecha, area: "Actividades", accion: h.accion === "reversión" ? "Realización deshecha" : "Realización", responsable: h.por, motivo: t.nombre, antes: "", despues: h.responsable || "" }))),
     ].filter(f => historialVisible([{ fecha: f.fecha }], "auditoria").length);
     const url = URL.createObjectURL(new Blob(["\ufeff", csvAuditoria(filas)], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `auditoria-rancho-${hoyISO()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const guardarDetallePlanta = async () => {
+    const original = editarDetallePlanta?.original;
+    if (!original) return;
+    setGuardando(true);
+    try {
+      const nuevo = await corregirDetallePlanta({ id: original.id, visto: original, campos: editarDetallePlanta.campos, motivo: motivoDetallePlanta, responsable: editarDetallePlanta.campos.responsable || completadoPor });
+      setPlantaMovs(v => v.map(m => String(m.id) === String(original.id) ? nuevo : m));
+      setEditarDetallePlanta(null); setMotivoDetallePlanta(""); avisar("✓ Detalle corregido y auditado. Los saldos no cambiaron.");
+    } catch (e) { avisar(`⚠ ${e.message}`); }
+    finally { setGuardando(false); }
   };
 
   if (cargando) return (
@@ -2288,8 +2350,11 @@ export default function App() {
           {printDoc.tipo === "enfermedades" && "Expediente de enfermedades y tratamientos"}
           {printDoc.tipo === "necropsias" && "Registro de necropsias y resultados de laboratorio"}
           {printDoc.tipo === "actividades" && `Tareas por hacer — ${l ? `Galera ${l.galpon} · ${l.raza}` : "Generales de la granja"}`}
+          {printDoc.tipo === "planta_historial" && "Historial de movimientos de planta"}
           {" · Emitido: "}{hoyStr()}
         </div>
+
+        {printDoc.tipo === "planta_historial" && <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Fecha", "Tipo", "Categoría", "Fórmula / detalle", "Cantidad", "Responsable"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{printDoc.items.map((m, i) => <tr key={m.id || i}><td style={celda}>{m.fecha}</td><td style={celda}>{m.tipo}</td><td style={celda}>{m.categoria}</td><td style={celda}>{m.formula} {m.detalle || m.numBache || m.numNucleo || ""}</td><td style={celda}>{m.categoria === "Núcleo" ? `${m.porciones || 0} porciones` : `${m.kg || 0} kg`}</td><td style={celda}>{mostrarNombre(m.responsable || m.por || "—")}</td></tr>)}</tbody></table>}
 
         {printDoc.tipo === "actividades" && (() => {
           const programadas = actividadesDelDia(tareasProgramadas, printDoc.fecha, printDoc.lote || "");
@@ -2935,8 +3000,24 @@ export default function App() {
   const loteActivo = lotes.find(l => l.id === galponActivo);
   const tiquetesCompartidos = tiquetesDelDia(capturas, registros, fechaCaptura.split("-").reverse().join("/"), Object.keys(suciosRef.current));
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
+    <div className="app-v10" style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
       <style>{fuentes}</style>
+      {editarDetallePlanta && <div className="v10-overlay"><div className="v10-search" role="dialog" aria-modal="true" aria-label="Corregir detalle de planta" style={{ padding: 20 }}>
+        <h3>Corregir detalle de planta</h3><p>Movimiento del {editarDetallePlanta.original.fecha} · {editarDetallePlanta.original.formula}. Para cambiar kilos o porciones usa el ajuste por conteo físico; esta corrección conserva los saldos.</p>
+        {[...new Set(["detalle", editarDetallePlanta.original.tipo === "bache" ? "numBache" : "numNucleo", "responsable"])].map(k => <label key={k} style={{ display: "block", marginBottom: 10 }}>{({ detalle: "Detalle", numBache: "Número de bache", numNucleo: "Número de núcleo", responsable: "Responsable" })[k]}<input style={{ ...inputStyle, width: "100%" }} value={editarDetallePlanta.campos[k] || ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, [k]: e.target.value } }))} /></label>)}
+        <label>Motivo de la corrección<textarea style={{ ...inputStyle, width: "100%" }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} /></label>
+        <div style={{ display: "flex", gap: 9 }}><button disabled={guardando} onClick={guardarDetallePlanta}>Guardar corrección</button><button onClick={() => setEditarDetallePlanta(null)}>Cancelar</button></div>
+      </div></div>}
+      <nav className="v10-desktop-nav" aria-label="Navegación principal">
+        <div className="v10-menu-brand">Rancho El Soñado <small>Operación de la granja</small></div>
+        {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => <button key={t.id} className={vista === t.id ? "v10-active" : ""} aria-current={vista === t.id ? "page" : undefined} onClick={() => irA(t.id)}>{t.nombre}</button>)}</div>)}
+        <button className="v10-menu-search" onClick={() => setBuscadorAbierto(true)}>⌕ Buscar · Ctrl K</button>
+      </nav>
+      {buscadorAbierto && <div className="v10-overlay" role="presentation" onClick={() => setBuscadorAbierto(false)}><div className="v10-search" role="dialog" aria-modal="true" aria-label="Buscar en la granja" onClick={e => e.stopPropagation()}>
+        <div className="v10-search-head"><input autoFocus aria-label="Buscar fecha, galpón, tiquete o actividad" placeholder="Fecha, galpón, tiquete, actividad…" value={busquedaGlobal} onChange={e => setBusquedaGlobal(e.target.value)} /><button onClick={() => setBuscadorAbierto(false)} aria-label="Cerrar búsqueda">✕</button></div>
+        {busquedaGlobal.trim().length < 2 ? <p>Escribe al menos dos caracteres.</p> : resultadosBusqueda.length ? resultadosBusqueda.map((r, i) => <button key={i} className="v10-result" onClick={() => abrirResultado(r)}>{r.texto}</button>) : <p>No hay resultados para esta búsqueda.</p>}
+      </div></div>}
+      {salidaPendiente && <div className="v10-overlay"><div className="v10-search" role="dialog" aria-modal="true" aria-label="Cambios pendientes" style={{ padding: 22 }}><h3>Hay cambios sin enviar</h3><p>El control seguirá como borrador en este dispositivo y podrás recuperarlo al volver a esta fecha.</p><div style={{ display: "flex", gap: 10 }}><button autoFocus onClick={() => setSalidaPendiente(null)}>Seguir editando</button><button onClick={() => { const id = salidaPendiente; setSalidaPendiente(null); abrirVista(id); }}>Salir y conservar borrador</button></div></div></div>}
       {revisionGuardado && <div style={{ position: "fixed", inset: 0, zIndex: 110, background: "rgba(20,30,24,.6)", display: "grid", placeItems: "center", padding: 14 }}>
         <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "min(100%,560px)", maxHeight: "85vh", overflowY: "auto" }}>
           <h3 style={{ marginTop: 0 }}>Revisar antes de guardar · {fechaCaptura}</h3>
@@ -3061,7 +3142,7 @@ export default function App() {
         </div>
       </div>}
 
-      <header style={{ background: C.verde, padding: "16px 16px 0", color: "#fff", position: "sticky", top: 0, zIndex: 10 }}>
+      <header className="v10-header" style={{ background: C.verde, padding: "16px 16px 0", color: "#fff", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ maxWidth: 880, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
@@ -3072,27 +3153,32 @@ export default function App() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button onClick={() => cargarTodo(false)} title="Actualizar" style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, color: "#fff", padding: "9px 12px", fontSize: 16, cursor: "pointer", opacity: cargandoFondo ? 0.5 : 1 }}>{cargandoFondo ? "…" : "⟳"}</button>
+              <button className="v10-search-action" onClick={() => setBuscadorAbierto(true)} aria-label="Buscar en la granja">⌕</button>
               <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 12px", textAlign: "center" }}>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, color: "#F5B845" }}>{posturaDia.toFixed(1)}%</div>
                 <div style={{ fontSize: 10, opacity: 0.75 }}>postura</div>
               </div>
             </div>
           </div>
-          <nav style={{ display: "flex", gap: 2, marginTop: 12, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-            {tabs.filter(t2 => esAdmin || t2.id !== "cxp").map(t => (
-              <button key={t.id} onClick={() => setVista(t.id)} style={{
-                padding: "9px 14px", fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer",
-                borderRadius: "9px 9px 0 0", fontFamily: "'Inter', sans-serif", whiteSpace: "nowrap",
-                background: vista === t.id ? C.fondo : "transparent",
-                color: vista === t.id ? C.verde : "rgba(255,255,255,0.7)",
-              }}>{t.nombre}</button>
-            ))}
-          </nav>
         </div>
       </header>
 
-      <main style={{ maxWidth: 880, margin: "0 auto", padding: 16 }}>
-        {guardado && <div style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
+      <main className="v10-main" style={{ maxWidth: 880, margin: "0 auto", padding: 16 }}>
+        {miRol === "sin_acceso" && <div role="alert" className="v10-security-alert">Tu cuenta no tiene un rol activo. Solicita acceso a un administrador.</div>}
+        {miRol === "consulta" && <div className="v10-security-alert">Acceso de consulta: los cambios están bloqueados por la base de datos.</div>}
+        {vista === "inicio" && <>
+          <Seccion titulo={`Hoy · ${hoyISO()}`} sub="Lo que necesita atención antes de cerrar el día">
+            <div className="v10-home-grid">
+              <button onClick={() => irA("captura")}><b>Control diario</b><span>{activos.filter(l => registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length}/{activos.length} gallineros guardados</span></button>
+              <button onClick={() => irA("revision")}><b>Revisión</b><span>{hallazgosOperacion.length} asuntos por revisar</span></button>
+              <button onClick={() => irA("bodega")}><b>Bodega</b><span>Movimientos y cierre del día</span></button>
+              <button onClick={() => irA("pesaje")}><b>Bienestar</b><span>Pesajes y actividades</span></button>
+            </div>
+          </Seccion>
+          {!!retirosActivos.length && <Seccion titulo="Retiros activos">{retirosActivos.map((m, i) => <p key={i}>G{m.galpon} · {m.producto} · hasta {m.retiroHasta}</p>)}</Seccion>}
+          <Seccion titulo="Próximas actividades">{tareasProgramadas.slice(0, 8).map(t => <div key={t.id} className="v10-home-row">{t.nombre} · {proximaTarea(t) || "sin fecha"}</div>)}{!tareasProgramadas.length && <p>No hay actividades programadas.</p>}</Seccion>
+        </>}
+        {guardado && <div role={guardado.startsWith("⚠") ? "alert" : "status"} style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
         {(() => {
           const conteo = new Map();
           registros.forEach(r => { const k = `${r.fecha}|${r.lote}`; conteo.set(k, (conteo.get(k) || 0) + 1); });
@@ -3945,15 +4031,28 @@ export default function App() {
             </Seccion>
 
             {movsPlanta.length > 0 && (
-              <Seccion titulo="Historial de movimientos">
-                {selectorHistorial("planta")}
-                {historialVisible(movsPlanta, "planta").map((m, i) => (
-                  <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. El detalle se puede corregir con motivo; las cantidades se concilian mediante ajuste físico.">
+                <div className="v10-plant-filters">
+                  <input aria-label="Buscar movimiento de planta" placeholder="Fórmula, detalle, número o responsable" value={filtroPlanta.texto} onChange={e => setFiltroPlanta(v => ({ ...v, texto: e.target.value }))} />
+                  <select aria-label="Tipo de movimiento" value={filtroPlanta.tipo} onChange={e => setFiltroPlanta(v => ({ ...v, tipo: e.target.value }))}><option value="">Todos los tipos</option>{["bache", "nucleo", "servido", "ajuste"].map(t => <option key={t}>{t}</option>)}</select>
+                  <select aria-label="Categoría" value={filtroPlanta.categoria} onChange={e => setFiltroPlanta(v => ({ ...v, categoria: e.target.value }))}><option value="">Todas las categorías</option>{["Aves", "Ganado", "Núcleo"].map(t => <option key={t}>{t}</option>)}</select>
+                  <select aria-label="Fórmula" value={filtroPlanta.formula} onChange={e => setFiltroPlanta(v => ({ ...v, formula: e.target.value }))}><option value="">Todas las fórmulas</option>{Object.keys(recetas.formulas).map(f => <option key={f}>{f}</option>)}</select>
+                  <label>Desde <input type="date" value={filtroPlanta.desde} onChange={e => setFiltroPlanta(v => ({ ...v, desde: e.target.value }))} /></label><label>Hasta <input type="date" value={filtroPlanta.hasta} onChange={e => setFiltroPlanta(v => ({ ...v, hasta: e.target.value }))} /></label>
+                  <button onClick={() => setFiltroPlanta(filtroPlantaInicial())}>Limpiar</button>
+                </div>
+                <div className="v10-history-actions">{selectorHistorial("planta")}<span>{historialVisible(plantaFiltrada, "planta").length} de {movsPlanta.length} movimientos</span><button onClick={() => setPrintDoc({ tipo: "planta_historial", items: historialVisible(plantaFiltrada, "planta") })}>🖨 Imprimir filtrados</button></div>
+                {historialVisible(plantaFiltrada, "planta").map((m, i) => (
+                  <div key={m.id || i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                     <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
                     {m.tipo !== "ajuste" && <button onClick={() => eliminarMovPlanta(m)} title="Eliminar (revierte efectos)" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>}
+                    </div>
+                    <button onClick={() => { setEditarDetallePlanta({ original: plantaMovs.find(x => String(x.id) === String(m.id)) || m, campos: { detalle: m.detalle || "", numBache: m.numBache || "", numNucleo: m.numNucleo || "", responsable: m.responsable || m.por || completadoPor } }); setMotivoDetallePlanta(""); }} style={{ marginTop: 7, fontSize: 12 }}>Corregir detalle</button>
+                    {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} · {mostrarNombre(ed.por)} · {ed.motivo}<div>Antes: {ed.anterior?.detalle || ed.anterior?.numBache || ed.anterior?.numNucleo || "—"} → Después: {ed.nuevo?.detalle || ed.nuevo?.numBache || ed.nuevo?.numNucleo || "—"}</div></div>)}</details>}
                   </div>
                 ))}
+                {!historialVisible(plantaFiltrada, "planta").length && <p>No hay movimientos con estos filtros.</p>}
               </Seccion>
             )}
 
@@ -5201,6 +5300,21 @@ export default function App() {
                     </button>
                   </div>
                 )}
+                {esAdmin && <div className="v10-user-admin">
+                  <h3>Usuarios y acceso</h3>
+                  {miRol !== "admin" ? <p>La administración segura de usuarios se activa al aplicar MIGRACION-V10-USUARIOS.sql y desplegar la función invite-user. Hasta entonces, los accesos existentes siguen como antes.</p> : <>
+                    <p>Invita a una persona con un rol. El enlace llega a su correo; no se comparte una contraseña.</p>
+                    <div className="v10-user-form"><input type="email" aria-label="Correo para invitar" placeholder="persona@correo.com" value={correoInvitacion} onChange={e => setCorreoInvitacion(e.target.value)} /><select aria-label="Rol del nuevo usuario" value={rolInvitacion} onChange={e => setRolInvitacion(e.target.value)}>{["encargado", "bodega", "planta", "bienestar", "consulta", "admin"].map(r => <option key={r} value={r}>{r}</option>)}</select><button disabled={gestionUsuarios} onClick={async () => {
+                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoInvitacion.trim())) { avisar("⚠ Escribe un correo válido"); return; }
+                      setGestionUsuarios(true);
+                      const { error } = await supabase.functions.invoke("invite-user", { body: { email: correoInvitacion.trim().toLowerCase(), role: rolInvitacion } });
+                      setGestionUsuarios(false);
+                      if (error) avisar(`⚠ No se pudo invitar: ${error.message}`);
+                      else { setCorreoInvitacion(""); avisar("✓ Invitación enviada"); const { data } = await supabase.from("user_roles").select("user_id,email,role,active").order("email"); if (data) setUsuariosRoles(data); }
+                    }}>Enviar invitación</button></div>
+                    {usuariosRoles.map(u => <div key={u.user_id} className="v10-user-row"><span>{nombresUsuarios[u.email] || u.email}<small>{u.email}</small></span><select aria-label={`Rol de ${u.email}`} value={u.role} disabled={gestionUsuarios} onChange={async e => { const role = e.target.value; setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ role }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, role } : x)); avisar("✓ Rol actualizado"); } }}>{["admin", "encargado", "bodega", "planta", "bienestar", "consulta"].map(r => <option key={r}>{r}</option>)}</select><button disabled={gestionUsuarios || u.email === window.__usuarioEmail?.toLowerCase()} onClick={async () => { setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ active: !u.active }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, active: !x.active } : x)); avisar("✓ Acceso actualizado"); } }}>{u.active ? "Suspender" : "Reactivar"}</button></div>)}
+                  </>}
+                </div>}
                 {esAdmin && (
                   <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Nombres visibles de usuarios</div>
@@ -5220,7 +5334,7 @@ export default function App() {
                     <button onClick={() => setCorreoNombre(window.__usuarioEmail || "")} style={{ marginTop: 7, fontSize: 11.5, color: C.verde, background: "none", border: "none", cursor: "pointer" }}>Usar mi correo</button>
                   </div>
                 )}
-                {esAdmin && (
+                {esAdmin && miRol !== "admin" && (
                   <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>👑 Administradores</div>
                     <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>Solo los correos de esta lista ven la parte económica (Por Pagar). Lista vacía = todos son administradores.</div>
@@ -5758,6 +5872,8 @@ export default function App() {
           </>
         )}
       </main>
+      <nav className="v10-mobile-nav" aria-label="Navegación móvil">{["inicio", "captura", "bodega", "revision"].filter(id => tabsVisibles.some(t => t.id === id)).map(id => { const t = tabs.find(x => x.id === id); return <button key={id} aria-current={vista === id ? "page" : undefined} onClick={() => irA(id)}>{t.nombre}</button>; })}<button aria-expanded={menuMovil} onClick={() => setMenuMovil(v => !v)}>Más</button></nav>
+      {menuMovil && <div className="v10-mobile-more" role="dialog" aria-label="Más apartados">{tabsVisibles.filter(t => !["inicio", "captura", "bodega", "revision"].includes(t.id)).map(t => <button key={t.id} onClick={() => irA(t.id)}>{t.nombre}</button>)}</div>}
 
       {conflictosPesaje && <div role="dialog" aria-modal="true" aria-label="Pesajes ya registrados" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
         <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(680px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
