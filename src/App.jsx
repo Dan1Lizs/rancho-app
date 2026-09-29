@@ -3765,6 +3765,19 @@ export default function App() {
 
   
 const cssEtapaB = `
+@media (min-width: 900px) {
+  .v10-mobile-nav { display: none !important; }
+  .v10-mobile-drawer-overlay { display: none !important; }
+  .v10-header-mobile-menu-btn { display: none !important; }
+}
+@media (max-width: 899px) {
+  .v10-desktop-nav { display: none !important; }
+  .v10-main { padding-bottom: 95px !important; }
+}
+.v10-mobile-nav::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes v10ModalIn {
   from { opacity: 0; transform: scale(0.97) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
@@ -4127,6 +4140,10 @@ const cssEtapaB = `
               <div style={{ fontSize: 11.5, opacity: 0.75 }}>{totalAves.toLocaleString()} aves · 4 gallineros · último registro: {ultDia.slice(0, 5)} · {mostrarNombre(window.__usuarioEmail)} · {estadoSync === "Sin conexión" ? "Sin conexión (borrador local)" : estadoSync === "Guardando…" || estadoSync === "Error al guardar" ? estadoSync : Object.keys(suciosRef.current).length || notaSuciaRef.current ? "Borrador sin enviar" : estadoSync} · v{VERSION_APP}</div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button type="button" className="v10-header-mobile-menu-btn" onClick={() => setMenuMovil(v => !v)} aria-label="Abrir menú de navegación" style={{ background: menuMovil ? "#F5B845" : "rgba(255,255,255,0.18)", color: menuMovil ? C.verde : "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 15 }}>☰</span>
+                <span style={{ fontSize: 12 }}>Menú</span>
+              </button>
               <button onClick={() => cargarTodo(false)} title="Actualizar" style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, color: "#fff", padding: "9px 12px", fontSize: 16, cursor: "pointer", opacity: cargandoFondo ? 0.5 : 1 }}>{cargandoFondo ? "…" : "⟳"}</button>
               <button className="v10-search-action" onClick={() => setBuscadorAbierto(true)} aria-label="Buscar en la granja">⌕</button>
               <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 12px", textAlign: "center" }}>
@@ -7464,30 +7481,228 @@ const cssEtapaB = `
           </>
         )}
       </main>
-      <nav className="v10-mobile-nav" aria-label="Navegación móvil">
-        {["inicio", "captura", "bodega", "revision"].filter(id => tabsVisibles.some(t => t.id === id)).map(id => {
-          const t = tabs.find(x => x.id === id);
-          const b = badgePorTab[id];
+      <nav className="v10-mobile-nav" aria-label="Navegación móvil" style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: "#ffffff",
+        borderTop: `1px solid ${C.borde}`,
+        boxShadow: "0 -4px 16px rgba(0,0,0,0.08)",
+        display: "flex",
+        alignItems: "center",
+        zIndex: 990,
+        padding: "6px 8px",
+        gap: 6,
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none"
+      }}>
+        <button
+          type="button"
+          onClick={() => setMenuMovil(v => !v)}
+          aria-expanded={menuMovil}
+          style={{
+            flex: "0 0 auto",
+            padding: "8px 12px",
+            borderRadius: 10,
+            border: menuMovil ? `2px solid ${C.verde}` : `1px solid ${C.borde}`,
+            background: menuMovil ? C.verdeSuave : "#F8F8F4",
+            color: C.verde,
+            fontWeight: 700,
+            fontSize: 12.5,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            fontFamily: "inherit"
+          }}
+        >
+          <span>☰</span>
+          <span>{menuMovil ? "Cerrar" : "Todos"}</span>
+        </button>
+        {tabsVisibles.map(t => {
+          const act = vista === t.id;
+          const b = badgePorTab[t.id];
           return (
-            <button key={id} aria-current={vista === id ? "page" : undefined} onClick={() => irA(id)} style={{ position: "relative" }}>
-              {t.nombre}
-              {b && <span className={`v10-badge v10-badge-${b.tipo}`} style={{ marginLeft: 3 }}>{b.texto}</span>}
+            <button
+              key={t.id}
+              type="button"
+              aria-current={act ? "page" : undefined}
+              onClick={() => irA(t.id)}
+              style={{
+                flex: "0 0 auto",
+                padding: "8px 13px",
+                borderRadius: 10,
+                border: act ? `2px solid ${C.verde}` : `1px solid ${C.borde}`,
+                background: act ? C.verde : C.superficie,
+                color: act ? "#ffffff" : C.texto,
+                fontWeight: act ? 700 : 500,
+                fontSize: 12.5,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontFamily: "inherit",
+                transition: "all 0.15s ease"
+              }}
+            >
+              <span>{t.nombre}</span>
+              {b && (
+                <span
+                  className={`v10-badge v10-badge-${b.tipo}`}
+                  style={{
+                    marginLeft: 2,
+                    background: act ? "rgba(255,255,255,0.25)" : undefined,
+                    color: act ? "#ffffff" : undefined,
+                    border: act ? "1px solid rgba(255,255,255,0.4)" : undefined
+                  }}
+                >
+                  {b.texto}
+                </span>
+              )}
             </button>
           );
         })}
-        <button aria-expanded={menuMovil} onClick={() => setMenuMovil(v => !v)}>Más</button>
       </nav>
       {menuMovil && (
-        <div className="v10-mobile-more" role="dialog" aria-label="Más apartados">
-          {tabsVisibles.filter(t => !["inicio", "captura", "bodega", "revision"].includes(t.id)).map(t => {
-            const b = badgePorTab[t.id];
-            return (
-              <button key={t.id} onClick={() => irA(t.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>{t.nombre}</span>
-                {b && <span className={`v10-badge v10-badge-${b.tipo}`}>{b.texto}</span>}
+        <div
+          className="v10-mobile-drawer-overlay"
+          role="presentation"
+          onClick={() => setMenuMovil(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(20,30,24,0.65)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            animation: "v10ModalIn 0.2s ease-out"
+          }}
+        >
+          <div
+            className="v10-mobile-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menú completo de la granja"
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              maxHeight: "85vh",
+              background: "#ffffff",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: "18px 18px 30px",
+              boxShadow: "0 -8px 30px rgba(0,0,0,0.25)",
+              overflowY: "auto",
+              boxSizing: "border-box"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, borderBottom: `1px solid ${C.borde}`, paddingBottom: 10 }}>
+              <div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>
+                  Rancho El Soñado
+                </div>
+                <div style={{ fontSize: 11.5, color: C.textoSuave }}>
+                  Módulos de la granja · {mostrarNombre(window.__usuarioEmail)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMenuMovil(false)}
+                aria-label="Cerrar menú"
+                style={{
+                  background: "#F1F1EA",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "8px 14px",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  color: C.texto
+                }}
+              >
+                ✕ Cerrar
               </button>
-            );
-          })}
+            </div>
+            {gruposMenu.map(g => {
+              const tabsGrupo = tabsVisibles.filter(t => g.ids.includes(t.id));
+              if (!tabsGrupo.length) return null;
+              return (
+                <div key={g.nombre} style={{ marginBottom: 16 }}>
+                  <div style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    fontWeight: 700,
+                    color: C.textoSuave,
+                    marginBottom: 7,
+                    paddingLeft: 2
+                  }}>
+                    {g.nombre}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {tabsGrupo.map(t => {
+                      const act = vista === t.id;
+                      const b = badgePorTab[t.id];
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { irA(t.id); setMenuMovil(false); }}
+                          style={{
+                            padding: "12px 14px",
+                            borderRadius: 12,
+                            border: act ? `2px solid ${C.verde}` : `1px solid ${C.borde}`,
+                            background: act ? C.verdeSuave : C.superficie,
+                            color: act ? C.verde : C.texto,
+                            fontWeight: act ? 700 : 600,
+                            fontSize: 14,
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            textAlign: "left",
+                            minHeight: 48,
+                            fontFamily: "inherit"
+                          }}
+                        >
+                          <span>{t.nombre}</span>
+                          {b && <span className={`v10-badge v10-badge-${b.tipo}`}>{b.texto}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => { setMenuMovil(false); setBuscadorAbierto(true); }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginTop: 6,
+                borderRadius: 12,
+                border: `1.5px dashed ${C.verde}`,
+                background: "#F8F8F4",
+                color: C.verde,
+                fontWeight: 600,
+                fontSize: 13.5,
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 6
+              }}
+            >
+              <span>⌕</span>
+              <span>Buscar fecha, galpón, tiquete o actividad…</span>
+            </button>
+          </div>
         </div>
       )}
 
