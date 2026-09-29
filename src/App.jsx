@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import * as XLSX from "xlsx";
 import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirDetallePlanta } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
@@ -16,6 +15,10 @@ import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
 import { saldosFormulasDesdeConteo, deltaConteoFormula } from "./inventarioFormulas";
 import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
 import { filtroPlantaInicial, filtrarMovimientosPlanta } from "./plantaHistorial";
+import { Campo } from "./components/Campo";
+import { ModalDialog } from "./components/ModalDialog";
+import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
+import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
 import "./v10.css";
 
 // ─── Tokens ─────────────────────────────────────────────────────
@@ -280,37 +283,6 @@ function BarraPostura({ actual, meta }) {
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, border: `1.5px solid #E4E4DC`, borderRadius: 10, background: "#fff", fontFamily: "'Inter', sans-serif", outline: "none" };
 
 // ── Campo mejorado con Unidades Fijas (Punto 14) y Validación Inline (Puntos 12, 13) ──
-function Campo({ etiqueta, mitad, tercio, unidad, error, advertencia, sugerencia, ...props }) {
-  const esNum = props.type === "number" || props.inputMode === "decimal" || props.inputMode === "numeric";
-  const extra = esNum ? {
-    type: "text", inputMode: props.inputMode || "decimal",
-    onChange: (e) => { e.target.value = e.target.value.replace(/,/g, "."); props.onChange && props.onChange(e); },
-  } : {};
-  return (
-    <label style={{ display: "block", marginBottom: 12, flex: tercio ? "1 1 30%" : mitad ? "1 1 45%" : "1 1 100%", minWidth: tercio ? 96 : undefined }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: C.texto }}>{etiqueta}</span>
-        {sugerencia && <span style={{ fontSize: 11, color: C.verde, fontWeight: 600 }}>{sugerencia}</span>}
-      </div>
-      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-        <input {...props} {...extra} style={{
-          ...inputStyle,
-          borderColor: error ? C.alerta : advertencia ? C.yema : C.borde,
-          paddingRight: unidad ? (unidad.length > 3 ? 55 : 42) : 12,
-          ...(props.style || {})
-        }} />
-        {unidad && (
-          <span style={{
-            position: "absolute", right: 10, fontSize: 12, fontWeight: 600, color: C.textoSuave, pointerEvents: "none", userSelect: "none"
-          }}>{unidad}</span>
-        )}
-      </div>
-      {error && <div style={{ fontSize: 11.5, color: C.alerta, marginTop: 4, fontWeight: 600 }}>⚠ {error}</div>}
-      {advertencia && !error && <div style={{ fontSize: 11.5, color: "#9A6605", marginTop: 4, fontWeight: 500 }}>ℹ {advertencia}</div>}
-    </label>
-  );
-}
-
 function Seccion({ titulo, sub, children, num, accion }) {
   return (
     <div style={{ background: C.superficie, border: `1px solid ${C.borde}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
@@ -355,358 +327,7 @@ function FiltrosLista({ filtro, setFiltro, lotes, estados = [], total, visibles 
 }
 
 // ── Componente Matriz "Qué falta hoy" (Punto 11) ──
-function MatrizQueFaltaHoy({ activos, registros, capturas, fechaCaptura, galponActivo, setGalponActivo }) {
-  const [expandida, setExpandida] = useState(false);
-  const fechaDmy = fechaCaptura.split("-").reverse().join("/");
-
-  // Evalúa el estado de cada componente para un galpón
-  const evaluarGalpon = (l) => {
-    const regGuardado = registros.find(r => r.fecha === fechaDmy && r.lote === l.id);
-    const cap = capturas[l.id] || {};
-    const cartonesBorrador = (cap.tiquetes || []).reduce((s, t) => s + Number(t.cartones || 0), 0);
-    const alimBorrador = Number(cap.alimento6am || 0) + Number(cap.alimento1pm || 0);
-
-    const prod = regGuardado ? "guardado" : cartonesBorrador > 0 ? "borrador" : "pendiente";
-    const alim = regGuardado && Number(regGuardado.alimentoKg || 0) > 0 ? "guardado" : alimBorrador > 0 ? "borrador" : "pendiente";
-    const mort = regGuardado ? "guardado" : (cap.muertas !== "" && cap.muertas != null) ? "borrador" : "pendiente";
-    const agua = regGuardado && (regGuardado.aguaL || regGuardado.chequeo) ? "guardado" : (cap.aguaL || (cap.chequeo && Object.values(cap.chequeo).some(Boolean))) ? "borrador" : "pendiente";
-
-    const completo = prod === "guardado" && alim === "guardado" && mort === "guardado";
-    const parcial = !completo && (prod !== "pendiente" || alim !== "pendiente" || mort !== "pendiente" || agua !== "pendiente");
-
-    return { prod, alim, mort, agua, completo, parcial, regGuardado };
-  };
-
-  const estados = activos.map(l => ({ lote: l, ...evaluarGalpon(l) }));
-  const completosTot = estados.filter(e => e.completo).length;
-
-  const colorBadge = (st) => {
-    if (st === "guardado") return { bg: C.verdeSuave, text: C.verde, label: "✓ Listo" };
-    if (st === "borrador") return { bg: C.yemaSuave, text: "#9A6605", label: "✎ En borrador" };
-    return { bg: "#F1F1EA", text: C.textoSuave, label: "○ Pendiente" };
-  };
-
-  return (
-    <div style={{ background: C.superficie, border: `1.5px solid ${completosTot === activos.length ? C.verde : C.yema}`, borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>📋</span>
-          <div>
-            <b style={{ fontSize: 14, color: C.texto }}>¿Qué falta registrar hoy? · {fechaDmy}</b>
-            <div style={{ fontSize: 12, color: C.textoSuave }}>
-              {completosTot === activos.length ? "✓ Los 4 gallineros tienen su control completo guardado" : `${completosTot} de ${activos.length} gallineros completos · toca un gallinero para ir a su control`}
-            </div>
-          </div>
-        </div>
-        <button type="button" onClick={() => setExpandida(v => !v)} style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 8, cursor: "pointer" }}>
-          {expandida ? "▲ Vista compacta" : "▼ Ver matriz detallada"}
-        </button>
-      </div>
-
-      {/* Tira rápida por gallinero */}
-      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-        {estados.map(({ lote, completo, parcial }) => {
-          const sel = galponActivo === lote.id;
-          const bg = completo ? C.verdeSuave : parcial ? C.yemaSuave : "#F1F1EA";
-          const col = completo ? C.verde : parcial ? "#9A6605" : C.textoSuave;
-          return (
-            <button key={lote.id} type="button" onClick={() => setGalponActivo(lote.id)} style={{
-              flex: "1 1 80px", padding: "8px 6px", borderRadius: 10, border: sel ? `2px solid ${C.verde}` : `1px solid ${C.borde}`,
-              background: bg, cursor: "pointer", textAlign: "center", fontFamily: "'Inter', sans-serif"
-            }}>
-              <b style={{ fontSize: 13, color: col }}>G{lote.galpon}</b>
-              <div style={{ fontSize: 10.5, fontWeight: 600, color: col }}>{completo ? "Completo ✓" : parcial ? "En proceso" : "Pendiente"}</div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Matriz detallada (desplegable) */}
-      {expandida && (
-        <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.borde}`, overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ color: C.textoSuave, textAlign: "left", fontSize: 11 }}>
-                <th style={{ padding: "4px 6px" }}>Gallinero</th>
-                <th style={{ padding: "4px 6px" }}>🥚 Producción</th>
-                <th style={{ padding: "4px 6px" }}>🌾 Alimento</th>
-                <th style={{ padding: "4px 6px" }}>💀 Mortalidad</th>
-                <th style={{ padding: "4px 6px" }}>💧 Agua / Chequeo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estados.map(({ lote, prod, alim, mort, agua }) => (
-                <tr key={lote.id} onClick={() => setGalponActivo(lote.id)} style={{ borderTop: `1px solid ${C.borde}`, cursor: "pointer", background: galponActivo === lote.id ? C.verdeSuave : "transparent" }}>
-                  <td style={{ padding: "7px 6px", fontWeight: 700 }}>Gallinero {lote.galpon}</td>
-                  {[prod, alim, mort, agua].map((st, j) => {
-                    const b = colorBadge(st);
-                    return (
-                      <td key={j} style={{ padding: "7px 6px" }}>
-                        <span style={{ fontSize: 11, padding: "3px 7px", borderRadius: 12, background: b.bg, color: b.text, fontWeight: 600, whiteSpace: "nowrap" }}>
-                          {b.label}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Componente Modal para Pegar Tiquetes desde Excel (Punto 22) ──
-function ModalPegarTiquetes({ abierto, onCerrar, onAplicar, galponNum, tiquetesCompartidos }) {
-  const [texto, setTexto] = useState("");
-  const [filas, setFilas] = useState([]);
-
-  if (!abierto) return null;
-
-  const procesarTexto = (txt) => {
-    setTexto(txt);
-    if (!txt.trim()) { setFilas([]); return; }
-    const lineas = txt.trim().split(/\r?\n/);
-    const parsed = lineas.map((linea, idx) => {
-      // Separa por tabulación, punto y coma, o comas / espacios múltiples
-      const celdas = linea.split(/\t|;/).map(c => c.trim()).filter(Boolean);
-      let num = "", cartones = "", peso = "";
-      if (celdas.length >= 3) {
-        num = celdas[0];
-        cartones = celdas[1].replace(/,/g, ".");
-        peso = celdas[2].replace(/,/g, ".");
-      } else if (celdas.length === 2) {
-        num = celdas[0];
-        cartones = celdas[1].replace(/,/g, ".");
-      } else if (celdas.length === 1) {
-        const partes = celdas[0].split(/[\s,]+/).filter(Boolean);
-        num = partes[0] || "";
-        cartones = (partes[1] || "").replace(/,/g, ".");
-        peso = (partes[2] || "").replace(/,/g, ".");
-      }
-      const c = Number(cartones) || 0;
-      const p = Number(peso) || 0;
-      const pesoPromHuevo = c > 0 && p > 0 ? (p * 1000) / (c * 30) : null;
-      const duplicado = num ? tiquetesCompartidos.includes(String(num)) : false;
-      const valido = num && c > 0 && p > 0;
-      return { idx: idx + 1, num, cartones, peso, c, p, pesoPromHuevo, duplicado, valido };
-    });
-    setFilas(parsed);
-  };
-
-  const totCart = filas.reduce((s, f) => s + f.c, 0);
-  const totKg = filas.reduce((s, f) => s + f.p, 0);
-  const totHuevos = totCart * 30;
-  const promHuevoGen = totHuevos > 0 && totKg > 0 ? (totKg * 1000) / totHuevos : null;
-  const validas = filas.filter(f => f.valido);
-
-  return (
-    <div className="v10-overlay" role="dialog" aria-modal="true" aria-label="Pegar tiquetes desde Excel">
-      <div className="v10-search" style={{ maxWidth: 620, padding: 20, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <h3 style={{ margin: 0, color: C.verde }}>📋 Pegar tiquetes de Excel · Gallinero {galponNum}</h3>
-          <button type="button" onClick={onCerrar} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.textoSuave }}>✕</button>
-        </div>
-        <p style={{ fontSize: 12.5, color: C.textoSuave, margin: "0 0 10px" }}>
-          Copia 3 columnas de Excel (<b># Tiquete</b>, <b>Cartones</b> y <b>Peso kg</b>) y pégalas aquí. Se verificará cada fila y el peso promedio por huevo antes de insertar.
-        </p>
-
-        <textarea
-          rows={5}
-          value={texto}
-          onChange={e => procesarTexto(e.target.value)}
-          placeholder="Pega aquí las celdas de Excel...\nEjemplo:\n6071\t14\t26.5\n6072\t12\t22.8"
-          style={{ ...inputStyle, width: "100%", fontFamily: "monospace", fontSize: 13, resize: "vertical" }}
-        />
-
-        {filas.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", background: C.fondo, padding: "9px 12px", borderRadius: 10, fontSize: 13, marginBottom: 10 }}>
-              <span><b>{validas.length}</b> tiquetes</span>
-              <span><b>{totCart.toFixed(1)}</b> cartones ({totHuevos.toLocaleString()} huevos)</span>
-              <span><b>{totKg.toFixed(1)}</b> kg</span>
-              {promHuevoGen && <span>Promedio: <b>{promHuevoGen.toFixed(1)} g/huevo</b> {promHuevoGen < 45 || promHuevoGen > 75 ? "⚠ anormal" : "✓"}</span>}
-            </div>
-
-            <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${C.borde}`, borderRadius: 8 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: "#F1F1EA", textAlign: "left", color: C.textoSuave }}>
-                    <th style={{ padding: "5px 6px" }}>#</th>
-                    <th style={{ padding: "5px 6px" }}>Tiquete</th>
-                    <th style={{ padding: "5px 6px" }}>Cartones</th>
-                    <th style={{ padding: "5px 6px" }}>Peso kg</th>
-                    <th style={{ padding: "5px 6px" }}>g/huevo</th>
-                    <th style={{ padding: "5px 6px" }}>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filas.map((f) => (
-                    <tr key={f.idx} style={{ borderTop: `1px solid ${C.borde}`, background: f.duplicado ? C.yemaSuave : !f.valido ? C.alertaSuave : "transparent" }}>
-                      <td style={{ padding: "5px 6px", color: C.textoSuave }}>{f.idx}</td>
-                      <td style={{ padding: "5px 6px", fontWeight: 700 }}>#{f.num || "s/n"}</td>
-                      <td style={{ padding: "5px 6px" }}>{f.cartones || "—"}</td>
-                      <td style={{ padding: "5px 6px" }}>{f.peso || "—"}</td>
-                      <td style={{ padding: "5px 6px" }}>{f.pesoPromHuevo ? `${f.pesoPromHuevo.toFixed(1)} g` : "—"}</td>
-                      <td style={{ padding: "5px 6px" }}>
-                        {f.duplicado ? <span style={{ color: "#9A6605", fontWeight: 600 }}>⚠ Ya usado hoy</span> : f.valido ? <span style={{ color: C.verde, fontWeight: 600 }}>✓ Válido</span> : <span style={{ color: C.alerta, fontWeight: 600 }}>Incompleto</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button
-            type="button"
-            disabled={!validas.length}
-            onClick={() => onAplicar(validas.map(f => ({ num: f.num, cartones: String(f.c), peso: String(f.p) })), false)}
-            style={{ ...btnStyle, flex: 1, padding: "11px", fontSize: 13.5, margin: 0 }}>
-            Reemplazar tiquetes actuales ({validas.length})
-          </button>
-          <button
-            type="button"
-            disabled={!validas.length}
-            onClick={() => onAplicar(validas.map(f => ({ num: f.num, cartones: String(f.c), peso: String(f.p) })), true)}
-            style={{ padding: "11px 14px", fontSize: 13.5, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>
-            + Agregar al final
-          </button>
-          <button type="button" onClick={onCerrar} style={{ padding: "11px 14px", fontSize: 13.5, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 10, cursor: "pointer" }}>
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 560, pie = null, tono = "normal" }) {
-  useEffect(() => {
-    if (!abierto) return;
-    const handleKey = (e) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose?.();
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [abierto, onClose]);
-
-  if (!abierto) return null;
-
-  return (
-    <div
-      className="v10-modal-backdrop"
-      role="presentation"
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 120,
-        background: "rgba(20, 30, 24, 0.65)",
-        backdropFilter: "blur(3px)",
-        WebkitBackdropFilter: "blur(3px)",
-        display: "grid",
-        placeItems: "center",
-        padding: "16px",
-        overflowY: "auto",
-      }}
-    >
-      <div
-        className="v10-modal-box"
-        role="dialog"
-        aria-modal="true"
-        aria-label={titulo || "Diálogo"}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.superficie,
-          borderRadius: 18,
-          border: `1px solid ${tono === "alerta" ? C.alerta : C.borde}`,
-          boxShadow: "0 14px 38px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.12)",
-          width: "100%",
-          maxWidth: ancho,
-          maxHeight: "88vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            padding: "18px 20px 14px",
-            borderBottom: `1px solid ${C.borde}`,
-            background: tono === "alerta" ? C.alertaSuave : C.superficie,
-          }}
-        >
-          <div>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: 17,
-                fontFamily: "'Space Grotesk', sans-serif",
-                color: tono === "alerta" ? C.alerta : C.verde,
-                fontWeight: 700,
-              }}
-            >
-              {titulo}
-            </h3>
-            {subtitulo && (
-              <div style={{ fontSize: 12.5, color: C.textoSuave, marginTop: 4, lineHeight: 1.4 }}>
-                {subtitulo}
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar ventana"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: C.textoSuave,
-              fontSize: 20,
-              lineHeight: 1,
-              padding: "4px 8px",
-              cursor: "pointer",
-              borderRadius: 8,
-            }}
-          >
-            ✕
-          </button>
-        </div>
-        <div style={{ padding: "18px 20px", overflowY: "auto", flex: 1, fontSize: 13.5, lineHeight: 1.5 }}>
-          {children}
-        </div>
-        {pie && (
-          <div
-            style={{
-              padding: "12px 20px",
-              borderTop: `1px solid ${C.borde}`,
-              background: C.fondo,
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            {pie}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subPlanta, subPedidoMP, subFormulas, subInsumos, subPesaje, subHistorial, recActiva, fPeso, histFecha, irA, avisar }) {
   if (vista === "inicio") return null;
 
@@ -933,8 +554,8 @@ export default function App() {
   const [abonando, setAbonando] = useState(null);
   const [fAbono, setFAbono] = useState({ monto: "", fecha: hoyISO(), medio: "Transferencia", ref: "" });
   const [kardex, setKardex] = useState([]);
-  const [esAdmin, setEsAdmin] = useState(true);
-  const [miRol, setMiRol] = useState(null);
+  const [esAdmin, setEsAdmin] = useState(false);
+  const [miRol, setMiRol] = useState("cargando");
   const [usuariosRoles, setUsuariosRoles] = useState([]);
   const [correoInvitacion, setCorreoInvitacion] = useState("");
   const [rolInvitacion, setRolInvitacion] = useState("encargado");
@@ -1213,6 +834,10 @@ export default function App() {
           setMiRol(propio?.active ? propio.role : "sin_acceso");
           setEsAdmin(propio?.role === "admin" && propio.active);
           setUsuariosRoles(roles);
+        } else {
+          setMiRol("sin_acceso");
+          setEsAdmin(false);
+          console.error("No se pudo verificar el rol del usuario:", errorRoles);
         }
       }
       if (!silencioso) {
@@ -1440,7 +1065,8 @@ export default function App() {
       await escribir(K.insumosMovs, nm);
       setInsumos(insumosDia); setInsumosMovs(nm);
     }
-    const nuevosRegistros = [...nuevos, ...registros.filter(r => !reemplazados.includes(r))]
+    const idsReemplazados = new Set(reemplazados.map(r => String(r.id)));
+    const nuevosRegistros = [...nuevos, ...vigentes.filter(r => !idsReemplazados.has(String(r.id)))]
       .sort((a, b) => aDate(b.fecha) - aDate(a.fecha));
     let nBitacora = bitacora;
     if (notaDia.trim()) nBitacora = [{ fecha, texto: notaDia.trim(), por: completadoPor }, ...bitacora];
@@ -1995,7 +1621,7 @@ export default function App() {
   const abrirExcelPesajes = async (archivo) => {
     if (!archivo) return;
     try {
-      const datos = extraerPesajesExcel(await archivo.arrayBuffer(), { fecha: fPeso.fecha, lote: fPeso.lote });
+      const datos = await extraerPesajesExcel(await archivo.arrayBuffer(), { fecha: fPeso.fecha, lote: fPeso.lote });
       const asignados = datos.map(p => {
         if (p.lote) return { ...p, incluir: p.fecha <= hoyISO() && p.incluir };
         const posibles = lotes.filter(l => String(l.galpon) === p.galpon && p.fecha >= l.nac &&
@@ -2656,7 +2282,15 @@ export default function App() {
     { nombre: "Salud y lotes", ids: ["pesaje", "lotes"] },
     { nombre: "Administración", ids: ["historial", "cxp"] },
   ];
-  const tabsVisibles = tabs.filter(t => (esAdmin || t.id !== "cxp") && (miRol !== "bodega" || ["inicio", "bodega", "reporte", "historial"].includes(t.id)) && (miRol !== "planta" || ["inicio", "planta", "pedidomp", "formulas", "revision", "reporte"].includes(t.id)) && (miRol !== "bienestar" || ["inicio", "pesaje", "insumos", "lotes", "reporte", "revision"].includes(t.id)));
+  const vistasPorRol = {
+    admin: tabs.map(t => t.id),
+    encargado: tabs.filter(t => t.id !== "cxp").map(t => t.id),
+    bodega: ["inicio", "bodega", "reporte", "historial"],
+    planta: ["inicio", "planta", "pedidomp", "formulas", "revision", "reporte"],
+    bienestar: ["inicio", "pesaje", "reporte", "revision"],
+    consulta: ["inicio", "reporte", "bodega", "planta", "pesaje", "insumos", "lotes", "pedidomp", "formulas", "historial"],
+  };
+  const tabsVisibles = tabs.filter(t => (vistasPorRol[miRol] || []).includes(t.id));
   useEffect(() => { if (!tabsVisibles.some(t => t.id === vista)) setVista("inicio"); }, [vista, esAdmin, miRol]);
   const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
   const irA = (id) => { if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id); else abrirVista(id); };
@@ -2667,7 +2301,7 @@ export default function App() {
     const h = leerHashRuta();
     if (!h) return;
     if (h.ruta && tabsVisibles.some(t => t.id === h.ruta) && h.ruta !== vista) {
-      setVista(h.ruta);
+      irA(h.ruta);
     }
     const g = h.params.get("galpon") || h.params.get("lote");
     if (g && lotes.some(l => l.id === g || String(l.galpon) === String(g))) {
@@ -2682,8 +2316,8 @@ export default function App() {
     const subParam = h.params.get("sub");
     if (subParam && h.ruta === "bodega") {
       setSubBodega(subParam);
-      if (h.ruta === "historial") setHistFecha(f);
     }
+    if (f && h.ruta === "historial") setHistFecha(f);
     const form = h.params.get("formula");
     if (form && recetas.formulas && recetas.formulas[form]) {
       setRecActiva(form);
@@ -2717,7 +2351,7 @@ export default function App() {
       const h = leerHashRuta();
       if (!h) return;
       if (h.ruta && tabsVisibles.some(t => t.id === h.ruta) && h.ruta !== vista) {
-        setVista(h.ruta);
+        irA(h.ruta);
       }
       const g = h.params.get("galpon") || h.params.get("lote");
       if (g) {
@@ -2732,8 +2366,8 @@ export default function App() {
       const subParam = h.params.get("sub");
       if (subParam && h.ruta === "bodega" && subParam !== subBodega) {
         setSubBodega(subParam);
-        if (h.ruta === "historial" && f !== histFecha) setHistFecha(f);
       }
+      if (f && h.ruta === "historial" && f !== histFecha) setHistFecha(f);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -3747,7 +3381,10 @@ export default function App() {
   }
 
   const cap = capturas[galponActivo] || capturaVacia();
-  const setCap = (cambios) => { suciosRef.current[galponActivo] = true; setCapturas({ ...capturas, [galponActivo]: { ...cap, ...cambios } }); };
+  const setCap = (cambios) => {
+    suciosRef.current[galponActivo] = true;
+    setCapturas(prev => ({ ...prev, [galponActivo]: { ...(prev[galponActivo] || capturaVacia()), ...cambios } }));
+  };
   const tGal = totalesGalpon(cap);
   const loteActivo = lotes.find(l => l.id === galponActivo);
   const tiquetesCompartidos = tiquetesDelDia(capturas, registros, fechaCaptura.split("-").reverse().join("/"), Object.keys(suciosRef.current));
@@ -3764,115 +3401,9 @@ export default function App() {
   };
 
   
-const cssEtapaB = `
-@media (min-width: 900px) {
-  .v10-mobile-nav { display: none !important; }
-  .v10-mobile-drawer-overlay { display: none !important; }
-  .v10-header-mobile-menu-btn { display: none !important; }
-}
-@media (max-width: 899px) {
-  .v10-desktop-nav { display: none !important; }
-  .v10-main { padding-bottom: 95px !important; }
-}
-.v10-mobile-nav::-webkit-scrollbar {
-  display: none;
-}
-
-@keyframes v10ModalIn {
-  from { opacity: 0; transform: scale(0.97) translateY(8px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-.v10-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 10px;
-  margin-left: 6px;
-  line-height: 1.2;
-}
-.v10-badge-alerta {
-  background: #FBEAE6;
-  color: #C4442A;
-  border: 1px solid #F5C6BA;
-}
-.v10-badge-aviso {
-  background: #FDF3E0;
-  color: #9A6605;
-  border: 1px solid #F8DFB3;
-}
-.v10-badge-ok {
-  background: #E7EFE8;
-  color: #14432A;
-  border: 1px solid #C8DEC9;
-}
-.v10-breadcrumbs {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 9px 14px;
-  margin-bottom: 14px;
-  background: #F8F8F4;
-  border-radius: 12px;
-  border: 1px solid #E8E8DF;
-  font-size: 12.5px;
-  flex-wrap: wrap;
-}
-.v10-breadcrumbs-trail {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.v10-breadcrumbs-crumb {
-  color: #6B7266;
-  text-decoration: none;
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  padding: 0;
-  font-size: 12.5px;
-  font-family: inherit;
-  font-weight: 500;
-}
-.v10-breadcrumbs-crumb:hover {
-  color: #14432A;
-  text-decoration: underline;
-}
-.v10-breadcrumbs-current {
-  color: #1C1F1A;
-  font-weight: 700;
-}
-.v10-breadcrumbs-sep {
-  color: #A3A89E;
-  font-size: 11px;
-}
-.v10-copy-link-btn {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #14432A;
-  background: #E7EFE8;
-  border: 1px solid #C8DEC9;
-  border-radius: 8px;
-  padding: 4px 10px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: inherit;
-  transition: background 0.15s ease;
-}
-.v10-copy-link-btn:hover {
-  background: #D4E6D6;
-}
-`;
-
   return (
     <div className="app-v10" style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", color: C.texto }}>
-      <style>{fuentes + cssEtapaB}</style>
+      <style>{fuentes}</style>
             <ModalDialog
         abierto={!!editarAjustePlanta}
         titulo="Modificar ajuste por conteo físico"
@@ -6469,8 +6000,9 @@ const cssEtapaB = `
             muertas: resMesLote.reduce((s, x) => s + x.muertas, 0),
           };
 
-          const exportar = () => {
+          const exportar = async () => {
             try {
+              const XLSX = await import("xlsx");
               const wb = XLSX.utils.book_new();
               const filasProd = (rsMes.length ? rsMes : registros).map(r => ({
                 Fecha: r.fecha, Gallinero: r.lote, Cartones: r.cartones, Huevos: r.cartones * HXC,
@@ -6993,7 +6525,7 @@ const cssEtapaB = `
                         Evaluación técnica por gallinero
                       </h2>
                       <div style={{ fontSize: 12.5, color: C.textoSuave }}>
-                        Estadísticas zootécnicas independientes para cada parvada activa: peso promedio, uniformidad (>85%), CV y ganancia.
+                          Estadísticas zootécnicas independientes para cada parvada activa: peso promedio, uniformidad (&gt;85%), CV y ganancia.
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>

@@ -49,10 +49,11 @@ begin
 end $$;
 drop trigger if exists ultimo_admin on public.user_roles;
 create trigger ultimo_admin before update on public.user_roles for each row execute function public.proteger_ultimo_admin();
+revoke all on function public.proteger_ultimo_admin() from public, anon, authenticated;
 
 create or replace function public.puede_escribir(tabla text) returns boolean language sql stable security definer
 set search_path = '' as $$
-  select case public.mi_rol()
+  select case (select public.mi_rol())
     when 'admin' then true
     when 'encargado' then tabla not like 'cxp_%' and tabla <> 'facturas'
     when 'bodega' then tabla in ('bodega_movs')
@@ -65,7 +66,7 @@ grant execute on function public.puede_escribir(text) to authenticated;
 
 create or replace function public.puede_configurar(clave text) returns boolean language sql stable security definer
 set search_path = '' as $$
-  select case public.mi_rol()
+  select case (select public.mi_rol())
     when 'admin' then true
     when 'encargado' then clave not in ('granja2:cfgAdmins','granja2:nombresUsuarios','granja2:costos') and clave not like 'granja2:cxp%'
     when 'bodega' then clave='granja2:bodegaCfg'
@@ -90,10 +91,10 @@ begin
     execute format('drop policy if exists v10_insert on public.%I',t);
     execute format('drop policy if exists v10_update on public.%I',t);
     execute format('drop policy if exists v10_delete on public.%I',t);
-    execute format('create policy v10_select on public.%I for select to authenticated using (public.mi_rol() is not null and (%L not like ''cxp_%%'' and %L <> ''facturas'' or public.mi_rol()=''admin''))',t,t,t);
-    execute format('create policy v10_insert on public.%I for insert to authenticated with check (public.puede_escribir(%L))',t,t);
-    execute format('create policy v10_update on public.%I for update to authenticated using (public.puede_escribir(%L)) with check (public.puede_escribir(%L))',t,t,t);
-    execute format('create policy v10_delete on public.%I for delete to authenticated using (public.puede_escribir(%L))',t,t);
+    execute format('create policy v10_select on public.%I for select to authenticated using ((select public.mi_rol()) is not null and (%L not like ''cxp_%%'' and %L <> ''facturas'' or (select public.mi_rol())=''admin''))',t,t,t);
+    execute format('create policy v10_insert on public.%I for insert to authenticated with check ((select public.puede_escribir(%L)))',t,t);
+    execute format('create policy v10_update on public.%I for update to authenticated using ((select public.puede_escribir(%L))) with check ((select public.puede_escribir(%L)))',t,t,t);
+    execute format('create policy v10_delete on public.%I for delete to authenticated using ((select public.puede_escribir(%L)))',t,t);
   end loop;
 end $$;
 
@@ -106,15 +107,20 @@ drop policy if exists v10_config_insert on public.config;
 drop policy if exists v10_config_update on public.config;
 drop policy if exists v10_config_delete on public.config;
 create policy v10_config_select on public.config for select to authenticated
-using (public.mi_rol() is not null and (key not like 'granja2:cxp%' and key <> 'granja2:costos' or public.mi_rol()='admin'));
+using ((select public.mi_rol()) is not null and (key not like 'granja2:cxp%' and key <> 'granja2:costos' or (select public.mi_rol())='admin'));
 create policy v10_config_insert on public.config for insert to authenticated
-with check (public.puede_configurar(key));
+with check ((select public.puede_configurar(key)));
 create policy v10_config_update on public.config for update to authenticated
-using (public.puede_configurar(key)) with check (public.puede_configurar(key));
-create policy v10_config_delete on public.config for delete to authenticated using (public.mi_rol()='admin');
+using ((select public.puede_configurar(key))) with check ((select public.puede_configurar(key)));
+create policy v10_config_delete on public.config for delete to authenticated using ((select public.mi_rol())='admin');
 
 drop policy if exists equipo_lee_auditoria on public.auditoria;
 drop policy if exists v10_auditoria on public.auditoria;
-create policy v10_auditoria on public.auditoria for select to authenticated using (public.mi_rol()='admin');
+create policy v10_auditoria on public.auditoria for select to authenticated using ((select public.mi_rol())='admin');
+
+-- La función de auditoría se ejecuta solamente desde sus triggers. No debe
+-- poder invocarse desde la API y no debe resolver objetos por un search_path mutable.
+alter function public.f_auditoria() set search_path = '';
+revoke all on function public.f_auditoria() from public, anon, authenticated;
 
 commit;
