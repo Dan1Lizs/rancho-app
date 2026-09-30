@@ -5322,7 +5322,7 @@ export default function App() {
                         <tr key={mp.c} style={{ borderTop: `1px solid ${C.borde}` }}>
                           <td style={{ padding: "7px 8px", fontWeight: 700, whiteSpace: "nowrap" }}>{mp.c}</td>
                           <td style={{ padding: "7px 8px", lineHeight: 1.25 }}><b>{mp.n}</b><br /><span style={{ color: C.textoSuave, fontSize: 10.5 }}>{mp.prov}</span></td>
-                          <td style={{ padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" }}>{mp.pres === 1 ? "A granel" : `${mp.pres} kg`}</td>
+                          <td style={{ padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" }}>{f2Dec(mp.pres)}</td>
                           <td style={{ padding: "5px 8px", textAlign: "center" }}>{mp.pres !== 1 ? <input type="text" inputMode="numeric" aria-label={`${mp.c} sacos completos`} placeholder="—" value={inv.sacos ?? ""}
                             onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, sacos: e.target.value } })}
                             style={{ ...inputStyle, width: 96, padding: "8px 9px", fontSize: 14, margin: 0 }} /> : <span style={{ color: C.textoSuave }}>—</span>}</td>
