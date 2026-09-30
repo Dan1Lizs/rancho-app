@@ -1,7 +1,11 @@
 import React from "react";
 
-const C = { borde: "#E4E4DC", texto: "#1C1F1A", textoSuave: "#6B7266", verde: "#14432A", yema: "#E8940A", alerta: "#C4442A" };
-const inputStyle = { width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, border: `1.5px solid ${C.borde}`, borderRadius: 10, background: "#fff", fontFamily: "'Inter', sans-serif", outline: "none" };
+const C = {
+  borde: "var(--v10-border, #E4E4DC)", texto: "var(--v10-text, #1C1F1A)",
+  textoSuave: "var(--v10-muted, #6B7266)", verde: "var(--v10-green, #14432A)",
+  yema: "var(--v10-amber, #E8940A)", alerta: "var(--v10-danger, #C4442A)",
+};
+const inputStyle = { width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, color: C.texto, border: `1.5px solid ${C.borde}`, borderRadius: 10, background: "var(--v10-input, #fff)", fontFamily: "'Inter', sans-serif", outline: "none" };
 
 export function Campo({ etiqueta, mitad, tercio, unidad, error, advertencia, sugerencia, ...props }) {
   const esNum = props.type === "number" || props.inputMode === "decimal" || props.inputMode === "numeric";

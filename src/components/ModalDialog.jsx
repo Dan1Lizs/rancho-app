@@ -1,6 +1,11 @@
 import React, { useEffect, useRef } from "react";
 
-const C = { superficie: "#FFFFFF", fondo: "#F6F6F1", borde: "#E4E4DC", verde: "#14432A", alerta: "#C4442A", alertaSuave: "#FBEAE6", textoSuave: "#6B7266" };
+const C = {
+  superficie: "var(--v10-surface, #FFFFFF)", fondo: "var(--v10-bg-soft, #F6F6F1)",
+  borde: "var(--v10-border, #E4E4DC)", verde: "var(--v10-green, #14432A)",
+  alerta: "var(--v10-danger, #C4442A)", alertaSuave: "var(--v10-danger-soft, #FBEAE6)",
+  textoSuave: "var(--v10-muted, #6B7266)",
+};
 
 export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 560, pie = null, tono = "normal" }) {
   const dialogoRef = useRef(null);

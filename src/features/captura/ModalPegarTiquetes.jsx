@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { parsearTiquetesPegados } from "./parsearTiquetes";
 
-const C = { fondo: "#F6F6F1", borde: "#E4E4DC", verde: "#14432A", alerta: "#C4442A", alertaSuave: "#FBEAE6", yemaSuave: "#FDF3E0", texto: "#1C1F1A", textoSuave: "#6B7266" };
+const C = { fondo: "var(--v10-bg-soft, #F6F6F1)", borde: "var(--v10-border, #E4E4DC)", verde: "var(--v10-green, #14432A)", alerta: "var(--v10-danger, #C4442A)", alertaSuave: "var(--v10-danger-soft, #FBEAE6)", yemaSuave: "var(--v10-amber-soft, #FDF3E0)", texto: "var(--v10-text, #1C1F1A)", textoSuave: "var(--v10-muted, #6B7266)" };
 
 export function ModalPegarTiquetes({ abierto, onCerrar, onAplicar, galponNum, tiquetesCompartidos }) {
   const [texto, setTexto] = useState("");

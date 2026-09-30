@@ -20,6 +20,7 @@ import { ModalDialog } from "./components/ModalDialog";
 import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
 import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
 import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
+import { baseDeRegistro, registroCambioDesdeBase } from "./concurrencia";
 import { resolverVistaSegura, vistasPermitidas } from "./permisos";
 import { DEFAULT_PREFERENCES, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
@@ -30,11 +31,12 @@ const AdministracionView = lazy(() => import("./views/AdministracionView"));
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
-  fondo: "#F6F6F1", superficie: "#FFFFFF",
-  verde: "#14432A", verdeSuave: "#E7EFE8",
-  yema: "#E8940A", yemaSuave: "#FDF3E0",
-  alerta: "#C4442A", alertaSuave: "#FBEAE6",
-  texto: "#1C1F1A", textoSuave: "#6B7266", borde: "#E4E4DC",
+  fondo: "var(--v10-bg-soft, #F6F6F1)", superficie: "var(--v10-surface, #FFFFFF)",
+  control: "var(--v10-control, #F1F1EA)", fondoElevado: "var(--v10-surface-alt, #F8F8F4)",
+  verde: "var(--v10-green, #14432A)", verdeSuave: "var(--v10-green-soft, #E7EFE8)",
+  yema: "var(--v10-amber, #E8940A)", yemaSuave: "var(--v10-amber-soft, #FDF3E0)",
+  alerta: "var(--v10-danger, #C4442A)", alertaSuave: "var(--v10-danger-soft, #FBEAE6)",
+  texto: "var(--v10-text, #1C1F1A)", textoSuave: "var(--v10-muted, #6B7266)", borde: "var(--v10-border, #E4E4DC)",
 };
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
@@ -521,6 +523,10 @@ export default function App() {
 
   const [galponActivo, setGalponActivo] = useState("G1");
   const suciosRef = useRef({});
+  // Conserva la versión exacta que cada formulario tenía al empezar a editarse.
+  // Realtime puede refrescar la pantalla, pero esta base no cambia hasta guardar
+  // o descartar: así nunca se pisa silenciosamente el trabajo de otra persona.
+  const basesEdicionRef = useRef({});
   const notaSuciaRef = useRef(false);
   const fechaCapturaRef = useRef(hoyISO());
   const [completadoPor, setCompletadoPor] = useState("");
@@ -625,6 +631,7 @@ export default function App() {
       const vigente = b?.fecha === fechaCaptura && Date.now() - b.guardadoEl < 7 * 86400000 ? b : null;
       if (vigente && preferencias.borradores.recuperarAutomaticamente) {
         suciosRef.current = Object.fromEntries(Object.keys(vigente.capturas || {}).map(id => [id, true]));
+        basesEdicionRef.current = vigente.bases || {};
         setCapturas(v => ({ ...v, ...vigente.capturas }));
         if (vigente.nota) { notaSuciaRef.current = true; setNotaDia(vigente.nota); }
       } else setBorradorDisponible(vigente);
@@ -638,9 +645,12 @@ export default function App() {
       if (!actuales) return;
       const fecha = fechaCaptura.split("-").reverse().join("/");
       const cambia = Object.keys(suciosRef.current).some(id => {
-        const r = registros.find(x => x.fecha === fecha && x.lote === id);
+        const clave = `${fechaCaptura}|${id}`;
+        const r = Object.prototype.hasOwnProperty.call(basesEdicionRef.current, clave)
+          ? basesEdicionRef.current[clave]
+          : registros.find(x => x.fecha === fecha && x.lote === id) || null;
         const a = actuales.find(x => x.fecha === fecha && x.lote === id);
-        return JSON.stringify(r || null) !== JSON.stringify(a || null);
+        return registroCambioDesdeBase(r, a);
       });
       setConflictoEdicion(cambia ? "Otro dispositivo cambió esta fecha. Revisa y actualiza antes de guardar." : "");
     };
@@ -677,6 +687,7 @@ export default function App() {
     setFechaCaptura(iso);
     fechaCapturaRef.current = iso;
     suciosRef.current = {};
+    basesEdicionRef.current = {};
     const dmy = iso.split("-").reverse().join("/");
     let cargados = 0;
     const nuevas = Object.fromEntries(lotes.map(l => {
@@ -690,6 +701,7 @@ export default function App() {
       const vigente = borrador?.fecha === iso && Date.now() - borrador.guardadoEl < 7 * 86400000 ? borrador : null;
       if (vigente && preferencias.borradores.recuperarAutomaticamente) {
         suciosRef.current = Object.fromEntries(Object.keys(vigente.capturas || {}).map(id => [id, true]));
+        basesEdicionRef.current = vigente.bases || {};
         setCapturas(v => ({ ...v, ...vigente.capturas }));
         if (vigente.nota) { notaSuciaRef.current = true; setNotaDia(vigente.nota); }
         setBorradorDisponible(null);
@@ -700,7 +712,7 @@ export default function App() {
   useEffect(() => {
     if (!preferencias.borradores.autoguardado || (!Object.keys(suciosRef.current).length && !notaSuciaRef.current)) return;
     const timer = setTimeout(() => {
-      guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento)
+      guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento)
         .catch(() => setEstadoSync("Borrador local"));
     }, preferencias.borradores.intervaloSegundos * 1000);
     return () => clearTimeout(timer);
@@ -923,9 +935,16 @@ export default function App() {
       "cxp_facturas", "cxp_pagos", "cxp_notas", "config",
     ];
     let temporizador = null;
-    const pedirRefresco = () => {
+    const pedirRefresco = (payload) => {
+      if (payload?.table === "registros" && Object.keys(suciosRef.current).length) {
+        const remoto = payload.new?.data || payload.old?.data;
+        const fechaActiva = (fechaCapturaRef.current || hoyISO()).split("-").reverse().join("/");
+        if (remoto?.fecha === fechaActiva && suciosRef.current[remoto?.lote]) {
+          setConflictoEdicion("Otro dispositivo guardó este mismo gallinero mientras lo editabas. Tus datos siguen como borrador y no se reemplazarán automáticamente.");
+        }
+      }
       clearTimeout(temporizador);
-      temporizador = setTimeout(() => cargarTodo(false, true), 1500);
+      temporizador = setTimeout(() => cargarTodo(false, true), 350);
     };
     const canal = supabase.channel("granja-en-vivo");
     tablasEnVivo.forEach((t) => {
@@ -996,9 +1015,15 @@ export default function App() {
     }
     if (aGuardar.some(l => {
       const actual = vigentes.find(r => r.fecha === fecha && r.lote === l.id);
-      const visto = registros.find(r => r.fecha === fecha && r.lote === l.id);
-      return actual?.id !== visto?.id || (actual && JSON.stringify(actual) !== JSON.stringify(visto));
-    })) { avisar("⚠ Esta fecha cambió en otro dispositivo. Actualiza la app antes de guardar."); setGuardando(false); return; }
+      const clave = `${fechaCaptura}|${l.id}`;
+      const visto = Object.prototype.hasOwnProperty.call(basesEdicionRef.current, clave)
+        ? basesEdicionRef.current[clave]
+        : registros.find(r => r.fecha === fecha && r.lote === l.id) || null;
+      return registroCambioDesdeBase(visto, actual);
+    })) {
+      setConflictoEdicion("Otro dispositivo guardó este mismo gallinero. Tus cambios permanecen como borrador; revisa la versión actual antes de volver a guardar.");
+      avisar("⚠ No se guardó para evitar sobreponer datos de otra persona."); setGuardando(false); return;
+    }
     {
       const enFormulario = [];
       lotes.forEach(l => {
@@ -1128,9 +1153,12 @@ export default function App() {
       setRegistros(ordenarPorFecha(nuevosRegistros)); setLotes(nuevosLotes); setMedicaciones(ordenarPorFecha(nMeds)); setFumigaciones(ordenarPorFecha(nFums)); setBitacora(nBitacora);
       if (soloLoteId) delete suciosRef.current[soloLoteId];
       else suciosRef.current = {};
+      if (soloLoteId) delete basesEdicionRef.current[`${fechaCaptura}|${soloLoteId}`];
+      else basesEdicionRef.current = {};
+      setConflictoEdicion("");
       if (!soloLoteId || notaDia.trim()) notaSuciaRef.current = false;
       try {
-        if (Object.keys(suciosRef.current).length || notaSuciaRef.current) await guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento);
+        if (Object.keys(suciosRef.current).length || notaSuciaRef.current) await guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento);
         else await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento);
         setBorradorDisponible(null);
       } catch { /* sin espacio local */ }
@@ -3492,6 +3520,11 @@ export default function App() {
 
   const cap = capturas[galponActivo] || capturaVacia();
   const setCap = (cambios) => {
+    const clave = `${fechaCaptura}|${galponActivo}`;
+    if (!Object.prototype.hasOwnProperty.call(basesEdicionRef.current, clave)) {
+      const fecha = fechaCaptura.split("-").reverse().join("/");
+      basesEdicionRef.current[clave] = baseDeRegistro(registros, fecha, galponActivo);
+    }
     suciosRef.current[galponActivo] = true;
     setCapturas(prev => ({ ...prev, [galponActivo]: { ...(prev[galponActivo] || capturaVacia()), ...cambios } }));
   };
@@ -3940,8 +3973,13 @@ export default function App() {
         {/* ══ CONTROL DIARIO ══ */}
         {vista === "captura" && (
           <>
-            {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay un borrador sin guardar de esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.nota) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={async () => { await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento); setBorradorDisponible(null); }} style={{ marginLeft: 8 }}>Descartar</button></div>}
-            {conflictoEdicion && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>{conflictoEdicion} <button onClick={() => cargarTodo(false)}>Actualizar</button></div>}
+            {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay un borrador sin guardar de esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); basesEdicionRef.current = borradorDisponible.bases || {}; setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.nota) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={async () => { await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento); setBorradorDisponible(null); }} style={{ marginLeft: 8 }}>Descartar</button></div>}
+            {conflictoEdicion && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>{conflictoEdicion} <button onClick={async () => {
+              const payload = { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() };
+              await guardarBorrador(fechaCaptura, payload, preferencias.borradores.almacenamiento);
+              suciosRef.current = {}; basesEdicionRef.current = {}; notaSuciaRef.current = false;
+              setConflictoEdicion(""); await cargarTodo(false); setBorradorDisponible(payload);
+            }}>Guardar mi borrador y ver la versión actual</button></div>}
             {!!retirosActivos.length && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>⚠ Retiro de huevo activo: {retirosActivos.map(m => `G${m.galpon} hasta ${m.retiroHasta} (${m.producto})`).join(" · ")}. Evita comercializar ese huevo.</div>}
             <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: (fechaCaptura || hoyISO()).split("-").reverse().join("/") })}
               style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
@@ -7180,7 +7218,7 @@ export default function App() {
         bottom: 0,
         left: 0,
         right: 0,
-        background: "#ffffff",
+        background: C.superficie,
         borderTop: `1px solid ${C.borde}`,
         boxShadow: "0 -4px 16px rgba(0,0,0,0.08)",
         display: "flex",
@@ -7201,7 +7239,7 @@ export default function App() {
             padding: "8px 12px",
             borderRadius: 10,
             border: menuMovil ? `2px solid ${C.verde}` : `1px solid ${C.borde}`,
-            background: menuMovil ? C.verdeSuave : "#F8F8F4",
+            background: menuMovil ? C.verdeSuave : C.fondoElevado,
             color: C.verde,
             fontWeight: 700,
             fontSize: 12.5,
@@ -7286,7 +7324,7 @@ export default function App() {
               width: "100%",
               maxWidth: 520,
               maxHeight: "85vh",
-              background: "#ffffff",
+              background: C.superficie,
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               padding: "18px 18px 30px",
@@ -7309,7 +7347,7 @@ export default function App() {
                 onClick={() => setMenuMovil(false)}
                 aria-label="Cerrar menú"
                 style={{
-                  background: "#F1F1EA",
+                  background: C.control,
                   border: "none",
                   borderRadius: 10,
                   padding: "8px 14px",
