@@ -397,7 +397,8 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
     }
   };
 
-  return (    <nav className="v10-breadcrumbs" aria-label="Ruta de navegación">
+  return (
+    <nav className="v10-breadcrumbs" aria-label="Ruta de navegación">
       <div className="v10-breadcrumbs-trail">
         <button type="button" className="v10-breadcrumbs-crumb" onClick={() => irA("inicio")}>
           Inicio
@@ -796,7 +797,8 @@ export default function App({ onCerrarSesion }) {
     }).catch(() => {});
   }, [preferenciasCargadas]);
   const [histFecha, setHistFecha] = useState(() => hoyISO());
-  const [histMes, setHistMes] = useState(() => hoyISO().slice(0, 7));  const [correccionesProduccion, setCorreccionesProduccion] = useState([]);
+  const [histMes, setHistMes] = useState(() => hoyISO().slice(0, 7));
+  const [correccionesProduccion, setCorreccionesProduccion] = useState([]);
   const [editarProduccion, setEditarProduccion] = useState(null);
   const [motivoProduccion, setMotivoProduccion] = useState("");
   const [formLote, setFormLote] = useState(null);
@@ -1195,7 +1197,8 @@ export default function App({ onCerrarSesion }) {
 
     setEstadoSync("Guardando…");
     const ok1 = await escribir(K.registros, nuevosRegistros);
-    const ok2 = await escribir(K.lotes, nuevosLotes);    if (nMeds !== medicaciones) await escribir(K.meds, nMeds);
+    const ok2 = await escribir(K.lotes, nuevosLotes);
+    if (nMeds !== medicaciones) await escribir(K.meds, nMeds);
     if (nFums !== fumigaciones) await escribir(K.fums, nFums);
     if (nBitacora !== bitacora) await escribir(K.bitacora, nBitacora);
 
@@ -1594,7 +1597,8 @@ export default function App({ onCerrarSesion }) {
       const id = editarAjustePlanta.id;
       const antReal = Number(editarAjustePlanta.saldoReal ?? editarAjustePlanta.kg ?? 0);
       const nuevoMov = {
-        ...editarAjustePlanta,        saldoReal: real,
+        ...editarAjustePlanta,
+        saldoReal: real,
         kg: editarAjustePlanta.categoria === "Núcleo" ? editarAjustePlanta.kg : real,
         porciones: editarAjustePlanta.categoria === "Núcleo" ? real : editarAjustePlanta.porciones,
         responsable: editarAjustePlanta.responsable || completadoPor,
@@ -1993,7 +1997,8 @@ export default function App({ onCerrarSesion }) {
     if (!t) return null;
     return lista.find(it => {
       const n = it.nombre.toLowerCase();
-      return t.includes(n) || n.includes(t) || t.split(/[\s/]+/).some(w => w.length > 3 && n.includes(w));    });
+      return t.includes(n) || n.includes(t) || t.split(/[\s/]+/).some(w => w.length > 3 && n.includes(w));
+    });
   };
   const registrarMovInsumo = async (tipo, itemId, cantidad, detalle, fechaISO) => {
     const cant = Number(cantidad);
@@ -2392,7 +2397,8 @@ export default function App({ onCerrarSesion }) {
     const pm = mm === 1 ? 12 : mm - 1, py = mm === 1 ? yy - 1 : yy;
     const diaObjetivo = Math.min(dd, new Date(py, pm, 0).getDate());
     fechaObjetivo = `${String(diaObjetivo).padStart(2, "0")}/${String(pm).padStart(2, "0")}/${py}`;
-    const objetivo = aDate(fechaObjetivo).getTime();    const candidatas = fechas.filter(f => aDate(f).getTime() < aDate(fHoy).getTime()).filter(f => {
+    const objetivo = aDate(fechaObjetivo).getTime();
+    const candidatas = fechas.filter(f => aDate(f).getTime() < aDate(fHoy).getTime()).filter(f => {
       const rs = registros.filter(r => r.fecha === f);
       const avesRegistradas = [...new Set(rs.map(r => r.lote))].reduce((s, id) => {
         const l = lotes.find(x => x.id === id);
@@ -2791,7 +2797,8 @@ export default function App({ onCerrarSesion }) {
   const BotonGuardaMini = () => (
     <button onClick={() => setRevisionGuardado(loteActivo?.id || "todos")} disabled={guardando} title={`Revisar este punto (Gallinero ${loteActivo?.galpon || ""})`}
       style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-      💾 Revisar    </button>
+      💾 Revisar
+    </button>
   );
   const dosisSugerida = (nombre, tipoFav) => {
     const ins = insumos.find(x => x.nombre === nombre);
@@ -3190,7 +3197,8 @@ export default function App({ onCerrarSesion }) {
           </>
         )}
 
-        {printDoc.tipo === "cxp" && (() => {          const abiertas = cxp.facturas.filter(f => (Number(f.monto || 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0)) > 0.005)
+        {printDoc.tipo === "cxp" && (() => {
+          const abiertas = cxp.facturas.filter(f => (Number(f.monto || 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0)) > 0.005)
             .sort((a, b) => aDate(a.vence) - aDate(b.vence));
           const saldoF = (f) => Number(f.monto || 0) + (cxp.notas || []).filter(n2 => n2.facturaId === f.id).reduce((a, n2) => a + (n2.tipo === "ND" ? 1 : -1) * Number(n2.monto || 0), 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0);
           const col = (n) => "₡" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3589,7 +3597,8 @@ export default function App({ onCerrarSesion }) {
                 <thead><tr>
                   <th style={th}>Gallinero</th><th style={th}>Lote</th><th style={th}>Genética</th><th style={th}>Nacimiento</th>
                   <th style={th}>Edad</th><th style={th}>Aves vivas</th><th style={th}>Proveedor pollonas</th>
-                </tr></thead>                <tbody>
+                </tr></thead>
+                <tbody>
                   {activos.map(l2 => (
                     <tr key={l2.id}>
                       <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
@@ -3988,7 +3997,8 @@ export default function App({ onCerrarSesion }) {
             <button type="button" disabled={guardando} onClick={() => setEditarAjusteMP(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Cancelar</button>
             <button type="button" disabled={guardando} onClick={guardarModificacionAjusteMP} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>{guardando ? "Guardando…" : "Guardar corrección"}</button>
           </>
-        }      >
+        }
+      >
         {editarAjusteMP && <div style={{ display: "grid", gap: 12 }}>
           <div style={{ padding: 12, borderRadius: 10, background: C.alertaSuave, color: C.texto, fontSize: 13, lineHeight: 1.5 }}>
             Saldo anterior: <b>{Number(editarAjusteMP.saldoAnterior || 0).toFixed(2)} kg</b><br />
@@ -4387,7 +4397,8 @@ export default function App({ onCerrarSesion }) {
                   <label>Tipo <select value={filtroExcepciones} onChange={e => setFiltroExcepciones(e.target.value)} style={inputStyle}><option>Todas</option>{[...new Set(hallazgosOperacion.map(h => h.tipo))].map(t => <option key={t}>{t}</option>)}</select></label>
                   <button onClick={() => window.print()}>Imprimir revisión</button>
                 </div>
-                {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => (                  <div key={i} style={{ padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
+                {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => (
+                  <div key={i} style={{ padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
                     <b>{h.tipo}</b> · {h.texto}
                   </div>
                 ))}
@@ -4786,7 +4797,8 @@ export default function App({ onCerrarSesion }) {
                     </div>
                   </>
                 );
-              })()}            </Seccion>
+              })()}
+            </Seccion>
 
             <Seccion accion={<BotonGuardaMini />} num="8" titulo="Trabajos diarios" sub="Marca lo realizado en este gallinero">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "2px 16px" }}>
@@ -5185,7 +5197,8 @@ export default function App({ onCerrarSesion }) {
               {repartos.map((r, i) => {
                 const neto = Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0);
                 return (
-                  <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: i === 0 ? `1px solid ${C.borde}` : "none" }}>                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: i === 0 ? `1px solid ${C.borde}` : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                       <input type="text" value={r.nombre} placeholder="Nombre del repartidor"
                         onChange={e => {
                           const rs = [...repartos]; rs[i] = { ...r, nombre: e.target.value }; setRepartos(rs);
@@ -5584,7 +5597,8 @@ export default function App({ onCerrarSesion }) {
                 <Campo tercio etiqueta="Inicial GANADO (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialGanado} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialGanado: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 130 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de apertura</span>
-                  <input type="date" value={plantaCfg.inicialFecha || ""} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialFecha: e.target.value })} style={inputStyle} />                </label>
+                  <input type="date" value={plantaCfg.inicialFecha || ""} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialFecha: e.target.value })} style={inputStyle} />
+                </label>
               </div>
               {plantaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La planta abre el {plantaCfg.inicialFecha.split("-").reverse().join("/")} con {plantaCfg.inicialAves || 0} kg (aves) y {plantaCfg.inicialGanado || 0} kg (ganado).</div>}
             </Seccion>
@@ -5983,7 +5997,8 @@ export default function App({ onCerrarSesion }) {
                       border: recActiva === n ? `2px solid ${C.verde}` : `1.5px solid ${C.borde}`,
                       background: recActiva === n ? C.verdeSuave : C.superficie, color: recActiva === n ? C.verde : C.texto,
                     }}>{n} <span style={{ fontWeight: 400, fontSize: 11, color: C.textoSuave }}>({f2.uso})</span></button>
-                  ))}                </div>
+                  ))}
+                </div>
               </Seccion>
 
               {f && (
@@ -6382,7 +6397,8 @@ export default function App({ onCerrarSesion }) {
                     <XAxis dataKey="dia" tick={{ fontSize: 10.5, fill: C.textoSuave }} tickLine={false} axisLine={{ stroke: C.borde }} interval={2} />
                     <YAxis domain={[50, 100]} tick={{ fontSize: 10.5, fill: C.textoSuave }} tickLine={false} axisLine={false} />
                     <Tooltip formatter={(v) => [`${v}%`, "Postura"]} contentStyle={{ borderRadius: 10, border: `1px solid ${C.borde}`, fontSize: 13 }} />
-                    {metaGenetica != null && <ReferenceLine y={metaGenetica} stroke={C.verde} strokeDasharray="5 4" strokeWidth={1.5} />}                    <Line type="monotone" dataKey="postura" stroke={C.yema} strokeWidth={2.5} dot={{ r: 2.5, fill: C.yema }} />
+                    {metaGenetica != null && <ReferenceLine y={metaGenetica} stroke={C.verde} strokeDasharray="5 4" strokeWidth={1.5} />}
+                    <Line type="monotone" dataKey="postura" stroke={C.yema} strokeWidth={2.5} dot={{ r: 2.5, fill: C.yema }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -6781,7 +6797,8 @@ export default function App({ onCerrarSesion }) {
                 Fecha: m.fecha, "Producido": m.producido, "Comprado": m.comprado, "Ruta neta": m.rutaNeta,
                 "Vendido granja": m.vendGranja, "Destruido": m.destruido, "Regalado": m.regalado, "Saldo final": m.saldoFinal, Observaciones: m.obs,
               }));
-              if (filasBod.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasBod), "Bodega");              const filasMed = medicaciones.filter(m => !rsMes.length || mesDe(m.fecha) === claveMes).map(m => ({
+              if (filasBod.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasBod), "Bodega");
+              const filasMed = medicaciones.filter(m => !rsMes.length || mesDe(m.fecha) === claveMes).map(m => ({
                 Fecha: m.fecha, Tipo: m.tipo || "Medicamento", Gallinero: m.galpon, Producto: m.producto, Dosis: m.dosis, "Enfermedad tratada": m.enfermedad || "",
               }));
               if (filasMed.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasMed), "Medicacion");
@@ -7180,7 +7197,8 @@ export default function App({ onCerrarSesion }) {
                         <div style={{ fontSize: 11, color: C.textoSuave }}>aves</div>
                       </div>
                     </div>
-                    <BarraPostura actual={postura} meta={metaPosturaLote(l, ult?.fecha)} />                    <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
+                    <BarraPostura actual={postura} meta={metaPosturaLote(l, ult?.fecha)} />
+                    <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 20, background: C.yemaSuave, color: "#9A6605", fontWeight: 500 }}>
                         {l.formula || "sin fórmula"}{l.racionGAve ? ` · ${l.racionGAve} g/ave` : ""}
                       </span>
@@ -7579,7 +7597,8 @@ export default function App({ onCerrarSesion }) {
                             <input type="date" max={hoyISO()} value={p.fecha} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, fecha: e.target.value, incluir: !!x.lote && !!e.target.value && e.target.value <= hoyISO() } : x))} style={{ ...inputStyle, width: "100%", marginTop: 4, borderColor: fechaPesajeISO(p.fecha) === p.fecha && p.fecha <= hoyISO() ? C.borde : C.alerta }} />
                           </label>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7 }}>                          {p.pesos.map((v, j) => <label key={j}>Ave {j + 1}<input aria-label={`Ave ${j + 1}`} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: pesoEnGramos(v) == null ? C.alerta : C.borde }} /></label>)}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7 }}>
+                          {p.pesos.map((v, j) => <label key={j}>Ave {j + 1}<input aria-label={`Ave ${j + 1}`} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: pesoEnGramos(v) == null ? C.alerta : C.borde }} /></label>)}
                         </div>
                       </div>}
                     </div>;
@@ -7978,7 +7997,8 @@ export default function App({ onCerrarSesion }) {
               );
             })}
             <button
-              type="button"              onClick={() => { setMenuMovil(false); setBuscadorAbierto(true); }}
+              type="button"
+              onClick={() => { setMenuMovil(false); setBuscadorAbierto(true); }}
               style={{
                 width: "100%",
                 padding: "12px",
