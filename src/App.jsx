@@ -362,7 +362,7 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
     const nomSub = { baches: "Baches producidos", nucleo: "Núcleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
     subdetalle = nomSub;
   } else if (vista === "pedidomp") {
-    const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo físico", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Materia Prima";
+    const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo físico", ajustes: "Ajustes físicos", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Materia Prima";
     subdetalle = nomSub;
   } else if (vista === "formulas") {
     const nomSub = { recetas: `Fórmulas (${recActiva || "activas"})`, nueva: "Crear fórmula", catalogo: "Catálogo MP", todo: "Todo" }[subFormulas] || "Fórmulas";
@@ -5670,7 +5670,7 @@ export default function App({ onCerrarSesion }) {
                       {historialVisible(kardex, "kardex").map(m2 => (
                         <div key={m2.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "6px 0", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
                           <span>{m2.fecha.slice(0, 5)} · <b>{(mpCat.find(x => x.c === m2.mp) || { n: m2.mp }).n}</b> · {m2.ref}</span>
-                          <b style={{ color: m2.tipo === "salida" ? C.alerta : C.verde }}>{m2.tipo === "salida" ? "−" : "+"}{Number(m2.kg).toFixed(1)} kg</b>
+                          <b style={{ color: m2.tipo === "salida" || Number(m2.kg) < 0 ? C.alerta : C.verde }}>{Number(m2.kg) > 0 ? "+" : ""}{Number(m2.kg).toFixed(1)} kg</b>
                         </div>
                       ))}
                     </details>
