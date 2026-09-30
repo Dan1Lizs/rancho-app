@@ -149,21 +149,21 @@
   color-scheme: dark;
 }
 .app-v10.v10-theme-contraste {
-  --v10-bg: #000;
-  --v10-bg-soft: #000;
-  --v10-surface: #000;
-  --v10-surface-alt: #111;
-  --v10-control: #111;
-  --v10-input: #000;
+  --v10-bg: #06150b;
+  --v10-bg-soft: #0b2615;
+  --v10-surface: #103b26;
+  --v10-surface-alt: #174b2d;
+  --v10-control: #215f3a;
+  --v10-input: #081b0f;
   --v10-text: #fff;
-  --v10-muted: #fff;
-  --v10-border: #fff;
-  --v10-green: #ffff00;
-  --v10-green-soft: #111100;
-  --v10-amber: #ffff00;
-  --v10-amber-soft: #1a1a00;
-  --v10-danger: #ff5f56;
-  --v10-danger-soft: #260000;
+  --v10-muted: #f1fff5;
+  --v10-border: #b9f5c8;
+  --v10-green: #43d66b;
+  --v10-green-soft: #174b2d;
+  --v10-amber: #ffe06a;
+  --v10-amber-soft: #4a3b0a;
+  --v10-danger: #ff9a86;
+  --v10-danger-soft: #54211a;
   color-scheme: dark;
 }
 .app-v10.v10-theme-oscuro .v10-main, .app-v10.v10-theme-contraste .v10-main { color: var(--v10-text); }
@@ -232,66 +232,66 @@
 
 /* Alto contraste: no depender de colores de la paleta clara para textos, controles o datos. */
 .app-v10.v10-theme-contraste :is(button, .v10-primary-action) {
-  background: #000 !important;
+  background: #164c2c !important;
   color: #fff !important;
-  border: 2px solid #fff !important;
+  border: 2px solid #b9f5c8 !important;
 }
 .app-v10.v10-theme-contraste :is(button:hover, button:focus-visible, .v10-primary-action:hover) {
-  background: #ffff00 !important;
+  background: #43d66b !important;
   color: #000 !important;
-  border-color: #ffff00 !important;
+  border-color: #43d66b !important;
 }
 .app-v10.v10-theme-contraste :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
-  background: #000 !important;
+  background: #081b0f !important;
   color: #fff !important;
-  border: 2px solid #fff !important;
+  border: 2px solid #b9f5c8 !important;
 }
 .app-v10.v10-theme-contraste :is(input, textarea)::placeholder { color: #fff !important; opacity: .9; }
-.app-v10.v10-theme-contraste a { color: #00ffff !important; }
-.app-v10.v10-theme-contraste :is(th, td) { color: #fff !important; border-color: #fff !important; }
+.app-v10.v10-theme-contraste a { color: #b8ffcf !important; }
+.app-v10.v10-theme-contraste :is(th, td) { color: #fff !important; border-color: #b9f5c8 !important; }
 .app-v10.v10-theme-contraste :is(.v10-badge, .v10-copy-link-btn) {
-  background: #000 !important;
+  background: #164c2c !important;
   color: #fff !important;
-  border-color: #fff !important;
+  border-color: #b9f5c8 !important;
 }
 .app-v10.v10-theme-contraste [style*="background: var(--v10-green-soft"] {
-  background: #000 !important;
+  background: #164c2c !important;
   color: #fff !important;
-  border-color: #fff !important;
+  border-color: #b9f5c8 !important;
 }
 .app-v10.v10-theme-contraste [style*="background: var(--v10-green"] {
-  background: #ffff00 !important;
+  background: #43d66b !important;
   color: #000 !important;
-  border-color: #ffff00 !important;
+  border-color: #43d66b !important;
 }
 .app-v10.v10-theme-contraste :is(.v10-desktop-nav, .v10-mobile-nav, .v10-mobile-more, .v10-overlay, .v10-modal-box, .v10-search) {
-  background: #000 !important;
+  background: #103b26 !important;
   color: #fff !important;
-  border-color: #fff !important;
+  border-color: #b9f5c8 !important;
 }
 .app-v10.v10-theme-contraste .v10-header {
-  background: #000 !important;
+  background: #0d4427 !important;
   color: #fff !important;
-  border-bottom: 1px solid #fff !important;
+  border-bottom: 2px solid #43d66b !important;
 }
 .app-v10.v10-theme-contraste .v10-desktop-nav button,
 .app-v10.v10-theme-contraste .v10-mobile-nav button,
 .app-v10.v10-theme-contraste .v10-mobile-more button {
-  background: #000 !important;
+  background: #103b26 !important;
   color: #fff !important;
-  border-color: #fff !important;
+  border-color: #b9f5c8 !important;
 }
 .app-v10.v10-theme-contraste .v10-desktop-nav button.v10-active,
 .app-v10.v10-theme-contraste .v10-desktop-nav button:hover,
 .app-v10.v10-theme-contraste .v10-mobile-nav button[aria-current="page"] {
-  background: #ffff00 !important;
+  background: #43d66b !important;
   color: #000 !important;
-  border-color: #ffff00 !important;
+  border-color: #43d66b !important;
 }
-.app-v10.v10-theme-contraste :is(.v10-view-heading h2, .v10-settings-card h3, .v10-preferences-view h3) { color: #ffff00 !important; }
+.app-v10.v10-theme-contraste :is(.v10-view-heading h2, .v10-settings-card h3, .v10-preferences-view h3) { color: #d8ff6b !important; }
 .app-v10.v10-theme-contraste :is(.v10-view-heading p, .v10-help, .v10-loading-view, .v10-search, .v10-search * , .v10-main) { color: #fff !important; }
 .app-v10.v10-theme-contraste svg text { fill: #fff !important; }
-.app-v10.v10-theme-contraste :is(svg line, svg path.recharts-rectangle, .recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line) { stroke: #fff !important; }
-.app-v10.v10-theme-contraste :is(button, input, select, textarea):focus-visible { outline-color: #ffff00 !important; }
+.app-v10.v10-theme-contraste :is(svg line, svg path.recharts-rectangle, .recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line) { stroke: #b9f5c8 !important; }
+.app-v10.v10-theme-contraste :is(button, input, select, textarea):focus-visible { outline-color: #ffe06a !important; }
 .app-v10.v10-theme-contraste :is(button, input, select, textarea):disabled { opacity: .65; }
 
