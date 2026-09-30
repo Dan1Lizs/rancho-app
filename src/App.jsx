@@ -133,22 +133,22 @@ const MP_LISTA = [
   { c: "MP004", n: "HARINA DE SOYA", prov: "AVIN", pres: 46 },
   { c: "MP005", n: "ACEMITE", prov: "AVIN", pres: 46 },
   { c: "MP006", n: "ACEITE DE SOYA", prov: "AVIN", pres: 1 },
-  { c: "MP007", n: "CARBONATO DE CALCIO", prov: "AVIN", pres: 50 },
+  { c: "MP007", n: "CARBONATO DE CALCIO 39% GRUESO", prov: "AVIN", pres: 50 },
   { c: "MP008", n: "CARB DE CALCIO 39%", prov: "AVIN", pres: 50 },
-  { c: "MP009", n: "SAL", prov: "Coonaprosal", pres: 50 },
+  { c: "MP009", n: "SAL", prov: "Coonaprosal", pres: 46 },
   { c: "MP013", n: "Núcleo Gortech", prov: "Gortech", pres: 22.7 },
-  { c: "MP022", n: "H. DE COQUITO (Premium)", prov: "AVIN", pres: 46 },
+  { c: "MP022", n: "H. DE COQUITO (Presion) (4-3-25 EV)", prov: "AVIN", pres: 46 },
   { c: "MP023", n: "LEVADURA", prov: "AVIN", pres: 1 },
   { c: "MP026", n: "BICARBONATO DE SODIO", prov: "AVIN", pres: 25 },
   { c: "MP028", n: "LIV-52", prov: "Agrokuvo", pres: 20 },
   { c: "MP029", n: "MONENSIN 7%", prov: "AVIN", pres: 15 },
   { c: "MP030", n: "TECNOVIT", prov: "Agrokuvo", pres: 20 },
   { c: "MP031", n: "MELAZA DE CAÑA", prov: "Dos Pinos", pres: 1 },
-  { c: "MP033", n: "DDGS MAÍZ", prov: "AVIN", pres: 46 },
+  { c: "MP033", n: "DDGS MAIZ", prov: "AVIN", pres: 46 },
   { c: "MP035", n: "FOSFATO MONOCÁLCICO", prov: "AVIN", pres: 25 },
   { c: "MP036", n: "DL-METIONINA", prov: "AVIN", pres: 25 },
   { c: "MP037", n: "CL-COLINA", prov: "AVIN", pres: 25 },
-  { c: "MP038", n: "PREM. GALLINAS TROPICAL", prov: "AVIN", pres: 25 },
+  { c: "MP038", n: "PREM. GALLINAS TROW NUTRITION", prov: "AVIN", pres: 25 },
   { c: "MP039", n: "L-LISINA", prov: "AVIN", pres: 25 },
   { c: "MP040", n: "MYCOFIX PLUS", prov: "AVIN", pres: 25 },
   { c: "MP041", n: "ISOLEUCINA", prov: "AVIN", pres: 1 },
@@ -157,9 +157,23 @@ const MP_LISTA = [
   { c: "MP044", n: "CLOSTAT", prov: "AVIN", pres: 1 },
   { c: "MP045", n: "ACTIGEN (MOS)", prov: "AVIN", pres: 1 },
   { c: "MP046", n: "ENRRAMIX", prov: "AVIN", pres: 1 },
-  { c: "MP047", n: "L-TRIPTÓFANO", prov: "AVIN", pres: 1 },
-  { c: "MP048", n: "BX POSTURA MÁXIMA", prov: "VYMISA", pres: 20 },
+  { c: "MP047", n: "L-TRIPTOFANO", prov: "AVIN", pres: 1 },
+  { c: "MP048", n: "BX POSTURA MÁXIMA PRODUCCIÓN", prov: "VYMISA", pres: 20 },
 ];
+
+// Catálogo oficial del formato físico de inventario. Se conserva el código
+// como llave de recetas y movimientos, pero el nombre y la presentación se
+// muestran exactamente como en la hoja de conteo de la granja.
+const normalizarCatalogoMateriaPrima = (catalogo) => {
+  const actual = Array.isArray(catalogo) ? catalogo : [];
+  const porCodigo = new Map(actual.map(item => [item.c, item]));
+  const oficiales = MP_LISTA.map(ref => {
+    const guardado = porCodigo.get(ref.c);
+    return guardado ? { ...guardado, c: ref.c, n: ref.n, pres: ref.pres } : { ...ref };
+  });
+  const oficialesSet = new Set(MP_LISTA.map(item => item.c));
+  return [...oficiales, ...actual.filter(item => item?.c && !oficialesSet.has(item.c))];
+};
 
 const RECETAS_MP = {
   "Impulsor": { MP001: .510954, MP004: .243609, MP005: .01, MP006: .038783, MP007: .067696, MP008: .028598, MP009: .003, MP022: .040924, MP023: .001, MP026: .00175, MP033: .035, MP035: .007033, MP036: .003207, MP037: .00175, MP038: .0015, MP039: .001196, MP040: .001, MP041: .000712, MP042: .000543, MP043: .000522, MP044: .0005, MP045: .000402, MP046: .000196, MP047: .00012 },
@@ -841,7 +855,9 @@ export default function App() {
         rc = { ...rc, formulas: { ...rc.formulas, "651 Impulsor VYMISA": JSON.parse(JSON.stringify(SEED_RECETAS.formulas["651 Impulsor VYMISA"])) } };
         siembras.push(escribir(K.recetas, rc));
       }
-      const mcat = mcat0 ?? (siembras.push(escribir(K.mpCat, MP_LISTA)), MP_LISTA);
+      const mcatBase = mcat0 ?? MP_LISTA;
+      const mcat = normalizarCatalogoMateriaPrima(mcatBase);
+      if (mcat0 == null || JSON.stringify(mcat) !== JSON.stringify(mcat0)) siembras.push(escribir(K.mpCat, mcat));
       let ins = ins0 ?? (siembras.push(escribir(K.insumos, SEED_INSUMOS)), SEED_INSUMOS);
       if (siembras.length) await Promise.all(siembras);
       ins = ins.map(it => ({ presentacion: "", dosis: "", proveedor: "", ...it, categoria: it.categoria === "Desinfectantes" ? "Desinfección" : it.categoria }));
@@ -2705,7 +2721,10 @@ export default function App() {
       advId,
       seccion: ultimo?.seccion || "auditoria",
       accion: "reactivar",
-      textoOriginal: ultimo?.textoOriginal || "Alerta reactivada manualmente",
+      // Conserva el texto del evento anterior para que la compatibilidad con
+      // descartes históricos también pueda volver a enlazar la alerta aunque
+      // sus cifras hayan cambiado.
+      textoOriginal: ultimo?.textoOriginal || "",
       nuevoTexto: null,
       responsable: completadoPor || nombreResponsableSesion(window.__usuarioEmail, nombresUsuarios, window.__usuarioNombre) || "",
       fecha: ahora.slice(0, 10).split("-").reverse().join("/"),
@@ -5285,20 +5304,37 @@ export default function App() {
                 </label>
                 <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre" value={mpResponsable} onChange={e => setMpResponsable(e.target.value)} />
               </div>
-              {mpCat.map(mp => {
-                const inv = mpInv[mp.c] || {};
-                return (
-                  <div key={mp.c} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ flex: "1 1 140px", fontSize: 12, lineHeight: 1.3 }}><b>{mp.n}</b><br /><span style={{ color: C.textoSuave, fontSize: 10.5 }}>{mp.c} · {mp.pres === 1 ? "por kg" : `saco ${mp.pres} kg`} · {mp.prov}</span></span>
-                    {mp.pres !== 1 && <input type="text" inputMode="numeric" placeholder="Sacos" value={inv.sacos ?? ""}
-                      onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, sacos: e.target.value } })}
-                      style={{ ...inputStyle, flex: "0 1 80px", padding: "8px 9px", fontSize: 14 }} />}
-                    <input type="text" inputMode="decimal" placeholder={mp.pres === 1 ? "Kg" : "Saldo kg"} value={inv.kg ?? ""}
-                      onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, kg: e.target.value } })}
-                      style={{ ...inputStyle, flex: "0 1 92px", padding: "8px 9px", fontSize: 14 }} />
-                  </div>
-                );
-              })}
+              <div style={{ overflowX: "auto", border: `1px solid ${C.borde}`, borderRadius: 10 }}>
+                <table style={{ width: "100%", minWidth: 660, borderCollapse: "collapse", fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ background: C.verde, color: "#fff", textAlign: "left" }}>
+                      <th style={{ padding: "9px 8px", width: 70 }}>Código</th>
+                      <th style={{ padding: "9px 8px" }}>Materia prima</th>
+                      <th style={{ padding: "9px 8px", width: 130, textAlign: "center" }}>Presentación<br /><span style={{ fontSize: 10, fontWeight: 500 }}>(kg/saco)</span></th>
+                      <th style={{ padding: "9px 8px", width: 120, textAlign: "center" }}>Sacos completos</th>
+                      <th style={{ padding: "9px 8px", width: 120, textAlign: "center" }}>Saldo (kg)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mpCat.map(mp => {
+                      const inv = mpInv[mp.c] || {};
+                      return (
+                        <tr key={mp.c} style={{ borderTop: `1px solid ${C.borde}` }}>
+                          <td style={{ padding: "7px 8px", fontWeight: 700, whiteSpace: "nowrap" }}>{mp.c}</td>
+                          <td style={{ padding: "7px 8px", lineHeight: 1.25 }}><b>{mp.n}</b><br /><span style={{ color: C.textoSuave, fontSize: 10.5 }}>{mp.prov}</span></td>
+                          <td style={{ padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" }}>{mp.pres === 1 ? "A granel" : `${mp.pres} kg`}</td>
+                          <td style={{ padding: "5px 8px", textAlign: "center" }}>{mp.pres !== 1 ? <input type="text" inputMode="numeric" aria-label={`${mp.c} sacos completos`} placeholder="—" value={inv.sacos ?? ""}
+                            onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, sacos: e.target.value } })}
+                            style={{ ...inputStyle, width: 96, padding: "8px 9px", fontSize: 14, margin: 0 }} /> : <span style={{ color: C.textoSuave }}>—</span>}</td>
+                          <td style={{ padding: "5px 8px", textAlign: "center" }}><input type="text" inputMode="decimal" aria-label={`${mp.c} saldo en kg`} placeholder="—" value={inv.kg ?? ""}
+                            onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, kg: e.target.value } })}
+                            style={{ ...inputStyle, width: 104, padding: "8px 9px", fontSize: 14, margin: 0 }} /></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
               <button onClick={guardarInventarioMP} disabled={guardando} style={{ ...btnStyle, marginTop: 8 }}>Guardar inventario del conteo</button>
               {mpInvHist.length > 0 && (
                 <details style={{ marginTop: 14 }}>
