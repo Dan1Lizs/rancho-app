@@ -489,6 +489,10 @@ export default function App() {
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [menuMovil, setMenuMovil] = useState(false);
   const [salidaPendiente, setSalidaPendiente] = useState(null);
+  // Consulta de historial con captura pendiente: antes de cambiar de sección
+  // guardamos una copia local para que consultar nunca borre lo que se estaba
+  // digitando. La copia es por usuario y no modifica los datos compartidos.
+  const [consultaHistorialPendiente, setConsultaHistorialPendiente] = useState(null);
   const [accesoDenegado, setAccesoDenegado] = useState(null);
   const [modalPegarTiquetes, setModalPegarTiquetes] = useState(false);
   const [preferencias, setPreferencias] = useState(DEFAULT_PREFERENCES);
@@ -569,6 +573,8 @@ export default function App() {
   ]);
   const [obsInv, setObsInv] = useState("");
   const [ajusteBodega, setAjusteBodega] = useState("");
+  const [bodegaBorradorConsulta, setBodegaBorradorConsulta] = useState(null);
+  const bodegaBorradorCargadoRef = useRef(false);
     const [subPlanta, setSubPlanta] = useState("baches");
   const [subPedidoMP, setSubPedidoMP] = useState("kardex");
   const [subFormulas, setSubFormulas] = useState("recetas");
@@ -739,6 +745,9 @@ export default function App() {
   const [tareasManualesReporte, setTareasManualesReporte] = useState("");
   const [alcanceReporteActividades, setAlcanceReporteActividades] = useState("");
   const [mpInv, setMpInv] = useState({});
+  const [mpHistorialAbierto, setMpHistorialAbierto] = useState(false);
+  const [mpBorradorConsulta, setMpBorradorConsulta] = useState(null);
+  const mpBorradorCargadoRef = useRef(false);
   const [mpInvUltimo, setMpInvUltimo] = useState({});
   const [mpFechaInput, setMpFechaInput] = useState(hoyISO());
   const [mpFechaConteo, setMpFechaConteo] = useState("");
@@ -759,6 +768,26 @@ export default function App() {
   const [fEnf, setFEnf] = useState({ lote: "G1", enfermedad: "", tratamiento: "", estado: "En tratamiento" });
   const [fNec, setFNec] = useState({ lote: "G1", tipo: "Necropsia", laboratorio: "", hallazgos: "" });
   const [fPlan, setFPlan] = useState({ vacuna: "", cepa: "", via: "", proveedor: "", dia: "" });
+  useEffect(() => {
+    if (!preferenciasCargadas || mpBorradorCargadoRef.current) return;
+    mpBorradorCargadoRef.current = true;
+    leerBorrador("consulta-materia-prima", "local").then(borrador => {
+      const vigente = borrador?.tipo === "materia-prima-inventario" && Date.now() - Number(borrador.guardadoEl || 0) < 7 * 86400000
+        ? borrador
+        : null;
+      if (vigente) setMpBorradorConsulta(vigente);
+    }).catch(() => {});
+  }, [preferenciasCargadas]);
+  useEffect(() => {
+    if (!preferenciasCargadas || bodegaBorradorCargadoRef.current) return;
+    bodegaBorradorCargadoRef.current = true;
+    leerBorrador("consulta-bodega", "local").then(borrador => {
+      const vigente = borrador?.tipo === "bodega" && Date.now() - Number(borrador.guardadoEl || 0) < 7 * 86400000
+        ? borrador
+        : null;
+      if (vigente) setBodegaBorradorConsulta(vigente);
+    }).catch(() => {});
+  }, [preferenciasCargadas]);
   const [histFecha, setHistFecha] = useState(() => hoyISO());
   const [histMes, setHistMes] = useState(() => hoyISO().slice(0, 7));
   const [correccionesProduccion, setCorreccionesProduccion] = useState([]);
@@ -1228,6 +1257,47 @@ export default function App() {
       setObsInv("");
     }
   };
+  const bodegaTieneCambios = Object.values(movBodega).some(v => String(v ?? "").trim() !== "")
+    || repartos.some(r => [r.tiq, r.salida, r.devBueno, r.devMalo].some(v => String(v ?? "").trim() !== ""))
+    || Boolean(String(obsInv || "").trim())
+    || String(ajusteBodega || "").trim() !== ""
+    || Object.values(pasosBodega).some(Boolean);
+  const guardarBorradorConsultaBodega = async () => {
+    const borrador = {
+      tipo: "bodega",
+      fecha: fechaBodega,
+      movimientoId: movBodegaIdRef.current,
+      movBodega,
+      repartos,
+      obsInv,
+      ajusteBodega,
+      pasosBodega,
+      guardadoEl: Date.now(),
+    };
+    await guardarBorrador("consulta-bodega", borrador, "local");
+    setBodegaBorradorConsulta(borrador);
+    return borrador;
+  };
+  const pedirConsultaHistorialBodega = (destino) => {
+    if (!bodegaTieneCambios) {
+      if (destino?.tipo === "subBodega") setSubBodega(destino.valor);
+      else if (destino?.tipo === "fecha") cambiarFechaBodega(destino.iso, destino.id);
+      return;
+    }
+    setConsultaHistorialPendiente({ tipo: "bodega", destino, titulo: "Consultar historial sin perder la bodega" });
+  };
+  const cambiarFechaBodegaSegura = (iso, id = null) => {
+    if (iso === fechaBodega && (id == null || String(id) === String(movBodegaIdRef.current))) return;
+    pedirConsultaHistorialBodega({ tipo: "fecha", iso, id });
+  };
+  const cambiarSubBodega = (valor) => {
+    if (valor === subBodega) return;
+    if (valor === "historial" && bodegaTieneCambios) {
+      pedirConsultaHistorialBodega({ tipo: "subBodega", valor });
+      return;
+    }
+    setSubBodega(valor);
+  };
   const saldoCalculado = saldoBase + Number(movBodega.comprado || 0) + producidoHoyCart
     - rutaNeta - Number(movBodega.vendGranja || 0) - Number(movBodega.destruido || 0) - Number(movBodega.regalado || 0);
   const hayAjuste = ajusteBodega !== "" && !isNaN(Number(ajusteBodega));
@@ -1287,6 +1357,8 @@ export default function App() {
       movBodegaOriginalRef.current = snapshotBodega(nuevos.find(m => String(m.id) === String(nuevoMov.id)));
       setMotivoEdicionBodega("");
       setAjusteBodega(nuevoMov.ajusteConteo == null ? "" : String(nuevoMov.ajusteConteo));
+      await eliminarBorrador("consulta-bodega", "local").catch(() => {});
+      setBodegaBorradorConsulta(null);
       avisar(delDia.length > 1 ? `✓ Fecha ${fechaB} unificada; ${delDia.length - 1} duplicado(s) conservados en la bitácora` : elegido ? "✓ Movimiento editado con registro de cambios" : "✓ Movimiento de bodega guardado");
     }
     else avisar("⚠ No se pudo guardar la bodega");
@@ -2047,6 +2119,23 @@ export default function App() {
     (pedidoPorProveedor[x.prov] = pedidoPorProveedor[x.prov] || []).push(x);
   });
 
+  const mpInvTieneCambios = Object.values(mpInv).some(v => v && ((v.sacos ?? "") !== "" || (v.kg ?? "") !== ""))
+    || Boolean(String(mpResponsable || "").trim())
+    || mpFechaInput !== hoyISO();
+
+  const guardarBorradorConsultaMP = async () => {
+    const borrador = {
+      tipo: "materia-prima-inventario",
+      fecha: mpFechaInput,
+      responsable: mpResponsable,
+      items: mpInv,
+      guardadoEl: Date.now(),
+    };
+    await guardarBorrador("consulta-materia-prima", borrador, "local");
+    setMpBorradorConsulta(borrador);
+    return borrador;
+  };
+
   const guardarInventarioMP = async () => {
     const items = Object.fromEntries(Object.entries(mpInv).filter(([, v]) => (v?.sacos ?? "") !== "" || (v?.kg ?? "") !== ""));
     if (!Object.keys(items).length) { avisar("⚠ Digita al menos un dato del conteo"); return; }
@@ -2060,6 +2149,8 @@ export default function App() {
     if (ok1 && ok2) {
       setMpFechaConteo(fecha); setMpInvHist(ordenarPorFecha(nuevoHist)); setMpInvUltimo(items);
       setMpInv({});
+      await eliminarBorrador("consulta-materia-prima", "local").catch(() => {});
+      setMpBorradorConsulta(null);
       avisar(`✓ Conteo del ${fecha.slice(0, 5)} guardado en el historial — listo para generar el pedido`);
     } else avisar("⚠ No se pudo guardar el inventario");
     setGuardando(false);
@@ -2388,6 +2479,27 @@ export default function App() {
     if (destino && destino !== vista && idsPermitidos.includes(destino)) abrirVista(destino);
   }, [preferenciasCargadas, miRol]);
   const abrirVista = (id) => { setVista(id); setMenuMovil(false); setBuscadorAbierto(false); window.scrollTo({ top: 0, behavior: "auto" }); };
+  const pedirConsultaHistorialMP = (destino) => {
+    if (!mpInvTieneCambios) {
+      if (destino?.tipo === "subPedidoMP") setSubPedidoMP(destino.valor);
+      else if (destino?.tipo === "mp") setMpHistorialAbierto(true);
+      else if (destino?.tipo === "vista") abrirVista(destino.valor);
+      return;
+    }
+    setConsultaHistorialPendiente({
+      tipo: "materia-prima",
+      destino,
+      titulo: destino?.tipo === "vista" ? "Consultar historial sin perder la captura" : "Consultar historial de materia prima",
+    });
+  };
+  const cambiarSubPedidoMP = (valor) => {
+    if (valor === subPedidoMP) return;
+    if (valor === "pedidos" && mpInvTieneCambios) {
+      pedirConsultaHistorialMP({ tipo: "subPedidoMP", valor });
+      return;
+    }
+    setSubPedidoMP(valor);
+  };
   const irA = (id) => {
     const destino = tabs.find(t => t.id === id);
     if (!destino) return;
@@ -2398,6 +2510,7 @@ export default function App() {
       return;
     }
     if (vista === "captura" && id !== vista && (Object.keys(suciosRef.current).length || notaSuciaRef.current)) setSalidaPendiente(id);
+    else if (vista === "pedidomp" && id === "historial" && mpInvTieneCambios) pedirConsultaHistorialMP({ tipo: "vista", valor: id });
     else abrirVista(id);
   };
 
@@ -2417,7 +2530,7 @@ export default function App() {
     const f = h.params.get("fecha");
     if (f) {
       if (h.ruta === "captura") setFechaCaptura(f);
-      if (h.ruta === "bodega") cambiarFechaBodega(f);
+      if (h.ruta === "bodega") cambiarFechaBodegaSegura(f);
     }
     const subParam = h.params.get("sub");
     if (subParam && h.ruta === "bodega") {
@@ -2470,7 +2583,7 @@ export default function App() {
       const f = h.params.get("fecha");
       if (f) {
         if (h.ruta === "captura" && f !== fechaCaptura) setFechaCaptura(f);
-        if (h.ruta === "bodega" && f !== fechaBodega) cambiarFechaBodega(f);
+        if (h.ruta === "bodega" && f !== fechaBodega) cambiarFechaBodegaSegura(f);
       }
       const subParam = h.params.get("sub");
       if (subParam && h.ruta === "bodega" && subParam !== subBodega) {
@@ -2493,7 +2606,7 @@ export default function App() {
     ...mpCat.map(m => ({ texto: `Materia prima ${m.n || ""} · ${m.c || ""}`, vista: "pedidomp" })),
     ...(esAdmin ? (cxp.facturas || []).map(f => ({ texto: `Factura ${f.proveedor || ""} · ${f.numero || ""}`, vista: "cxp" })) : []),
   ].filter(x => x.texto.toLocaleLowerCase("es").includes(busquedaGlobal.trim().toLocaleLowerCase("es"))).slice(0, 30);
-  const abrirResultado = r => { if (r.vista === "historial" && r.fecha) setHistFecha(r.fecha); if (r.vista === "bodega" && r.fecha) cambiarFechaBodega(r.fecha); if (r.lote) setGalponActivo(r.lote); if (r.formula) setRecActiva(r.formula); irA(r.vista); };
+  const abrirResultado = r => { if (r.vista === "historial" && r.fecha) setHistFecha(r.fecha); if (r.vista === "bodega" && r.fecha) cambiarFechaBodegaSegura(r.fecha); if (r.lote) setGalponActivo(r.lote); if (r.formula) setRecActiva(r.formula); irA(r.vista); };
   const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta, filtroPlanta);
   const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
@@ -3698,6 +3811,43 @@ export default function App() {
         <p style={{ margin: 0, color: C.textoSuave }}>Si cambias de pantalla sin enviar, tus datos no se perderán pero no estarán reflejados en los reportes hasta que confirmes el envío.</p>
       </ModalDialog>
       <ModalDialog
+        abierto={!!consultaHistorialPendiente}
+        titulo={consultaHistorialPendiente?.titulo || "Consultar historial"}
+        subtitulo="La captura actual todavía no se ha enviado"
+        onClose={() => setConsultaHistorialPendiente(null)}
+        ancho={500}
+        tono="alerta"
+        pie={
+          <>
+            <button type="button" autoFocus onClick={() => setConsultaHistorialPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Seguir digitando
+            </button>
+            <button type="button" onClick={async () => {
+              const pendiente = consultaHistorialPendiente;
+              try {
+                if (pendiente?.tipo === "materia-prima") await guardarBorradorConsultaMP();
+                if (pendiente?.tipo === "bodega") await guardarBorradorConsultaBodega();
+                setConsultaHistorialPendiente(null);
+                if (pendiente?.destino?.tipo === "subPedidoMP") setSubPedidoMP(pendiente.destino.valor);
+                else if (pendiente?.destino?.tipo === "mp") setMpHistorialAbierto(true);
+                else if (pendiente?.destino?.tipo === "vista") abrirVista(pendiente.destino.valor);
+                else if (pendiente?.destino?.tipo === "subBodega") setSubBodega(pendiente.destino.valor);
+                else if (pendiente?.destino?.tipo === "fecha") cambiarFechaBodega(pendiente.destino.iso, pendiente.destino.id);
+                avisar("✓ Captura guardada como borrador local. Puedes recuperarla al volver a Inventario.");
+              } catch {
+                avisar("⚠ No se pudo guardar el borrador; la captura sigue abierta.");
+              }
+            }} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>
+              Guardar borrador y consultar
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, lineHeight: 1.55 }}>
+          Si consultas el historial, la sección de captura puede cambiar de lugar. Tus datos se guardarán como un borrador privado de este dispositivo y se podrán recuperar al regresar.
+        </p>
+      </ModalDialog>
+      <ModalDialog
         abierto={!!accesoDenegado}
         titulo="Acceso restringido"
         subtitulo={`Tu rol actual no tiene permiso para entrar a ${accesoDenegado || "este módulo"}.`}
@@ -4687,6 +4837,27 @@ export default function App() {
         {/* ══ BODEGA ══ */}
         {vista === "bodega" && (
           <>
+            {bodegaBorradorConsulta && !bodegaTieneCambios && (
+              <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.yemaSuave, border: `1px solid ${C.yema}`, fontSize: 12.5, lineHeight: 1.45 }}>
+                <b>📝 Hay un borrador de bodega sin enviar.</b>
+                <div style={{ marginTop: 3 }}>Se guardó antes de consultar el historial. Recuperarlo vuelve a colocar el movimiento y sus salidas en el formulario.</div>
+                <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
+                  <button type="button" onClick={() => {
+                    const b = bodegaBorradorConsulta;
+                    setFechaBodega(b.fecha || hoyISO());
+                    fechaBodegaRef.current = b.fecha || hoyISO();
+                    setMovBodega(b.movBodega || { comprado: "", vendGranja: "", destruido: "", regalado: "" });
+                    setRepartos(b.repartos || []);
+                    setObsInv(b.obsInv || "");
+                    setAjusteBodega(b.ajusteBodega || "");
+                    setPasosBodega(b.pasosBodega || { salidas: false, devoluciones: false, conteo: false });
+                    setBodegaBorradorConsulta(null);
+                    avisar("✓ Borrador de bodega recuperado");
+                  }} style={{ padding: "7px 11px", border: "none", borderRadius: 8, background: C.verde, color: "#fff", cursor: "pointer", fontWeight: 600 }}>Recuperar borrador</button>
+                  <button type="button" onClick={async () => { await eliminarBorrador("consulta-bodega", "local").catch(() => {}); setBodegaBorradorConsulta(null); avisar("✓ Borrador descartado"); }} style={{ padding: "7px 11px", border: `1px solid ${C.borde}`, borderRadius: 8, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Descartar</button>
+                </div>
+              </div>
+            )}
             {retirosActivos.length > 0 && (
               <div style={{ background: C.alertaSuave, border: `1px solid #EBC0B5`, borderRadius: 14, padding: "12px 15px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.5 }}>
                 <b>🔴 Retiro de medicamento activo:</b> {retirosActivos.map(m => `G${m.galpon} (${m.producto}) hasta ${m.retiroHasta}`).join(" · ")}. No comercializar huevo de esos gallineros.
@@ -4695,7 +4866,7 @@ export default function App() {
             <button onClick={() => setPrintDoc({ tipo: "bodega" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir movimiento de bodega</button>
             <label id="form-bodega" style={{ display: "block", marginBottom: 10, scrollMarginTop: 110 }}>
               <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del movimiento de bodega</span>
-              <input type="date" value={fechaBodega} onChange={e => cambiarFechaBodega(e.target.value)} style={inputStyle} />
+              <input type="date" value={fechaBodega} onChange={e => cambiarFechaBodegaSegura(e.target.value)} style={inputStyle} />
             </label>
             {bodegaMovs.filter(m => fechaHistorialISO(m.fecha) === fechaBodega).length > 1 && <div style={{ padding: "9px 12px", marginBottom: 10, background: C.alertaSuave, borderRadius: 9, fontSize: 12.5, color: C.alerta }}>
               Hay movimientos duplicados para {fechaB}. Elige «Editar / conservar» en la fila correcta del historial; al guardar con un motivo se unificarán y quedará copia de los otros valores en la bitácora.
@@ -4726,7 +4897,7 @@ export default function App() {
                 <button
                   key={sub.id}
                   type="button"
-                  onClick={() => setSubBodega(sub.id)}
+                  onClick={() => cambiarSubBodega(sub.id)}
                   style={{
                     padding: "8px 14px",
                     fontSize: 13,
@@ -4922,7 +5093,7 @@ export default function App() {
                       <b style={{ color: C.verde }}>= {f2Dec(m.saldoFinal)} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
-                      <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); setSubBodega("cierre"); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
+                      <button onClick={() => { cambiarFechaBodegaSegura(fechaHistorialISO(m.fecha), m.id); setSubBodega("cierre"); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
                       <button onClick={() => setPrintDoc({ tipo: "bodega", movimientoId: m.id })} style={{ padding: "5px 9px", fontSize: 11.5, background: "#fff", color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>🖨 Imprimir</button>
                     </div>
                     {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
@@ -5297,6 +5468,22 @@ export default function App() {
 
             {(subPedidoMP === "inventario" || subPedidoMP === "todo") && (
               <Seccion titulo="2 · Inventario físico" sub="El encargado cuenta el jueves: sacos completos + saldo suelto en kg de cada materia prima">
+              {mpBorradorConsulta && !mpInvTieneCambios && (
+                <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.yemaSuave, border: `1px solid ${C.yema}`, fontSize: 12.5, lineHeight: 1.45 }}>
+                  <b>📝 Hay un borrador de inventario sin enviar.</b>
+                  <div style={{ marginTop: 3 }}>Se guardó al consultar el historial{mpBorradorConsulta.fecha ? ` del ${mpBorradorConsulta.fecha.split("-").reverse().join("/")}` : ""}. Recuperarlo vuelve a colocar los datos en esta tabla.</div>
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
+                    <button type="button" onClick={() => {
+                      setMpInv(mpBorradorConsulta.items || {});
+                      setMpFechaInput(mpBorradorConsulta.fecha || hoyISO());
+                      setMpResponsable(mpBorradorConsulta.responsable || "");
+                      setMpBorradorConsulta(null);
+                      avisar("✓ Borrador de inventario recuperado");
+                    }} style={{ padding: "7px 11px", border: "none", borderRadius: 8, background: C.verde, color: "#fff", cursor: "pointer", fontWeight: 600 }}>Recuperar borrador</button>
+                    <button type="button" onClick={async () => { await eliminarBorrador("consulta-materia-prima", "local").catch(() => {}); setMpBorradorConsulta(null); avisar("✓ Borrador descartado"); }} style={{ padding: "7px 11px", border: `1px solid ${C.borde}`, borderRadius: 8, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Descartar</button>
+                  </div>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
@@ -5337,24 +5524,31 @@ export default function App() {
               </div>
               <button onClick={guardarInventarioMP} disabled={guardando} style={{ ...btnStyle, marginTop: 8 }}>Guardar inventario del conteo</button>
               {mpInvHist.length > 0 && (
-                <details style={{ marginTop: 14 }}>
-                  <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>📋 Historial de conteos ({mpInvHist.length})</summary>
-                  {selectorHistorial("conteos")}
-                  {historialVisible(mpInvHist, "conteos").map(h => (
-                    <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 2px", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
-                      <span><b>{String(h.fecha).slice(0, 5)}</b> · {mostrarNombre(h.responsable || "sin responsable")} · {Object.keys(h.items || {}).length} materias primas contadas</span>
-                      <span style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => { setMpInv(h.items || {}); setMpResponsable(h.responsable || ""); avisar(`✓ Conteo del ${String(h.fecha).slice(0, 5)} cargado en el formulario — puedes editarlo y guardar de nuevo`); }}
-                          style={{ fontSize: 11.5, padding: "4px 10px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Ver / reusar</button>
-                        <span onClick={async () => {
-                          if (!pideConfirm(`borrarConteo-${h.id}`, "⚠ Toca otra vez para borrar este conteo del historial")) return;
-                          const nuevo = mpInvHist.filter(x => x.id !== h.id);
-                          if (await escribir(K.mpInvHist, nuevo)) { setMpInvHist(nuevo); avisar("✓ Conteo borrado del historial"); }
-                        }} style={{ cursor: "pointer", color: C.alerta, fontSize: 15, padding: "0 4px" }} title="Borrar este conteo">×</span>
-                      </span>
-                    </div>
-                  ))}
-                </details>
+                <div style={{ marginTop: 14, border: `1px solid ${C.borde}`, borderRadius: 10, overflow: "hidden" }}>
+                  <button type="button" onClick={() => {
+                    if (mpHistorialAbierto) setMpHistorialAbierto(false);
+                    else pedirConsultaHistorialMP({ tipo: "mp" });
+                  }} aria-expanded={mpHistorialAbierto} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 12px", border: "none", background: C.verdeSuave, color: C.verde, cursor: "pointer", fontSize: 12.5, fontWeight: 700, textAlign: "left" }}>
+                    <span>📋 Historial de conteos ({mpInvHist.length})</span><span>{mpHistorialAbierto ? "▴" : "▾"}</span>
+                  </button>
+                  {mpHistorialAbierto && <div style={{ padding: "4px 10px 8px" }}>
+                    {selectorHistorial("conteos")}
+                    {historialVisible(mpInvHist, "conteos").map(h => (
+                      <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 2px", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
+                        <span><b>{String(h.fecha).slice(0, 5)}</b> · {mostrarNombre(h.responsable || "sin responsable")} · {Object.keys(h.items || {}).length} materias primas contadas</span>
+                        <span style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => { setMpInv(h.items || {}); setMpFechaInput(h.fecha ? String(h.fecha).split("/").reverse().join("-") : hoyISO()); setMpResponsable(h.responsable || ""); setMpHistorialAbierto(false); avisar(`✓ Conteo del ${String(h.fecha).slice(0, 5)} cargado en el formulario — puedes editarlo y guardar de nuevo`); }}
+                            style={{ fontSize: 11.5, padding: "4px 10px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Ver / reusar</button>
+                          <span onClick={async () => {
+                            if (!pideConfirm(`borrarConteo-${h.id}`, "⚠ Toca otra vez para borrar este conteo del historial")) return;
+                            const nuevo = mpInvHist.filter(x => x.id !== h.id);
+                            if (await escribir(K.mpInvHist, nuevo)) { setMpInvHist(nuevo); avisar("✓ Conteo borrado del historial"); }
+                          }} style={{ cursor: "pointer", color: C.alerta, fontSize: 15, padding: "0 4px" }} title="Borrar este conteo">×</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>}
+                </div>
               )}
             </Seccion>
             )}
