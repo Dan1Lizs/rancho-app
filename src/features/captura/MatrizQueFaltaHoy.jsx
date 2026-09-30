@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { estadosCapturaDelDia } from "./estadoCaptura";
 
-const C = { superficie: "#FFFFFF", borde: "#E4E4DC", verde: "#14432A", verdeSuave: "#E7EFE8", yema: "#E8940A", yemaSuave: "#FDF3E0", texto: "#1C1F1A", textoSuave: "#6B7266" };
+const C = { superficie: "var(--v10-surface, #FFFFFF)", borde: "var(--v10-border, #E4E4DC)", verde: "var(--v10-green, #14432A)", verdeSuave: "var(--v10-green-soft, #E7EFE8)", yema: "var(--v10-amber, #E8940A)", yemaSuave: "var(--v10-amber-soft, #FDF3E0)", texto: "var(--v10-text, #1C1F1A)", textoSuave: "var(--v10-muted, #6B7266)" };
 const badge = (estado) => estado === "guardado"
   ? { fondo: C.verdeSuave, color: C.verde, texto: "✓ Listo" }
   : estado === "borrador"
     ? { fondo: C.yemaSuave, color: "#9A6605", texto: "En borrador" }
-    : { fondo: "#F1F1EA", color: C.textoSuave, texto: "Pendiente" };
+    : { fondo: "var(--v10-control, #F1F1EA)", color: C.textoSuave, texto: "Pendiente" };
 
 export function MatrizQueFaltaHoy({ activos, registros, capturas, fechaCaptura, galponActivo, setGalponActivo }) {
   const [expandida, setExpandida] = useState(false);
@@ -22,11 +22,11 @@ export function MatrizQueFaltaHoy({ activos, registros, capturas, fechaCaptura, 
           <b style={{ fontSize: 14, color: C.texto }}>¿Qué falta registrar hoy? · {fecha}</b>
           <div style={{ fontSize: 12, color: C.textoSuave }}>{todoListo ? "Todos los gallineros tienen su control completo guardado" : `${completos} de ${activos.length} gallineros completos`}</div>
         </div>
-        <button type="button" aria-expanded={expandida} onClick={() => setExpandida((valor) => !valor)} style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 8, cursor: "pointer" }}>{expandida ? "Vista compacta" : "Ver matriz detallada"}</button>
+        <button type="button" aria-expanded={expandida} onClick={() => setExpandida((valor) => !valor)} style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, background: "var(--v10-control, #F1F1EA)", color: C.texto, border: "none", borderRadius: 8, cursor: "pointer" }}>{expandida ? "Vista compacta" : "Ver matriz detallada"}</button>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         {estados.map((estado) => {
-          const fondo = estado.completo ? C.verdeSuave : estado.parcial ? C.yemaSuave : "#F1F1EA";
+          const fondo = estado.completo ? C.verdeSuave : estado.parcial ? C.yemaSuave : "var(--v10-control, #F1F1EA)";
           const color = estado.completo ? C.verde : estado.parcial ? "#9A6605" : C.textoSuave;
           return <button key={estado.lote.id} type="button" onClick={() => setGalponActivo(estado.lote.id)} aria-pressed={galponActivo === estado.lote.id} style={{ flex: "1 1 80px", padding: "8px 6px", borderRadius: 10, border: galponActivo === estado.lote.id ? `2px solid ${C.verde}` : `1px solid ${C.borde}`, background: fondo, cursor: "pointer", textAlign: "center" }}><b style={{ fontSize: 13, color }}>G{estado.lote.galpon}</b><div style={{ fontSize: 10.5, fontWeight: 600, color }}>{estado.completo ? "Completo ✓" : estado.parcial ? "En proceso" : "Pendiente"}</div></button>;
         })}
