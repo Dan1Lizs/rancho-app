@@ -148,7 +148,24 @@
   --v10-amber: #f2b84b; --v10-amber-soft: #453619; --v10-danger: #ff8a76; --v10-danger-soft: #482720;
   color-scheme: dark;
 }
-.app-v10.v10-theme-contraste { --v10-bg: #000; --v10-surface: #000; --v10-text: #fff; --v10-border: #fff; color-scheme: dark; }
+.app-v10.v10-theme-contraste {
+  --v10-bg: #000;
+  --v10-bg-soft: #000;
+  --v10-surface: #000;
+  --v10-surface-alt: #111;
+  --v10-control: #111;
+  --v10-input: #000;
+  --v10-text: #fff;
+  --v10-muted: #fff;
+  --v10-border: #fff;
+  --v10-green: #ffff00;
+  --v10-green-soft: #111100;
+  --v10-amber: #ffff00;
+  --v10-amber-soft: #1a1a00;
+  --v10-danger: #ff5f56;
+  --v10-danger-soft: #260000;
+  color-scheme: dark;
+}
 .app-v10.v10-theme-oscuro .v10-main, .app-v10.v10-theme-contraste .v10-main { color: var(--v10-text); }
 .app-v10.v10-theme-oscuro .v10-settings-card, .app-v10.v10-theme-oscuro .v10-preferences-view section,
 .app-v10.v10-theme-contraste .v10-settings-card, .app-v10.v10-theme-contraste .v10-preferences-view section { background: var(--v10-surface) !important; border-color: var(--v10-border) !important; }
@@ -212,3 +229,54 @@
 .v10-user-row button.danger { background: #c4442a; }
 .v10-loading-view { padding: 24px; text-align: center; color: #6b7266; }
 @media (max-width: 620px) { .v10-preference-grid { grid-template-columns: 1fr; } }
+
+/* Alto contraste: no depender de colores de la paleta clara para textos, controles o datos. */
+.app-v10.v10-theme-contraste :is(button, .v10-primary-action) {
+  background: #fff !important;
+  color: #000 !important;
+  border: 2px solid #fff !important;
+}
+.app-v10.v10-theme-contraste :is(button:hover, button:focus-visible, .v10-primary-action:hover) {
+  background: #ffff00 !important;
+  color: #000 !important;
+  border-color: #ffff00 !important;
+}
+.app-v10.v10-theme-contraste :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  background: #000 !important;
+  color: #fff !important;
+  border: 2px solid #fff !important;
+}
+.app-v10.v10-theme-contraste :is(input, textarea)::placeholder { color: #fff !important; opacity: .9; }
+.app-v10.v10-theme-contraste a { color: #00ffff !important; }
+.app-v10.v10-theme-contraste :is(th, td) { color: #fff !important; border-color: #fff !important; }
+.app-v10.v10-theme-contraste :is(.v10-badge, .v10-copy-link-btn) {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+.app-v10.v10-theme-contraste :is(.v10-desktop-nav, .v10-mobile-nav, .v10-mobile-more, .v10-overlay, .v10-modal-box, .v10-search) {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+.app-v10.v10-theme-contraste .v10-desktop-nav button,
+.app-v10.v10-theme-contraste .v10-mobile-nav button,
+.app-v10.v10-theme-contraste .v10-mobile-more button {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+.app-v10.v10-theme-contraste .v10-desktop-nav button.v10-active,
+.app-v10.v10-theme-contraste .v10-desktop-nav button:hover,
+.app-v10.v10-theme-contraste .v10-mobile-nav button[aria-current="page"] {
+  background: #ffff00 !important;
+  color: #000 !important;
+  border-color: #ffff00 !important;
+}
+.app-v10.v10-theme-contraste :is(.v10-view-heading h2, .v10-settings-card h3, .v10-preferences-view h3) { color: #ffff00 !important; }
+.app-v10.v10-theme-contraste :is(.v10-view-heading p, .v10-help, .v10-loading-view, .v10-search, .v10-search * , .v10-main) { color: #fff !important; }
+.app-v10.v10-theme-contraste svg text { fill: #fff !important; }
+.app-v10.v10-theme-contraste :is(svg line, svg path.recharts-rectangle, .recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line) { stroke: #fff !important; }
+.app-v10.v10-theme-contraste :is(button, input, select, textarea):focus-visible { outline-color: #ffff00 !important; }
+.app-v10.v10-theme-contraste :is(button, input, select, textarea):disabled { opacity: .65; }
+
