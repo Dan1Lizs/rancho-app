@@ -3844,7 +3844,7 @@ export default function App() {
         }
       >
         <p style={{ margin: 0, lineHeight: 1.55 }}>
-          Si consultas el historial, la sección de captura puede cambiar de lugar. Tus datos se guardarán como un borrador privado de este dispositivo y se podrán recuperar al regresar.
+          Si consultas el historial, la sección de captura puede cambiar de lugar. Tus datos se guardarán como un borrador privado de este dispositivo y se podrán recuperar al regresar a la sección correspondiente.
         </p>
       </ModalDialog>
       <ModalDialog
@@ -4844,8 +4844,12 @@ export default function App() {
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
                   <button type="button" onClick={() => {
                     const b = bodegaBorradorConsulta;
+                    const movOriginal = bodegaMovs.find(m => String(m.id) === String(b.movimientoId)) || null;
                     setFechaBodega(b.fecha || hoyISO());
                     fechaBodegaRef.current = b.fecha || hoyISO();
+                    setMovBodegaId(movOriginal?.id ?? b.movimientoId ?? null);
+                    movBodegaIdRef.current = movOriginal?.id ?? b.movimientoId ?? null;
+                    movBodegaOriginalRef.current = movOriginal ? snapshotBodega(movOriginal) : null;
                     setMovBodega(b.movBodega || { comprado: "", vendGranja: "", destruido: "", regalado: "" });
                     setRepartos(b.repartos || []);
                     setObsInv(b.obsInv || "");
