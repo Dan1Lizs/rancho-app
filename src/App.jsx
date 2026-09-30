@@ -22,7 +22,7 @@ import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
 import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
 import { baseDeRegistro, registroCambioDesdeBase } from "./concurrencia";
 import { resolverVistaSegura, vistasPermitidas } from "./permisos";
-import { DEFAULT_PREFERENCES, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
+import { DEFAULT_PREFERENCES, completarOrdenNavegacion, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
 import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAlertas } from "./alertasRevision";
 import "./v10.css";
@@ -362,7 +362,7 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
     const nomSub = { baches: "Baches producidos", nucleo: "Núcleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
     subdetalle = nomSub;
   } else if (vista === "pedidomp") {
-    const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo físico", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Pedido MP";
+    const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo físico", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Materia Prima";
     subdetalle = nomSub;
   } else if (vista === "formulas") {
     const nomSub = { recetas: `Fórmulas (${recActiva || "activas"})`, nueva: "Crear fórmula", catalogo: "Catálogo MP", todo: "Todo" }[subFormulas] || "Fórmulas";
@@ -467,7 +467,7 @@ function BarraSubmenu({ subsecciones, activo, onChange }) {
   );
 }
 
-export default function App() {
+export default function App({ onCerrarSesion }) {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(false);
   const [cargandoFondo, setCargandoFondo] = useState(false);
@@ -599,6 +599,7 @@ export default function App() {
   const [abonando, setAbonando] = useState(null);
   const [fAbono, setFAbono] = useState({ monto: "", fecha: hoyISO(), medio: "Transferencia", ref: "" });
   const [kardex, setKardex] = useState([]);
+  const [ajusteMPKardex, setAjusteMPKardex] = useState(null);
   const [esAdmin, setEsAdmin] = useState(false);
   const [miRol, setMiRol] = useState("cargando");
   const [usuariosRoles, setUsuariosRoles] = useState([]);
@@ -2511,7 +2512,7 @@ export default function App() {
     { id: "revision", nombre: "Revisión" },
     { id: "bodega", nombre: "Bodega" }, { id: "planta", nombre: "Planta" },
     { id: "pesaje", nombre: "Bienestar" }, { id: "insumos", nombre: "Insumos" },
-    { id: "lotes", nombre: "Lotes" }, { id: "pedidomp", nombre: "Pedido MP" },
+    { id: "lotes", nombre: "Lotes" }, { id: "pedidomp", nombre: "Materia Prima" },
     { id: "formulas", nombre: "Fórmulas" },
     { id: "cxp", nombre: "Por Pagar" }, { id: "historial", nombre: "Historial" },
     { id: "administracion", nombre: "Administración" }, { id: "preferencias", nombre: "Preferencias" },
@@ -2524,7 +2525,9 @@ export default function App() {
   ];
   const idsVistas = tabs.map(t => t.id);
   const idsPermitidos = vistasPermitidas(miRol, idsVistas);
-  const tabsVisibles = ordenarPorPreferencia(tabs.filter(t => idsPermitidos.includes(t.id)), preferencias.ordenNavegacion);
+  const tabsDisponibles = tabs.filter(t => idsPermitidos.includes(t.id));
+  const ordenNavegacion = completarOrdenNavegacion(tabsDisponibles, preferencias.ordenNavegacion);
+  const tabsVisibles = ordenarPorPreferencia(tabsDisponibles, ordenNavegacion);
   useEffect(() => {
     const segura = resolverVistaSegura(miRol, vista, idsVistas);
     if (segura !== vista) setVista(segura);
@@ -2724,6 +2727,29 @@ export default function App() {
     if (await escribir(K.kardex, nuevo)) { setKardex(nuevo); return true; }
     return false;
   };
+  const deltaKardex = (mov) => mov?.tipo === "salida" ? -Number(mov.kg || 0) : Number(mov?.kg || 0);
+  const conteoFisicoMPKg = (inv, presentacion = 1) => {
+    const tieneDato = valor => valor !== undefined && valor !== null && String(valor).trim() !== "" && Number.isFinite(Number(valor));
+    if (!inv || (!tieneDato(inv.sacos) && !tieneDato(inv.kg))) return null;
+    return +(Number(inv.sacos || 0) * Number(presentacion || 1) + Number(inv.kg || 0)).toFixed(2);
+  };
+  const abrirAjusteMPKardex = ({ codigo, nombre, teorico, fisico, diferencia }) => {
+    if (fisico == null || Math.abs(Number(diferencia || 0)) < 0.005) { avisar("✓ Este producto ya está conciliado con el conteo físico"); return; }
+    setAjusteMPKardex({ codigo, nombre, teorico, fisico, diferencia: +Number(diferencia).toFixed(2), fecha: hoyISO(), responsable: mpResponsable || completadoPor || nombreResponsableSesion(window.__usuarioEmail, nombresUsuarios, window.__usuarioNombre) || "", motivo: "Conciliación con conteo físico" });
+  };
+  const guardarAjusteMPKardex = async () => {
+    if (!ajusteMPKardex) return;
+    const diferencia = Number(ajusteMPKardex.diferencia);
+    if (!Number.isFinite(diferencia) || Math.abs(diferencia) < 0.005) { avisar("✓ No hay diferencia que ajustar"); setAjusteMPKardex(null); return; }
+    if (!String(ajusteMPKardex.responsable || "").trim()) { avisar("⚠ Indica quién realizó el ajuste físico"); return; }
+    if (!String(ajusteMPKardex.motivo || "").trim()) { avisar("⚠ Indica el motivo del ajuste"); return; }
+    setGuardando(true);
+    const evento = { id: Date.now() + Math.random(), fecha: String(ajusteMPKardex.fecha || hoyISO()).split("-").reverse().join("/"), mp: ajusteMPKardex.codigo, tipo: "ajuste", kg: +diferencia.toFixed(2), ref: "Ajuste por conteo físico", detalle: ajusteMPKardex.motivo.trim(), responsable: ajusteMPKardex.responsable.trim(), por: window.__usuarioEmail || ajusteMPKardex.responsable.trim(), registradoEl: new Date().toISOString() };
+    const ok = await registrarKardex([evento]);
+    setGuardando(false);
+    if (ok) { setAjusteMPKardex(null); avisar(`✓ Ajuste físico de ${ajusteMPKardex.nombre} guardado: ${diferencia > 0 ? "+" : ""}${diferencia.toFixed(2)} kg`); }
+    else avisar("⚠ No se pudo guardar el ajuste físico");
+  };
   const BotonGuardaMini = () => (
     <button onClick={() => setRevisionGuardado(loteActivo?.id || "todos")} disabled={guardando} title={`Revisar este punto (Gallinero ${loteActivo?.galpon || ""})`}
       style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
@@ -2747,7 +2773,7 @@ export default function App() {
     else avisar("⚠ No se pudo guardar");
   };
   const retiroSugerido = (nombre) => favoritos.find(f2 => f2.tipo === "med" && f2.nombre === nombre)?.retiro || "";
-  const kardexSaldo = (codigo) => kardex.reduce((a, m) => a + (m.mp === codigo ? (m.tipo === "salida" ? -1 : 1) * Number(m.kg || 0) : 0), 0);
+  const kardexSaldo = (codigo) => kardex.reduce((a, m) => a + (m.mp === codigo ? deltaKardex(m) : 0), 0);
 
   const guardarCxp = async (delta) => {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — espera unos segundos e intenta de nuevo"); return false; }
@@ -3772,13 +3798,7 @@ export default function App() {
     avisar(`✓ ${nuevosTiq.length} tiquete(s) insertado(s) desde Excel`);
   };
 
-  const tabsMovil = [...tabsVisibles].sort((a, b) => {
-    const ia = preferencias.favoritos.indexOf(a.id); const ib = preferencias.favoritos.indexOf(b.id);
-    if (ia >= 0 && ib >= 0) return ia - ib;
-    if (ia >= 0) return -1;
-    if (ib >= 0) return 1;
-    return 0;
-  });
+  const tabsMovil = tabsVisibles;
 
   
   return (
@@ -3857,7 +3877,7 @@ export default function App() {
             <span>{t.nombre}</span>
             {badgePorTab[t.id] && <span className={`v10-badge v10-badge-${badgePorTab[t.id].tipo}`}>{badgePorTab[t.id].texto}</span>}
           </button>
-        ))}</div>)}
+        ))}{g.ids.includes("administracion") && onCerrarSesion && <button type="button" onClick={onCerrarSesion} title="Cerrar la sesión actual" style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", color: C.alerta, background: "transparent", border: `1px solid ${C.borde}`, marginTop: 4 }}>Cerrar sesión <span>↪</span></button>}</div>)}
         <button className="v10-menu-search" onClick={() => setBuscadorAbierto(true)}>⌕ Buscar · Ctrl K</button>
       </nav>
       {buscadorAbierto && <div className="v10-overlay" role="presentation" onClick={() => setBuscadorAbierto(false)}><div className="v10-search" role="dialog" aria-modal="true" aria-label="Buscar en la granja" onClick={e => e.stopPropagation()}>
@@ -3920,6 +3940,38 @@ export default function App() {
         <p style={{ margin: 0, lineHeight: 1.55 }}>
           Si consultas el historial, la sección de captura puede cambiar de lugar. Tus datos se guardarán como un borrador privado de este dispositivo y se podrán recuperar al regresar a la sección correspondiente.
         </p>
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!ajusteMPKardex}
+        titulo="Ajuste por conteo físico"
+        subtitulo={ajusteMPKardex ? `${ajusteMPKardex.nombre} · concilia el kardex con el conteo guardado` : ""}
+        onClose={() => setAjusteMPKardex(null)}
+        ancho={500}
+        tono="alerta"
+        pie={
+          <>
+            <button type="button" disabled={guardando} onClick={() => setAjusteMPKardex(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Cancelar</button>
+            <button type="button" disabled={guardando} onClick={guardarAjusteMPKardex} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>{guardando ? "Guardando…" : "Guardar ajuste físico"}</button>
+          </>
+        }
+      >
+        {ajusteMPKardex && <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ padding: 12, borderRadius: 10, background: C.alertaSuave, color: C.texto, fontSize: 13, lineHeight: 1.5 }}>
+            Saldo teórico actual: <b>{Number(ajusteMPKardex.teorico).toFixed(2)} kg</b><br />
+            Conteo físico guardado: <b>{Number(ajusteMPKardex.fisico).toFixed(2)} kg</b><br />
+            Diferencia que se registrará: <b>{Number(ajusteMPKardex.diferencia) > 0 ? "+" : ""}{Number(ajusteMPKardex.diferencia).toFixed(2)} kg</b>
+          </div>
+          <label style={{ fontSize: 12.5, fontWeight: 600 }}>Fecha del ajuste
+            <input type="date" value={ajusteMPKardex.fecha} onChange={e => setAjusteMPKardex(v => ({ ...v, fecha: e.target.value }))} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+          </label>
+          <label style={{ fontSize: 12.5, fontWeight: 600 }}>Responsable del conteo
+            <input type="text" value={ajusteMPKardex.responsable} onChange={e => setAjusteMPKardex(v => ({ ...v, responsable: e.target.value }))} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+          </label>
+          <label style={{ fontSize: 12.5, fontWeight: 600 }}>Motivo del ajuste
+            <input type="text" value={ajusteMPKardex.motivo} onChange={e => setAjusteMPKardex(v => ({ ...v, motivo: e.target.value }))} placeholder="ej. Rebaja no registrada / diferencia de conteo" style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+          </label>
+          <div style={{ fontSize: 11.5, color: C.textoSuave }}>El ajuste no borra rebajas, facturas ni el conteo físico. Se agrega como una línea auditada del kardex y la diferencia debería quedar en cero.</div>
+        </div>}
       </ModalDialog>
       <ModalDialog
         abierto={!!mpLimpiarPendiente}
@@ -4224,8 +4276,8 @@ export default function App() {
         {vista === "inicio" && <>
           <Seccion titulo={`Hoy · ${hoyISO()}`} sub="Lo que necesita atención antes de cerrar el día">
             <div className="v10-home-grid">
-              {preferencias.favoritos.filter(id => idsPermitidos.includes(id)).slice(0, 6).map(id => {
-                const t = tabs.find(x => x.id === id); if (!t) return null;
+              {tabsVisibles.filter(t => preferencias.favoritos.includes(t.id)).slice(0, 6).map(t => {
+                const id = t.id;
                 const detalle = id === "captura" ? `${activos.filter(l => registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length}/${activos.length} gallineros guardados` : id === "revision" ? `${hallazgosOperacion.length} asuntos por revisar` : ({ reporte: "Indicadores y reportes", bodega: "Movimientos y cierre del día", pesaje: "Pesajes y actividades", historial: "Consulta y auditoría", planta: "Producción y movimientos", insumos: "Existencias y consumos" })[id] || "Abrir módulo";
                 return <button key={id} onClick={() => irA(id)}><b>{t.nombre}</b><span>{detalle}</span></button>;
               })}
@@ -5525,42 +5577,45 @@ export default function App() {
 
             {(subPedidoMP === "kardex" || subPedidoMP === "todo") && (
               <Seccion titulo="📦 Kardex de materias primas" sub="Perpetuo: entradas por facturas − salidas por baches y núcleo = saldo teórico, conciliado contra tu conteo físico">
-              {kardex.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Aún sin movimientos — se llena solo con las facturas (PDF con líneas) y la producción registrada.</div>}
-              {kardex.length > 0 && (() => {
-                const codigos = [...new Set(kardex.map(m2 => m2.mp))];
+              {kardex.length === 0 && Object.keys(mpInvUltimo).length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Aún sin movimientos - se llena solo con las facturas (PDF con líneas) y la producción registrada.</div>}
+              {(kardex.length > 0 || Object.keys(mpInvUltimo).length > 0) && (() => {
+                const codigos = [...new Set([...kardex.map(m2 => m2.mp), ...Object.keys(mpInvUltimo)])].filter(Boolean);
                 return (
                   <>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 520 }}>
                         <thead><tr style={{ color: C.textoSuave, fontSize: 11, textAlign: "right" }}>
                           <th style={{ textAlign: "left", padding: "5px 4px" }}>Materia prima</th>
-                          <th style={{ padding: "5px 4px" }}>Entradas</th><th style={{ padding: "5px 4px" }}>Salidas</th>
-                          <th style={{ padding: "5px 4px" }}>Saldo kardex</th><th style={{ padding: "5px 4px" }}>Conteo físico</th><th style={{ padding: "5px 4px" }}>Diferencia</th>
+                          <th style={{ padding: "5px 4px" }}>Entradas</th><th style={{ padding: "5px 4px" }}>Salidas / rebajas</th><th style={{ padding: "5px 4px" }}>Ajustes físicos</th>
+                          <th style={{ padding: "5px 4px" }}>Saldo conciliado</th><th style={{ padding: "5px 4px" }}>Conteo físico</th><th style={{ padding: "5px 4px" }}>Diferencia</th><th style={{ padding: "5px 4px" }} />
                         </tr></thead>
                         <tbody>
                           {codigos.map(c2 => {
                             const mp = mpCat.find(m2 => m2.c === c2) || { n: c2 };
-                            const ent = kardex.filter(m2 => m2.mp === c2 && m2.tipo !== "salida").reduce((a, m2) => a + Number(m2.kg || 0), 0);
+                            const ent = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "entrada").reduce((a, m2) => a + Number(m2.kg || 0), 0);
                             const sal = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "salida").reduce((a, m2) => a + Number(m2.kg || 0), 0);
-                            const teorico = ent - sal;
+                            const ajustes = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "ajuste").reduce((a, m2) => a + Number(m2.kg || 0), 0);
+                            const teorico = ent - sal + ajustes;
                             const invF = mpInvUltimo[c2];
-                            const fisico = invF && (invF.sacos || invF.kg) ? Number(invF.sacos || 0) * (mp.pres || 1) + Number(invF.kg || 0) : null;
+                            const fisico = conteoFisicoMPKg(invF, mp.pres || 1);
                             const dif = fisico != null ? fisico - teorico : null;
                             return (
                               <tr key={c2} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
                                 <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>{mp.n}</td>
                                 <td style={{ padding: "8px 4px", color: C.verde }}>{ent.toFixed(1)}</td>
                                 <td style={{ padding: "8px 4px", color: C.alerta }}>{sal.toFixed(1)}</td>
+                                <td style={{ padding: "8px 4px", color: ajustes ? "#9A6605" : C.textoSuave }}>{ajustes ? `${ajustes > 0 ? "+" : ""}${ajustes.toFixed(1)}` : "-"}</td>
                                 <td style={{ padding: "8px 4px", fontWeight: 700 }}>{teorico.toFixed(1)} kg</td>
                                 <td style={{ padding: "8px 4px" }}>{fisico != null ? `${fisico.toFixed(1)} kg` : "—"}</td>
                                 <td style={{ padding: "8px 4px", fontWeight: 700, color: dif == null ? C.textoSuave : Math.abs(dif) <= Math.max(5, Math.abs(teorico) * 0.03) ? C.verde : "#9A6605" }}>{dif != null ? `${dif > 0 ? "+" : ""}${dif.toFixed(1)}` : "—"}</td>
+                                <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>{dif != null && Math.abs(dif) > 0.005 ? <button type="button" onClick={() => abrirAjusteMPKardex({ codigo: c2, nombre: mp.n, teorico, fisico, diferencia: dif })} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 700, borderRadius: 7, border: `1px solid ${C.verde}`, background: C.verdeSuave, color: C.verde, cursor: "pointer" }}>Ajustar conteo</button> : dif != null ? <span style={{ color: C.verde, fontSize: 11 }}>Conciliado</span> : null}</td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Diferencia = conteo físico − saldo kardex. Positiva: hay más de lo esperado (falta registrar facturas). Negativa: merma o consumo sin registrar.</div>
+                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Diferencia = conteo físico - saldo teórico. El ajuste físico agrega solo la diferencia, conserva las rebajas originales y deja responsable, fecha y motivo en el kardex.</div>
                     <details style={{ marginTop: 10 }}>
                       <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Últimos movimientos del kardex</summary>
                       {selectorHistorial("kardex")}
@@ -7647,8 +7702,8 @@ export default function App() {
             )}
           </>
         )}
-        {vista === "preferencias" && <Suspense fallback={<div className="v10-loading-view">Cargando preferencias…</div>}><PreferenciasView preferencias={preferencias} tabs={tabsVisibles} onGuardar={guardarMisPreferencias} guardando={guardandoPreferencias} /></Suspense>}
-        {vista === "administracion" && <Suspense fallback={<div className="v10-loading-view">Cargando administración…</div>}><AdministracionView nombresUsuarios={nombresUsuarios} onGuardarNombre={guardarNombreVisible} onBorrarNombre={borrarNombreVisible} avisar={avisar} /></Suspense>}
+        {vista === "preferencias" && <Suspense fallback={<div className="v10-loading-view">Cargando preferencias…</div>}><PreferenciasView preferencias={preferencias} tabs={tabsDisponibles} onGuardar={guardarMisPreferencias} guardando={guardandoPreferencias} /></Suspense>}
+        {vista === "administracion" && <Suspense fallback={<div className="v10-loading-view">Cargando administración…</div>}><AdministracionView nombresUsuarios={nombresUsuarios} onGuardarNombre={guardarNombreVisible} onBorrarNombre={borrarNombreVisible} avisar={avisar} onCerrarSesion={onCerrarSesion} /></Suspense>}
       </main>
       <nav className="v10-mobile-nav" aria-label="Navegación móvil" style={{
         position: "fixed",
@@ -7845,6 +7900,7 @@ export default function App() {
                       );
                     })}
                   </div>
+                  {g.ids.includes("administracion") && onCerrarSesion && <button type="button" onClick={onCerrarSesion} style={{ width: "100%", marginTop: 8, padding: "12px 14px", borderRadius: 12, border: `1px solid ${C.alerta}`, background: "transparent", color: C.alerta, fontWeight: 700, fontSize: 14, cursor: "pointer", textAlign: "left" }}>Cerrar sesión</button>}
                 </div>
               );
             })}
