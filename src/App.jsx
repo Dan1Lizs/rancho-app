@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 154230)
-Total output lines: 8005
-
 import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirDetallePlanta } from "./storage";
@@ -3108,7 +3105,2515 @@ export default function App() {
                   return (
                     <tr key={p2.id}>
                       <td style={celda}>{p2.dia}</td><td style={celda}>{p2.vacuna}</td><td style={celda}>{p2.cepa}</td>
-             …54230 tokens truncated…: 8 }}>
+                      <td style={celda}>{p2.via}</td><td style={celda}>{p2.proveedor}</td><td style={celda}>{ev.fecha}</td>
+                      <td style={{ ...celda, fontWeight: 600 }}>{ev.estado === "aplicada" ? `✓ ${ev.fechaAplicada || ""}` : ev.estado === "cubierta" ? "Levante (proveedor)" : ev.estado.toUpperCase()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+              <span>_______________________________<br />Responsable de granja</span>
+              <span>_______________________________<br />Dr. Heiner Hernández Ávila · C.M.V #666</span>
+            </div>
+          </>
+        )}
+
+        {printDoc.tipo === "cxp" && (() => {
+          const abiertas = cxp.facturas.filter(f => (Number(f.monto || 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0)) > 0.005)
+            .sort((a, b) => aDate(a.vence) - aDate(b.vence));
+          const saldoF = (f) => Number(f.monto || 0) + (cxp.notas || []).filter(n2 => n2.facturaId === f.id).reduce((a, n2) => a + (n2.tipo === "ND" ? 1 : -1) * Number(n2.monto || 0), 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0);
+          const col = (n) => "₡" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const buck = (f) => { const d = Math.round((hoyD - aDate(f.vence)) / 86400000); return d <= 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : 3; };
+          const porProv2 = {};
+          abiertas.forEach(f => { if (!porProv2[f.proveedor]) porProv2[f.proveedor] = [0, 0, 0, 0]; porProv2[f.proveedor][buck(f)] += saldoF(f); });
+          return (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Antigüedad de saldos (aging)</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                <thead><tr><th style={th}>Proveedor</th><th style={th}>Corriente</th><th style={th}>1–30 d</th><th style={th}>31–60 d</th><th style={th}>+60 d</th><th style={th}>Total</th></tr></thead>
+                <tbody>
+                  {Object.entries(porProv2).map(([pv, b]) => (
+                    <tr key={pv}>
+                      <td style={{ ...celda, fontWeight: 600 }}>{pv}</td>
+                      {[0, 1, 2, 3].map(i2 => <td key={i2} style={{ ...celda, textAlign: "right" }}>{b[i2] ? col(b[i2]) : "—"}</td>)}
+                      <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{col(b[0] + b[1] + b[2] + b[3])}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>TOTAL</td>
+                    {[0, 1, 2, 3].map(i2 => <td key={i2} style={{ ...celda, textAlign: "right", fontWeight: 700, borderTop: "2px solid #333" }}>{col(Object.values(porProv2).reduce((a, b) => a + b[i2], 0))}</td>)}
+                    <td style={{ ...celda, textAlign: "right", fontWeight: 700, borderTop: "2px solid #333" }}>{col(abiertas.reduce((a, f) => a + saldoF(f), 0))}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Detalle de facturas pendientes</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th style={th}>Proveedor</th><th style={th}>No.</th><th style={th}>Emisión</th><th style={th}>Vence</th><th style={th}>Categoría</th><th style={th}>Original</th><th style={th}>Saldo</th></tr></thead>
+                <tbody>
+                  {abiertas.map(f => (
+                    <tr key={f.id}>
+                      <td style={{ ...celda, fontWeight: 600 }}>{f.proveedor}</td>
+                      <td style={celda}>{f.numero || "s/n"}</td>
+                      <td style={celda}>{f.emision.slice(0, 5)}</td>
+                      <td style={{ ...celda, fontWeight: aDate(f.vence) < hoyD ? 700 : 400 }}>{f.vence.slice(0, 5)}{aDate(f.vence) < hoyD ? " ⚠" : ""}</td>
+                      <td style={celda}>{f.categoria}</td>
+                      <td style={{ ...celda, textAlign: "right" }}>{col(f.monto)}</td>
+                      <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{col(saldoF(f))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>_______________________________<br />Elaborado</span>
+                <span>_______________________________<br />Gerencia / Contabilidad</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {printDoc.tipo === "controldiario" && (() => {
+          const fSel2 = printDoc.fecha;
+          const regsDia = registros.filter(r => r.fecha === fSel2);
+          const medsDia = medicaciones.filter(m => m.fecha === fSel2);
+          const fumsDia = fumigaciones.filter(m => m.fecha === fSel2);
+          const notaDia2 = bitacora.find(b => b.fecha === fSel2);
+          return (
+            <>
+              {regsDia.length === 0 && <div style={{ fontSize: 13.5 }}>Sin registros guardados para el {fSel2}.</div>}
+              {regsDia.map((r, ri) => {
+                const l2 = lotes.find(x => x.id === r.lote);
+                if (!l2) return null;
+                const huevos = r.cartones * HXC;
+                const medsG = medsDia.filter(m => m.galpon === l2.galpon && m.tipo === "Medicamento");
+                const vitsG = medsDia.filter(m => m.galpon === l2.galpon && m.tipo === "Vitamina");
+                const fumsG = fumsDia.filter(m => m.galpon === l2.galpon);
+                const ch = r.chequeo || {};
+                const trabajosHechos = r.trabajos ? TRABAJOS.filter((_, i) => r.trabajos[i]) : [];
+                return (
+                  <div key={ri} style={{ marginBottom: 22, pageBreakInside: "avoid" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, background: "#eee", padding: "6px 10px", borderRadius: 6, marginBottom: 8 }}>
+                      GALLINERO {l2.galpon} · {l2.raza} · {semanasDe(l2.nac).toFixed(1)} sem · {l2.aves.toLocaleString()} aves {r.por ? ` · Capturó: ${mostrarNombre(r.por)}` : ""}
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 8 }}>
+                      <tbody>
+                        <tr>
+                          <td style={celda}><b>1. Producción:</b> {r.cartones} cartones = {huevos.toFixed(0)} huevos · {r.pesoKg} kg · Postura {l2.aves ? ((huevos / l2.aves) * 100).toFixed(1) : "—"}%</td>
+                          <td style={celda}><b>2. Quebrado:</b> {r.quebrados}</td>
+                        </tr>
+                        <tr>
+                          <td style={celda}><b>3. Mortalidad:</b> {r.muertas} ave(s){r.dx ? ` · Dx: ${r.dx}` : ""}</td>
+                          <td style={celda}><b>Saldo aves:</b> {l2.aves.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                          <td style={celda}><b>7. Alimento:</b> 6am {r.alimento6am || "—"} kg · 1pm {r.alimento1pm || "—"} kg · Total {f2Dec(r.alimentoKg)} kg (esperado {f2Dec(r.alimentoEsperadoKg)} kg)</td>
+                          <td style={celda}><b>Agua:</b> {r.aguaL ? `${r.aguaL} L` : "—"}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    {(fumsG.length > 0 || medsG.length > 0 || vitsG.length > 0) && (
+                      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 8 }}>
+                        <tbody>
+                          {fumsG.map((m, i) => <tr key={"f" + i}><td style={celda}><b>4. Fumigación:</b> {m.producto} · {m.dosis}{m.hora ? ` · ${m.hora}` : ""}</td></tr>)}
+                          {medsG.map((m, i) => <tr key={"m" + i}><td style={celda}><b>5. Medicamento:</b> {m.producto} · {m.dosis}{m.enfermedad ? ` · Dx: ${m.enfermedad}` : ""}{m.retiroDias > 0 ? ` · RETIRO ${m.retiroDias} días (hasta ${m.retiroHasta})` : ""}</td></tr>)}
+                          {vitsG.map((m, i) => <tr key={"v" + i}><td style={celda}><b>6. Vitamina:</b> {m.producto} · {m.dosis}</td></tr>)}
+                        </tbody>
+                      </table>
+                    )}
+                    {trabajosHechos.length > 0 && (
+                      <div style={{ fontSize: 11.5, marginBottom: 8 }}><b>8. Trabajos realizados:</b> {trabajosHechos.map(t => `☑ ${t}`).join(" · ")}</div>
+                    )}
+                    {r.chequeo && (
+                      <div style={{ fontSize: 11.5, marginBottom: 4 }}>
+                        <b>9. Chequeo sanitario:</b> {[
+                          ch.cascara && `Cáscara: ${ch.cascara}`, ch.cresta && `Cresta: ${ch.cresta}`,
+                          ch.consumoObs && `Consumo obs.: ${ch.consumoObs}`, ch.aguaObs && `Agua obs.: ${ch.aguaObs}`,
+                          ch.heces && `Heces: ${ch.heces}`, ch.respiratorio && `Respiratorio: ${ch.respiratorio}`,
+                          ch.secrecion && `Secreción: ${ch.secrecion}`, ch.comederos && `Comederos: ${ch.comederos}`,
+                          ch.ph && `pH: ${ch.ph}`, ch.cloro && `Cloro: ${ch.cloro} ppm`, ch.temp && `Temp: ${ch.temp}°C`,
+                          ch.humedad && `Humedad: ${ch.humedad}%`, ch.luz && `Luz: ${ch.luz} h`, ch.obs && `Obs: ${ch.obs}`,
+                        ].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {notaDia2 && <div style={{ fontSize: 12, marginBottom: 14 }}><b>Bitácora:</b> {notaDia2.texto} {notaDia2.por ? `(${mostrarNombre(notaDia2.por)})` : ""}</div>}
+              <div style={{ marginTop: 36, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>_______________________________<br />Encargado de granja</span>
+                <span>_______________________________<br />Supervisión / Gerencia</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {(printDoc.tipo === "bache" || printDoc.tipo === "nucleo") && (() => {
+          const f = recetas.formulas[printDoc.formula];
+          if (!f) return <div>Fórmula no encontrada.</div>;
+          const esc = (printDoc.tipo === "bache" ? Number(printDoc.kg || recetas.bacheKg) / recetas.bacheKg : Number(printDoc.baches || 1));
+          const items = Object.entries(f.items).map(([c, kg]) => {
+            const mp = mpCat.find(m => m.c === c) || { n: c, pres: 1 };
+            return { c, mp, kg: Number(kg || 0) * esc, bascula: basculaDe(c) };
+          }).filter(x => x.kg > 0);
+          const filaMP = (x, conQ) => {
+            const sacos = conQ && x.mp.pres > 1 ? Math.floor(x.kg / x.mp.pres) : 0;
+            const rem = conQ && x.mp.pres > 1 ? x.kg - sacos * x.mp.pres : x.kg;
+            return (
+              <tr key={x.c}>
+                <td style={{ ...celda, width: 26, fontSize: 15 }}>☐</td>
+                <td style={celda}>{x.mp.n}</td>
+                <td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{x.kg.toFixed(2)}</td>
+                {conQ && <td style={{ ...celda, textAlign: "right" }}>{x.mp.pres > 1 ? sacos : "—"}</td>}
+                {conQ && <td style={{ ...celda, textAlign: "right" }}>{x.mp.pres > 1 ? rem.toFixed(2) : "granel"}</td>}
+              </tr>
+            );
+          };
+          const cab = (conQ) => (
+            <tr><th style={th}>✓</th><th style={th}>Materia prima</th><th style={{ ...th, textAlign: "right" }}>Peso (kg)</th>
+              {conQ && <th style={{ ...th, textAlign: "right" }}>Sacos</th>}{conQ && <th style={{ ...th, textAlign: "right" }}>Kg remanentes</th>}</tr>
+          );
+          const kgNuc = items.filter(x => x.bascula === 4).reduce((a, x) => a + x.kg, 0);
+          const usaNucleoEnBache = f.uso === "Aves" && kgNuc > 0;
+          const total = items.reduce((a, x) => a + x.kg, 0);
+          return (
+            <>
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 12.5 }}>
+                <tbody>
+                  <tr><td style={celda}><b>Fórmula:</b> {printDoc.formula}</td><td style={celda}><b>No. de lote:</b> ______________</td></tr>
+                  <tr><td style={celda}><b>Fecha:</b> ______________</td><td style={celda}><b>Operador:</b> ______________</td></tr>
+                  <tr><td style={celda}><b>Hora inicio:</b> ______________</td><td style={celda}><b>Hora fin:</b> ______________</td></tr>
+                  <tr><td style={celda}><b>{printDoc.tipo === "bache" ? "Kg a producir" : "Para baches de concentrado"}:</b> {printDoc.tipo === "bache" ? `${(recetas.bacheKg * esc).toFixed(0)} kg` : `${esc} bache(s) → ${kgNuc.toFixed(2)} kg de núcleo`}</td><td style={celda}></td></tr>
+                </tbody>
+              </table>
+              {printDoc.tipo === "bache" ? (
+                <>
+                  {[1, 2, 3, ...(!usaNucleoEnBache ? [4] : [])].map(b => {
+                    const its = items.filter(x => x.bascula === b);
+                    if (!its.length) return null;
+                    return (
+                      <div key={b} style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{NOMBRE_BASCULA[b]}</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse" }}><thead>{cab(true)}</thead><tbody>{its.map(x => filaMP(x, true))}</tbody></table>
+                      </div>
+                    );
+                  })}
+                  {usaNucleoEnBache && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{NOMBRE_BASCULA[4]}</div>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>{cab(false)}</thead>
+                        <tbody>
+                          <tr><td style={{ ...celda, width: 26, fontSize: 15 }}>☐</td><td style={celda}><b>NÚCLEO {printDoc.formula.toUpperCase()}</b> (premezcla — ver hoja de núcleo)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{kgNuc.toFixed(2)}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, fontWeight: 700, padding: "8px 4px", borderTop: "2px solid #333" }}>
+                    <span>PESO TOTAL DE LA FÓRMULA</span><span>{total.toFixed(2)} kg</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 8 }}>
+                    <thead>{cab(false)}</thead>
+                    <tbody>{items.filter(x => x.bascula === 4).map(x => filaMP(x, false))}</tbody>
+                  </table>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, fontWeight: 700, padding: "8px 4px", borderTop: "2px solid #333" }}>
+                    <span>TOTAL NÚCLEO ({esc} bache(s))</span><span>{kgNuc.toFixed(2)} kg</span>
+                  </div>
+                </>
+              )}
+              <div style={{ marginTop: 36, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>_______________________________<br />Elaborado por</span>
+                <span>_______________________________<br />Supervisado por</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {printDoc.tipo === "reporte" && (() => {
+          const avesTot = activos.reduce((a, x) => a + x.aves, 0);
+          const colorNivel = { rojo: "#B3402A", amarillo: "#9A6605" };
+          const seccion = printDoc.seccion || "todo";
+          const incluye = (...ids) => seccion === "todo" || ids.includes(seccion);
+          const notasHoy = bitacora.filter(b => b.fecha === fHoy);
+          const filasComparativo = dHoy ? [
+            ["Producción", dHoy.cartones, dAyer?.cartones, dFechaCercana?.cartones, " cart"],
+            ["% Postura", dHoy.postura, dAyer?.postura, dFechaCercana?.postura, "%"],
+            ["Consumo", dHoy.consumo, dAyer?.consumo, dFechaCercana?.consumo, " g/ave"],
+            ["Conversión", dHoy.conv, dAyer?.conv, dFechaCercana?.conv, ""],
+            ["Mortalidad", dHoy.muertas, dAyer?.muertas, dFechaCercana?.muertas, " aves"],
+            ["% Quebrado", dHoy.pctQueb, dAyer?.pctQueb, dFechaCercana?.pctQueb, "%"],
+            ["Peso huevo", dHoy.pesoH, dAyer?.pesoH, dFechaCercana?.pesoH, " g"],
+          ] : [];
+          return (
+            <>
+              {!dHoy && <div style={{ fontSize: 13.5, marginBottom: 14 }}>Sin registro de producción para hoy — el reporte muestra el último estado disponible.</div>}
+              {incluye("resumen") && dHoy && (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Resumen del día ({fHoy}) — {avesTot.toLocaleString()} aves en {activos.length} gallineros</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                    <tbody>
+                      <tr><td style={celda}>% de postura granja</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.postura.toFixed(1)}%</td>
+                          <td style={celda}>Cartones producidos</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.cartones.toFixed(1)}</td></tr>
+                      <tr><td style={celda}>Consumo (g/ave)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.consumo.toFixed(0)}</td>
+                          <td style={celda}>Peso prom. huevo</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pesoH ? dHoy.pesoH.toFixed(1) + " g" : "—"}</td></tr>
+                      <tr><td style={celda}>% quebrado</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pctQueb.toFixed(1)}%</td>
+                          <td style={celda}>Mortalidad del día</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.muertas}</td></tr>
+                    </tbody>
+                  </table>
+                </>
+              )}
+              {incluye("comparativo") && dHoy && <>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Comparativo del día</div>
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                  <thead><tr><th style={th}>Indicador</th><th style={th}>{fHoy}</th><th style={th}>{fAyer || "Anterior"}</th><th style={th}>{fechaComparacion || "Comparación"}</th></tr></thead>
+                  <tbody>{filasComparativo.map(([nombre, actual, anterior, otra, unidad]) => <tr key={nombre}><td style={{ ...celda, fontWeight: 600 }}>{nombre}</td><td style={celda}>{f2Dec(actual)}{unidad}</td><td style={celda}>{anterior == null ? "—" : `${f2Dec(anterior)}${unidad}`}</td><td style={celda}>{otra == null ? "—" : `${f2Dec(otra)}${unidad}`}</td></tr>)}</tbody>
+                </table>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Postura vs genética por gallinero</div>
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}><thead><tr><th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta genética</th><th style={th}>Brecha</th></tr></thead><tbody>{activos.map(l2 => { const r = registros.find(x => x.fecha === fHoy && x.lote === l2.id); const postura = r && l2.aves ? (r.cartones * HXC / l2.aves) * 100 : null; const meta = metaPosturaLote(l2, fHoy); return <tr key={l2.id}><td style={celda}>G{l2.galpon} · {l2.raza}</td><td style={celda}>{postura == null ? "—" : `${f2Dec(postura)}%`}</td><td style={celda}>{meta == null ? "—" : `${f2Dec(meta)}%`}</td><td style={celda}>{postura == null || meta == null ? "—" : `${postura - meta > 0 ? "+" : ""}${f2Dec(postura - meta)} pts`}</td></tr>; })}</tbody></table>
+              </>}
+              {incluye("kpis") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>KPIs técnicos y semáforo por gallinero</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                <thead><tr><th style={th}>Gall.</th><th style={th}>Postura (vs tabla)</th><th style={th}>Consumo vs ración</th><th style={th}>Agua:alim</th><th style={th}>Mort. 7d</th><th style={th}>Peso vs tabla</th><th style={th}>Uniformidad</th></tr></thead>
+                <tbody>
+                  {activos.map(l2 => {
+                    const regsL = registros.filter(r => r.lote === l2.id).slice(0, 7);
+                    const rU = regsL[0];
+                    const post = rU && l2.aves ? ((rU.cartones * HXC) / l2.aves) * 100 : null;
+                    const metaPost = metaPosturaLote(l2, rU?.fecha);
+                    const dPost = post != null && metaPost != null ? post - metaPost : null;
+                    const gReal = rU && Number(rU.alimentoKg || 0) > 0 && l2.aves ? (rU.alimentoKg * 1000) / l2.aves : null;
+                    const dCons = gReal != null && l2.racionGAve > 0 ? ((gReal - l2.racionGAve) / l2.racionGAve) * 100 : null;
+                    const ratio = rU && Number(rU.aguaL || 0) > 0 && Number(rU.alimentoKg || 0) > 0 ? rU.aguaL / rU.alimentoKg : null;
+                    const m7 = regsL.reduce((a, r) => a + Number(r.muertas || 0), 0);
+                    const pM7 = l2.aves ? (m7 / l2.aves) * 100 : null;
+                    const pes = pesajes.find(p2 => p2.lote === l2.id);
+                    const stP = pes ? statsPesaje(pes) : null;
+                    const metaP = pes ? metaPesoLote(l2, pes.fecha, pes) : null;
+                    const dPeso = stP && metaP ? ((stP.prom - metaP) / metaP) * 100 : null;
+                    return (
+                      <tr key={l2.id}>
+                        <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
+                        <td style={celda}>{dPost != null ? `${post.toFixed(1)}% (${dPost > 0 ? "+" : ""}${dPost.toFixed(1)})` : "—"}</td>
+                        <td style={celda}>{dCons != null ? `${dCons > 0 ? "+" : ""}${dCons.toFixed(0)}%` : "—"}</td>
+                        <td style={celda}>{ratio != null ? ratio.toFixed(1) : "—"}</td>
+                        <td style={celda}>{pM7 != null ? `${pM7.toFixed(2)}%` : "—"}</td>
+                        <td style={celda}>{dPeso != null ? `${dPeso > 0 ? "+" : ""}${dPeso.toFixed(1)}%` : "—"}</td>
+                        <td style={celda}>{stP ? `${stP.unif.toFixed(0)}%` : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              </>}
+              {incluye("auditoria") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Auditoría de gestión ({auditoriaVisibles.length} hallazgo{auditoriaVisibles.length === 1 ? "" : "s"})</div>
+              {auditoriaVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 12 }}>✓ Sin hallazgos — tareas y controles al día.</div>}
+              {auditoriaVisibles.map((a, i) => (
+                <div key={"au" + i} style={{ fontSize: 12, padding: "5px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
+                  <b style={{ color: colorNivel[a.nivel] || "#333" }}>{a.nivel === "rojo" ? "🔴" : "🟡"}</b> {a.textoAjustado || a.texto}
+                  {a.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(a.ajuste.responsable)}: {a.ajuste.razon}]</span>}
+                </div>
+              ))}</>}
+              {incluye("decisiones") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Para decidir hoy ({decisionesVisibles.length} punto{decisionesVisibles.length === 1 ? "" : "s"})</div>
+              {decisionesVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 14 }}>✓ Sin alertas — operación dentro de parámetros.</div>}
+              {decisionesVisibles.map((d, i) => (
+                <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
+                  <b style={{ color: colorNivel[d.nivel] || "#333" }}>{d.nivel === "rojo" ? "🔴" : "🟡"}</b> {d.textoAjustado || d.texto}
+                  {d.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(d.ajuste.responsable)}: {d.ajuste.razon}]</span>}
+                </div>
+              ))}</>}
+              {incluye("bitacora") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Bitácora del día</div>{notasHoy.length ? notasHoy.map((n, i) => <div key={i} style={{ fontSize: 12.5, padding: "7px 0", borderBottom: "1px solid #ddd" }}>{n.texto}{n.por ? ` — ${mostrarNombre(n.por)}` : ""}</div>) : <div style={{ fontSize: 12.5 }}>Sin novedades registradas.</div>}</>}
+              {incluye("economia") && (() => {
+                const precioCarton = Number(costos._precioVenta || 0);
+                const registrosDia = ultDia ? registros.filter(r => r.fecha === ultDia) : [];
+                const cartones = registrosDia.reduce((a, r) => a + Number(r.cartones || 0), 0);
+                const costoAlimento = registrosDia.reduce((a, r) => { const lote = lotes.find(x => x.id === r.lote); return a + Number(r.alimentoKg || 0) * Number(costos[lote?.formula] || 0); }, 0);
+                const ingreso = precioCarton * cartones;
+                const margen = precioCarton > 0 && costoAlimento > 0 ? ingreso - costoAlimento : null;
+                return <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Economía — margen sobre alimento</div><table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr><td style={celda}>Cartones del día</td><td style={celda}>{f2Dec(cartones, "0")}</td></tr><tr><td style={celda}>Ingreso estimado</td><td style={celda}>{precioCarton > 0 ? colones(ingreso) : "Falta precio de venta"}</td></tr><tr><td style={celda}>Costo de alimento</td><td style={celda}>{costoAlimento > 0 ? colones(costoAlimento) : "Faltan costos por fórmula"}</td></tr><tr><td style={{ ...celda, fontWeight: 700 }}>Margen sobre alimento</td><td style={{ ...celda, fontWeight: 700 }}>{margen == null ? "—" : colones(margen)}</td></tr></tbody></table></>;
+              })()}
+              <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>_______________________________<br />Encargado de granja</span>
+                <span>_______________________________<br />Gerencia</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {printDoc.tipo === "bodega" && (() => {
+          const mov = movimientoBodegaParaReporte(bodegaMovs, printDoc.movimientoId);
+          const saldoPrevio = mov ? +(mov.saldoFinal - (mov.producido || 0) - (mov.comprado || 0) + (mov.rutaNeta || 0) + (mov.vendGranja || 0) + (mov.destruido || 0) + (mov.regalado || 0) - (mov.difAjuste || 0)).toFixed(1) : null;
+          const fila = (nombre, val, signo) => (val != null && val !== 0) || signo === "=" ? (
+            <tr><td style={celda}>{nombre} ({signo})</td><td style={{ ...celda, fontWeight: signo === "=" ? 700 : 600, textAlign: "right" }}>{Number(val).toFixed(1)}</td></tr>
+          ) : null;
+          return (
+            <>
+              {!mov && <div style={{ fontSize: 13.5 }}>Aún no hay movimientos de bodega guardados.</div>}
+              {mov && (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Movimiento del {mov.fecha} (en cartones)</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                    <tbody>
+                      {fila("Saldo inicial del día", saldoPrevio, "=")}
+                      {fila("Huevo producido", mov.producido, "+")}
+                      {fila("Huevo comprado", mov.comprado, "+")}
+                      {fila("Salida neta a ruta", mov.rutaNeta, "−")}
+                      {fila("Vendido en granja", mov.vendGranja, "−")}
+                      {fila("Destruido / quebrado", mov.destruido, "−")}
+                      {fila("Regalado", mov.regalado, "−")}
+                      {mov.ajusteConteo != null && <tr><td style={celda}>Ajuste por conteo físico</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{mov.ajusteConteo} ({mov.difAjuste > 0 ? "+" : ""}{mov.difAjuste})</td></tr>}
+                      <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{f2Dec(mov.saldoFinal)}</td></tr>
+                    </tbody>
+                  </table>
+                  {mov.repartos?.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Detalle por repartidor</div>
+                      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                        <thead><tr><th style={th}>Repartidor</th><th style={th}>Salida</th><th style={th}>Dev. bueno</th><th style={th}>Dev. malo</th><th style={th}>Neto</th></tr></thead>
+                        <tbody>
+                          {mov.repartos.map((r, i) => (
+                            <tr key={i}>
+                              <td style={{ ...celda, fontWeight: 600 }}>{r.nombre}</td>
+                              <td style={celda}>{Number(r.salida || 0)}</td>
+                              <td style={celda}>{Number(r.devBueno || 0)}</td>
+                              <td style={celda}>{Number(r.devMalo || 0)}</td>
+                              <td style={{ ...celda, fontWeight: 700 }}>{(Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0)).toFixed(1)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
+                  {mov.obs && <div style={{ fontSize: 12.5, marginBottom: 14 }}><b>Observaciones:</b> {mov.obs}</div>}
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Movimientos hasta esta fecha</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead><tr><th style={th}>Fecha</th><th style={th}>Producido</th><th style={th}>Ruta neta</th><th style={th}>Saldo final</th></tr></thead>
+                    <tbody>
+                      {bodegaMovs.filter(m2 => fechaHistorialISO(m2.fecha) <= fechaHistorialISO(mov.fecha)).slice(0, 7).map((m2, i) => (
+                        <tr key={i}>
+                          <td style={celda}>{m2.fecha}</td>
+                          <td style={celda}>{m2.producido ?? "—"}</td>
+                          <td style={celda}>{m2.rutaNeta ?? "—"}</td>
+                          <td style={{ ...celda, fontWeight: 600 }}>{f2Dec(m2.saldoFinal)}{m2.ajusteConteo != null ? " *" : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: 10.5, color: "#555", marginTop: 4 }}>* día con ajuste por conteo físico</div>
+                </>
+              )}
+              <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>_______________________________<br />Responsable de bodega</span>
+                <span>_______________________________<br />Gerencia</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {printDoc.tipo === "lotes" && (() => {
+          const cerrados = lotes.filter(x => x.estado === "cerrado");
+          return (
+            <>
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 18 }}>
+                <thead><tr>
+                  <th style={th}>Gallinero</th><th style={th}>Lote</th><th style={th}>Genética</th><th style={th}>Nacimiento</th>
+                  <th style={th}>Edad</th><th style={th}>Aves vivas</th><th style={th}>Proveedor pollonas</th>
+                </tr></thead>
+                <tbody>
+                  {activos.map(l2 => (
+                    <tr key={l2.id}>
+                      <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
+                      <td style={celda}>{l2.lote || "—"}</td>
+                      <td style={celda}>{l2.raza}</td>
+                      <td style={celda}>{l2.nac.split("-").reverse().join("/")}</td>
+                      <td style={celda}>{semanasDe(l2.nac).toFixed(1)} sem</td>
+                      <td style={{ ...celda, fontWeight: 700 }}>{l2.aves.toLocaleString()}</td>
+                      <td style={celda}>{l2.proveedor || "—"}</td>
+                    </tr>
+                  ))}
+                  <tr><td style={{ ...celda, fontWeight: 700 }} colSpan={5}>TOTAL</td><td style={{ ...celda, fontWeight: 700 }}>{activos.reduce((a, x) => a + x.aves, 0).toLocaleString()}</td><td style={celda}></td></tr>
+                </tbody>
+              </table>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Desempeño</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr>
+                  <th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta tabla</th><th style={th}>Fórmula</th>
+                  <th style={th}>Ración</th><th style={th}>Consumo real</th><th style={th}>Mort. día</th><th style={th}>Mort. 7d</th><th style={th}>Mort. acum.</th>
+                </tr></thead>
+                <tbody>
+                  {activos.map(l2 => {
+                    const regsL = registros.filter(r => r.lote === l2.id).slice(0, 30);
+                    const ult = regsL[0];
+                    const post = ult && l2.aves ? ((ult.cartones * HXC) / l2.aves) * 100 : null;
+                    const gAveReal = ult && Number(ult.alimentoKg || 0) > 0 && l2.aves ? (Number(ult.alimentoKg) * 1000) / l2.aves : null;
+                    const mDia = ult ? Number(ult.muertas || 0) : null;
+                    const mSem = regsL.slice(0, 7).reduce((a, r) => a + Number(r.muertas || 0), 0);
+                    const mortPct2 = ((l2.mortAcum / (l2.avesIniciales || 1)) * 100).toFixed(1);
+                    return (
+                      <tr key={l2.id}>
+                        <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
+                        <td style={{ ...celda, fontWeight: 600 }}>{post != null ? `${post.toFixed(1)}%` : "—"}</td>
+                        <td style={celda}>{metaPosturaLote(l2, ult?.fecha) != null ? `${metaPosturaLote(l2, ult?.fecha).toFixed(1)}%` : "—"}</td>
+                        <td style={celda}>{l2.formula || "—"}</td>
+                        <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "—"}</td>
+                        <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "—"}</td>
+                        <td style={celda}>{mDia != null && l2.aves ? `${mDia} (${((mDia / l2.aves) * 100).toFixed(2)}%)` : "—"}</td>
+                        <td style={celda}>{l2.aves ? `${mSem} (${((mSem / l2.aves) * 100).toFixed(2)}%)` : "—"}</td>
+                        <td style={celda}>{l2.mortAcum} ({mortPct2}%)</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {cerrados.length > 0 && (
+                <div style={{ fontSize: 11.5, color: "#555", marginTop: 12 }}>
+                  Lotes cerrados: {cerrados.map(c2 => `G${c2.galpon} ${c2.lote || ""} (${c2.raza}, cerrado ${c2.cerradoFecha || "—"})`).join(" · ")}
+                </div>
+              )}
+              <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>_______________________________<br />Encargado de granja</span>
+                <span>_______________________________<br />Gerencia</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {printDoc.tipo === "pesajes" && (() => {
+          const filasP = activos.map(l2 => {
+            const delLote = pesajes.filter(p2 => p2.lote === l2.id);
+            const ult = delLote[0]; const ant = delLote[1];
+            if (!ult) return null;
+            const st = statsPesaje(ult);
+            const stAnt = ant ? statsPesaje(ant) : null;
+            const meta = metaPesoLote(l2, ult.fecha, ult);
+            const rReal = registros.find(r => r.lote === l2.id && Number(r.alimentoKg || 0) > 0);
+            const gAveReal = rReal && l2.aves ? (Number(rReal.alimentoKg) * 1000) / l2.aves : null;
+            return { l2, ult, ant, st, stAnt, meta, gAveReal };
+          }).filter(Boolean);
+          return (
+            <>
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 18 }}>
+                <thead><tr>
+                  <th style={th}>Gallinero</th><th style={th}>Genética / Edad</th><th style={th}>Fecha (n aves)</th>
+                  <th style={th}>Promedio</th><th style={th}>Meta tabla</th><th style={th}>Brecha</th>
+                  <th style={th}>Uniformidad</th><th style={th}>CV</th><th style={th}>Vs pesaje anterior</th>
+                </tr></thead>
+                <tbody>
+                  {filasP.map(({ l2, ult, ant, st, stAnt, meta }) => (
+                    <tr key={l2.id}>
+                      <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
+                      <td style={celda}>{l2.raza} · {semanasDe(l2.nac).toFixed(1)} sem</td>
+                      <td style={celda}>{ult.fecha} ({ult.pesos.length})</td>
+                      <td style={{ ...celda, fontWeight: 700 }}>{st.prom.toFixed(0)} g</td>
+                      <td style={celda}>{meta ? `${meta} g` : "—"}</td>
+                      <td style={{ ...celda, fontWeight: 600 }}>{meta ? `${(st.prom - meta) >= 0 ? "+" : ""}${(st.prom - meta).toFixed(0)} g (${(((st.prom - meta) / meta) * 100).toFixed(1)}%)` : "—"}</td>
+                      <td style={celda}>{st.unif.toFixed(1)}% <span style={{ fontSize: 10.5 }}>(meta &gt;85%)</span></td>
+                      <td style={celda}>{st.cv.toFixed(1)}%</td>
+                      <td style={celda}>{ant ? `${stAnt.prom.toFixed(0)} g (${ant.fecha.slice(0, 5)}) → ${(st.prom - stAnt.prom) >= 0 ? "+" : ""}${(st.prom - stAnt.prom).toFixed(0)} g` : "primer pesaje"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Contexto de alimentación</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th style={th}>Gallinero</th><th style={th}>Aves vivas</th><th style={th}>Fórmula</th><th style={th}>Ración definida</th><th style={th}>Consumo real último día</th></tr></thead>
+                <tbody>
+                  {filasP.map(({ l2, gAveReal }) => (
+                    <tr key={l2.id}>
+                      <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
+                      <td style={celda}>{l2.aves.toLocaleString()}</td>
+                      <td style={celda}>{l2.formula || "—"}</td>
+                      <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "—"}</td>
+                      <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12, gap: 8, flexWrap: "wrap" }}>
+                <span>____________________________<br />Encargado de granja</span>
+                <span>____________________________<br />Dr. Heiner Hernández Ávila<br />C.M.V #666</span>
+                <span>____________________________<br />Nutricionista</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {printDoc.tipo === "medidas" && l && (() => {
+          const reg = registros.find(r => r.lote === l.id) || {};
+          const ch = reg.chequeo || {};
+          const huevos = (reg.cartones || 0) * 30;
+          const pesoHuevo = huevos > 0 && reg.pesoKg > 0 ? (reg.pesoKg / huevos) * 1000 : null;
+          const gAve = l.aves > 0 && reg.alimentoKg > 0 ? (reg.alimentoKg * 1000) / l.aves : null;
+          const mlAve = l.aves > 0 && reg.aguaL > 0 ? (reg.aguaL * 1000) / l.aves : null;
+          const pesUlt = pesajes.find(p2 => p2.lote === l.id);
+          const promP = pesUlt ? pesUlt.pesos.reduce((a, b) => a + b, 0) / pesUlt.pesos.length : null;
+          const unif = pesUlt && promP ? (pesUlt.pesos.filter(x => Math.abs(x - promP) <= 0.1 * promP).length / pesUlt.pesos.length) * 100 : null;
+          const filas = [
+            ["Edad del lote (semanas)", semanasDe(l.nac).toFixed(1), ""],
+            ["Genética", l.raza, ""],
+            ["Aves vivas", l.aves.toLocaleString(), ""],
+            ["Mortalidad del día", reg.muertas ?? "—", "0–2 aves/1000"],
+            ["% de postura", huevos > 0 ? `${((huevos / l.aves) * 100).toFixed(1)}%` : "—", metaPosturaLote(l, reg.fecha) != null ? `${metaPosturaLote(l, reg.fecha).toFixed(1)}% (tabla)` : "—"],
+            ["Huevos buenos", huevos > 0 ? (huevos - (reg.quebrados || 0)).toFixed(0) : "—", ""],
+            ["Huevos quebrados", reg.quebrados ?? "—", "<3%"],
+            ["Peso promedio del huevo (g)", pesoHuevo ? pesoHuevo.toFixed(1) : "—", "Según edad"],
+            ["Consumo alimento (g/ave/día)", gAve ? gAve.toFixed(0) : "—", l.racionGAve ? `${l.racionGAve} g (ración)` : "Según tabla"],
+            ["Consumo total alimento (kg)", reg.alimentoKg ?? "—", ""],
+            ["Consumo de agua (ml/ave/día)", mlAve ? mlAve.toFixed(0) : "—", gAve ? `${(gAve * 1.8).toFixed(0)}–${(gAve * 2.2).toFixed(0)} (1.8–2.2× alimento)` : "1.8–2.2× alimento"],
+            ["Peso corporal promedio (g)", promP ? promP.toFixed(0) : "—", pesUlt && metaPesoLote(l, pesUlt.fecha, pesUlt) ? `${metaPesoLote(l, pesUlt.fecha, pesUlt).toFixed(0)} g` : "—"],
+            ["Uniformidad del lote (%)", unif ? unif.toFixed(1) : "—", ">85%"],
+            ["Calidad de cáscara", ch.cascara || "—", "Buena"],
+            ["Color de cresta", ch.cresta || "—", "Rojo normal o rojo intenso"],
+            ["Consumo alimento observado", ch.consumoObs || "—", "Normal"],
+            ["Consumo agua observado", ch.aguaObs || "—", "Normal"],
+            ["Consistencia de heces", ch.heces || "—", "Normal"],
+            ["Sonidos respiratorios", ch.respiratorio || "—", "No"],
+            ["Secreción nasal", ch.secrecion || "—", "No"],
+            ["Uniformidad de comederos", ch.comederos || "—", "Buena"],
+            ["pH del agua", ch.ph || "—", "6.0–7.5"],
+            ["Cloro (ppm)", ch.cloro || "—", ""],
+            ["Temperatura del galpón (°C)", ch.temp || "—", "27–29"],
+            ["Humedad relativa (%)", ch.humedad || "—", "50–70"],
+            ["Horas de luz", ch.luz || "—", "16 h"],
+          ];
+          return (
+            <>
+              <div style={{ fontSize: 12.5, marginBottom: 10 }}>Fecha del registro: {reg.fecha || hoyStr()} · Aves: {l.aves.toLocaleString()} · Nacimiento: {l.nac.split("-").reverse().join("/")}</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th style={th}>KPI</th><th style={th}>Valor</th><th style={th}>Meta</th></tr></thead>
+                <tbody>
+                  {filas.map(([k, v, m], i) => (
+                    <tr key={i}><td style={celda}>{k}</td><td style={{ ...celda, fontWeight: 600 }}>{v}</td><td style={celda}>{m}</td></tr>
+                  ))}
+                  {ch.obs && <tr><td style={celda}>Observaciones</td><td style={celda} colSpan={2}>{ch.obs}</td></tr>}
+                </tbody>
+              </table>
+              <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>_______________________________<br />Encargado de granja</span>
+                <span>_______________________________<br />Dr. Heiner Hernández Ávila · C.M.V #666</span>
+              </div>
+            </>
+          );
+        })()}
+
+        {printDoc.tipo === "enfermedades" && (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={th}>Fecha</th><th style={th}>Gallinero</th><th style={th}>Enfermedad</th><th style={th}>Tratamiento</th><th style={th}>Estado</th></tr></thead>
+            <tbody>
+              {enfermedades.map((e2, i) => {
+                const le = lotes.find(x => x.id === e2.lote);
+                return (
+                  <tr key={i}>
+                    <td style={celda}>{e2.fecha}</td><td style={celda}>G{le?.galpon ?? "?"}</td>
+                    <td style={celda}>{e2.enfermedad}</td><td style={celda}>{e2.tratamiento}</td>
+                    <td style={celda}>{e2.estado === "Recuperado" ? `Recuperado ${e2.fechaAlta || ""}` : e2.estado}</td>
+                  </tr>
+                );
+              })}
+              {enfermedades.length === 0 && <tr><td style={celda} colSpan={5}>Sin registros.</td></tr>}
+            </tbody>
+          </table>
+        )}
+
+        {printDoc.tipo === "necropsias" && (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={th}>Fecha</th><th style={th}>Gallinero</th><th style={th}>Tipo</th><th style={th}>Laboratorio</th><th style={th}>Hallazgos</th></tr></thead>
+            <tbody>
+              {necropsias.map((n2, i) => {
+                const ln = lotes.find(x => x.id === n2.lote);
+                return (
+                  <tr key={i}>
+                    <td style={celda}>{n2.fecha}</td><td style={celda}>G{ln?.galpon ?? "?"}</td>
+                    <td style={celda}>{n2.tipo}</td><td style={celda}>{n2.laboratorio}</td>
+                    <td style={celda}>{n2.hallazgos}{n2.numFotos ? ` (${n2.numFotos} foto(s) en la app)` : ""}</td>
+                  </tr>
+                );
+              })}
+              {necropsias.length === 0 && <tr><td style={celda} colSpan={5}>Sin registros.</td></tr>}
+            </tbody>
+          </table>
+        )}
+      </div>
+      </div>
+    );
+  }
+
+  const cap = capturas[galponActivo] || capturaVacia();
+  const setCap = (cambios) => {
+    const clave = `${fechaCaptura}|${galponActivo}`;
+    if (!Object.prototype.hasOwnProperty.call(basesEdicionRef.current, clave)) {
+      const fecha = fechaCaptura.split("-").reverse().join("/");
+      basesEdicionRef.current[clave] = baseDeRegistro(registros, fecha, galponActivo);
+    }
+    suciosRef.current[galponActivo] = true;
+    setCapturas(prev => ({ ...prev, [galponActivo]: { ...(prev[galponActivo] || capturaVacia()), ...cambios } }));
+  };
+  const tGal = totalesGalpon(cap);
+  const loteActivo = lotes.find(l => l.id === galponActivo);
+  const tiquetesCompartidos = tiquetesDelDia(capturas, registros, fechaCaptura.split("-").reverse().join("/"), Object.keys(suciosRef.current));
+
+  // Aplicar tiquetes pegados desde Excel (Punto 22)
+  const aplicarTiquetesPegados = (nuevosTiq, agregar) => {
+    const tsActuales = agregar ? (cap.tiquetes || []).filter(t => t.num || t.cartones || t.peso) : [];
+    const tsFinales = [...tsActuales, ...nuevosTiq];
+    // Asegurar que siempre haya al menos 3 filas
+    while (tsFinales.length < 3) tsFinales.push({ num: "", cartones: "", peso: "" });
+    setCap({ tiquetes: tsFinales });
+    setModalPegarTiquetes(false);
+    avisar(`✓ ${nuevosTiq.length} tiquete(s) insertado(s) desde Excel`);
+  };
+
+  const tabsMovil = [...tabsVisibles].sort((a, b) => {
+    const ia = preferencias.favoritos.indexOf(a.id); const ib = preferencias.favoritos.indexOf(b.id);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return 0;
+  });
+
+  
+  return (
+    <div className={`app-v10 v10-theme-${preferencias.tema} v10-density-${preferencias.densidad} v10-text-${preferencias.tamanoTexto}`} style={{ fontFamily: "'Inter', sans-serif", background: "var(--v10-bg, #F6F6F1)", minHeight: "100vh", color: "var(--v10-text, #1C1F1A)" }}>
+      <style>{fuentes}</style>
+            <ModalDialog
+        abierto={!!editarAjustePlanta}
+        titulo="Modificar ajuste por conteo físico"
+        subtitulo={`Ajuste de ${editarAjustePlanta?.categoria} (${editarAjustePlanta?.formula || "sin fórmula"})`}
+        onClose={() => setEditarAjustePlanta(null)}
+        ancho={500}
+        pie={
+          <>
+            <button type="button" onClick={() => setEditarAjustePlanta(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cancelar
+            </button>
+            <button type="button" disabled={guardando} onClick={guardarModificacionAjustePlanta} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              Guardar cambios
+            </button>
+          </>
+        }
+      >
+        {editarAjustePlanta && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Fecha del ajuste
+              <input type="date" value={editarAjustePlanta.fechaISO || (editarAjustePlanta.fecha ? editarAjustePlanta.fecha.split("/").reverse().join("-") : hoyISO())} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, fechaISO: e.target.value, fecha: e.target.value.split("-").reverse().join("/") })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Saldo real contado ({editarAjustePlanta.categoria === "Núcleo" ? "porciones" : "kg"})
+              <input type="text" inputMode="decimal" value={editarAjustePlanta.nuevoSaldoReal ?? ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, nuevoSaldoReal: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Responsable del conteo
+              <input type="text" value={editarAjustePlanta.responsable || ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, responsable: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Motivo de la modificación
+              <input type="text" placeholder="ej. Error en lectura de báscula / conteo físico corregido" value={editarAjustePlanta.motivoCambio || ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, motivoCambio: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            </label>
+          </div>
+        )}
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!editarDetallePlanta}
+        titulo="Corregir detalle de planta"
+        subtitulo={`Movimiento del ${editarDetallePlanta?.original?.fecha || ""} · ${editarDetallePlanta?.original?.formula || ""}. Para cambiar kilos o porciones usa el ajuste por conteo físico; esta corrección conserva los saldos.`}
+        onClose={() => setEditarDetallePlanta(null)}
+        ancho={540}
+        pie={
+          <>
+            <button type="button" onClick={() => setEditarDetallePlanta(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Cancelar
+            </button>
+            <button type="button" disabled={guardando} onClick={guardarDetallePlanta} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              Guardar corrección
+            </button>
+          </>
+        }
+      >
+        {editarDetallePlanta && (
+          <>
+            {[...new Set(["detalle", editarDetallePlanta.original.tipo === "bache" ? "numBache" : "numNucleo", "responsable"])].map(k => (
+              <label key={k} style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>
+                {({ detalle: "Detalle", numBache: "Número de bache", numNucleo: "Número de núcleo", responsable: "Responsable" })[k]}
+                <input style={{ ...inputStyle, width: "100%", marginTop: 4 }} value={editarDetallePlanta.campos[k] || ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, [k]: e.target.value } }))} />
+              </label>
+            ))}
+            <label style={{ display: "block", fontSize: 12.5, fontWeight: 600 }}>
+              Motivo de la corrección
+              <textarea style={{ ...inputStyle, width: "100%", marginTop: 4 }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} placeholder="Indica el motivo de la corrección" />
+            </label>
+          </>
+        )}
+      </ModalDialog>
+      <nav className="v10-desktop-nav" aria-label="Navegación principal">
+        <div className="v10-menu-brand">{configOrganizacion.nombre || "Rancho El Soñado"} <small>Operación de la granja</small></div>
+        {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => (
+          <button key={t.id} className={vista === t.id ? "v10-active" : ""} aria-current={vista === t.id ? "page" : undefined} onClick={() => irA(t.id)} title={badgePorTab[t.id]?.titulo || t.nombre} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>{t.nombre}</span>
+            {badgePorTab[t.id] && <span className={`v10-badge v10-badge-${badgePorTab[t.id].tipo}`}>{badgePorTab[t.id].texto}</span>}
+          </button>
+        ))}</div>)}
+        <button className="v10-menu-search" onClick={() => setBuscadorAbierto(true)}>⌕ Buscar · Ctrl K</button>
+      </nav>
+      {buscadorAbierto && <div className="v10-overlay" role="presentation" onClick={() => setBuscadorAbierto(false)}><div className="v10-search" role="dialog" aria-modal="true" aria-label="Buscar en la granja" onClick={e => e.stopPropagation()}>
+        <div className="v10-search-head"><input autoFocus aria-label="Buscar fecha, galpón, tiquete o actividad" placeholder="Fecha, galpón, tiquete, actividad…" value={busquedaGlobal} onChange={e => setBusquedaGlobal(e.target.value)} /><button onClick={() => setBuscadorAbierto(false)} aria-label="Cerrar búsqueda">✕</button></div>
+        {busquedaGlobal.trim().length < 2 ? <p>Escribe al menos dos caracteres.</p> : resultadosBusqueda.length ? resultadosBusqueda.map((r, i) => <button key={i} className="v10-result" onClick={() => abrirResultado(r)}>{r.texto}</button>) : <p>No hay resultados para esta búsqueda.</p>}
+      </div></div>}
+      <ModalDialog
+        abierto={!!salidaPendiente}
+        titulo="Hay cambios sin enviar"
+        subtitulo="El control diario seguirá guardado como borrador en este dispositivo y podrás recuperarlo al volver a esta fecha."
+        onClose={() => setSalidaPendiente(null)}
+        ancho={480}
+        tono="alerta"
+        pie={
+          <>
+            <button type="button" autoFocus onClick={() => setSalidaPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Seguir editando
+            </button>
+            <button type="button" onClick={() => { const id = salidaPendiente; setSalidaPendiente(null); abrirVista(id); }} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>
+              Salir y conservar borrador
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, color: C.textoSuave }}>Si cambias de pantalla sin enviar, tus datos no se perderán pero no estarán reflejados en los reportes hasta que confirmes el envío.</p>
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!consultaHistorialPendiente}
+        titulo={consultaHistorialPendiente?.titulo || "Consultar historial"}
+        subtitulo="La captura actual todavía no se ha enviado"
+        onClose={() => setConsultaHistorialPendiente(null)}
+        ancho={500}
+        tono="alerta"
+        pie={
+          <>
+            <button type="button" autoFocus onClick={() => setConsultaHistorialPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Seguir digitando
+            </button>
+            <button type="button" onClick={async () => {
+              const pendiente = consultaHistorialPendiente;
+              try {
+                if (pendiente?.tipo === "materia-prima") await guardarBorradorConsultaMP();
+                if (pendiente?.tipo === "bodega") await guardarBorradorConsultaBodega();
+                setConsultaHistorialPendiente(null);
+                if (pendiente?.destino?.tipo === "subPedidoMP") setSubPedidoMP(pendiente.destino.valor);
+                else if (pendiente?.destino?.tipo === "mp") setMpHistorialAbierto(true);
+                else if (pendiente?.destino?.tipo === "vista") abrirVista(pendiente.destino.valor);
+                else if (pendiente?.destino?.tipo === "subBodega") setSubBodega(pendiente.destino.valor);
+                else if (pendiente?.destino?.tipo === "fecha") cambiarFechaBodega(pendiente.destino.iso, pendiente.destino.id);
+                avisar("✓ Captura guardada como borrador local. Puedes recuperarla al volver a Inventario.");
+              } catch {
+                avisar("⚠ No se pudo guardar el borrador; la captura sigue abierta.");
+              }
+            }} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>
+              Guardar borrador y consultar
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, lineHeight: 1.55 }}>
+          Si consultas el historial, la sección de captura puede cambiar de lugar. Tus datos se guardarán como un borrador privado de este dispositivo y se podrán recuperar al regresar a la sección correspondiente.
+        </p>
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!mpLimpiarPendiente}
+        titulo="Limpiar conteo actual"
+        subtitulo="Solo se borrarán los datos que todavía no has enviado"
+        onClose={() => setMpLimpiarPendiente(false)}
+        ancho={460}
+        tono="alerta"
+        pie={
+          <>
+            <button type="button" autoFocus onClick={() => setMpLimpiarPendiente(false)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Conservar datos</button>
+            <button type="button" onClick={limpiarConteoMP} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0, background: C.alerta }}>Limpiar todo</button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, lineHeight: 1.55 }}>El historial guardado permanecerá intacto. Se vaciarán la fecha, el responsable y los valores del conteo que estás digitando.</p>
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!mpHistorialDetalle}
+        titulo="Conteo físico de materia prima"
+        subtitulo={mpHistorialDetalle ? `${mpHistorialDetalle.fecha || "Sin fecha"} · ${mostrarNombre(mpHistorialDetalle.responsable || "Sin responsable")}${mpHistorialDetalle.editadoEl ? " · corregido" : ""}` : ""}
+        onClose={cerrarDetalleHistorialMP}
+        ancho={980}
+        pie={
+          mpHistorialEditando ? (
+            <>
+              <button type="button" disabled={guardando} onClick={() => { setMpHistorialEditando(false); setMpHistorialEdicion(Object.fromEntries(Object.entries(mpHistorialDetalle?.items || {}).map(([codigo, valores]) => [codigo, { ...valores }]))); }} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Cancelar edición</button>
+              <button type="button" disabled={guardando} onClick={guardarEdicionHistorialMP} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>{guardando ? "Guardando…" : "Guardar corrección"}</button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => setPrintDoc({ tipo: "mp_inventario", historial: mpHistorialDetalle })} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", color: C.verde, cursor: "pointer", fontWeight: 600 }}>🖨 Imprimir conteo</button>
+              <button type="button" onClick={() => setMpHistorialEditando(true)} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>Editar este conteo</button>
+            </>
+          )
+        }
+      >
+        {mpHistorialDetalle && (() => {
+          const valores = mpHistorialEditando ? mpHistorialEdicion : (mpHistorialDetalle.items || {});
+          return (
+            <div style={{ background: "#fff", color: "#111", border: `1px solid ${C.borde}`, padding: "18px 14px", fontFamily: "Arial, sans-serif" }}>
+              <div style={{ textAlign: "center", borderBottom: "2px solid #243b2a", paddingBottom: 10, marginBottom: 12 }}>
+                <MarcaRancho impresion />
+                <div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>{RAZON_SOCIAL}</div>
+                <div style={{ fontWeight: 700, fontSize: 13, marginTop: 5 }}>TOMA DE INVENTARIO FÍSICO — MATERIA PRIMA</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12, fontSize: 13 }}>
+                <div><b>Fecha del conteo:</b> {mpHistorialDetalle.fecha || "—"}</div>
+                <div><b>Responsable del conteo:</b> {mpHistorialDetalle.responsable || "—"}</div>
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", minWidth: 690, borderCollapse: "collapse", fontSize: 12.5 }}>
+                  <thead><tr style={{ background: "#304936", color: "#fff", textAlign: "left" }}>
+                    {[["Código", 72], ["Materia prima", null], ["Presentación", 115], ["Sacos completos", 120], ["Saldo en kg", 120]].map(([encabezado, ancho]) => <th key={encabezado} style={{ padding: "8px 7px", border: "1px solid #1f3224", width: ancho || undefined }}>{encabezado}{encabezado === "Presentación" && <><br /><span style={{ fontSize: 10, fontWeight: 400 }}>(kg/saco)</span></>}</th>)}
+                  </tr></thead>
+                  <tbody>{mpCat.map(mp => {
+                    const inv = valores[mp.c] || {};
+                    return <tr key={mp.c} style={{ borderBottom: "1px solid #b9c1b8" }}>
+                      <td style={{ padding: "6px 7px", fontWeight: 700 }}>{mp.c}</td>
+                      <td style={{ padding: "6px 7px", fontWeight: 600 }}>{mp.n}<div style={{ color: "#5d665e", fontSize: 10.5, fontWeight: 400 }}>{mp.prov}</div></td>
+                      <td style={{ padding: "6px 7px", textAlign: "center" }}>{f2Dec(mp.pres)}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "center" }}>{mp.pres !== 1 ? (mpHistorialEditando ? <input type="text" inputMode="numeric" aria-label={`${mp.c} sacos históricos`} value={inv.sacos ?? ""} onChange={e => setMpHistorialEdicion(v => ({ ...v, [mp.c]: { ...v[mp.c], sacos: e.target.value } }))} style={{ ...inputStyle, width: 96, padding: "6px 7px", margin: 0, fontSize: 13 }} /> : f2Dec(inv.sacos)) : "—"}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "center" }}>{mpHistorialEditando ? <input type="text" inputMode="decimal" aria-label={`${mp.c} saldo histórico en kg`} value={inv.kg ?? ""} onChange={e => setMpHistorialEdicion(v => ({ ...v, [mp.c]: { ...v[mp.c], kg: e.target.value } }))} style={{ ...inputStyle, width: 104, padding: "6px 7px", margin: 0, fontSize: 13 }} /> : f2Dec(inv.kg)}</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
+              <div style={{ marginTop: 12, fontSize: 11.5, color: "#4d584f" }}>Los guiones indican que no se anotó saldo en ese producto. Esta consulta no cambia la captura del conteo actual.</div>
+            </div>
+          );
+        })()}
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!accesoDenegado}
+        titulo="Acceso restringido"
+        subtitulo={`Tu rol actual no tiene permiso para entrar a ${accesoDenegado || "este módulo"}.`}
+        onClose={() => setAccesoDenegado(null)}
+        ancho={460}
+        tono="alerta"
+        pie={
+          <button type="button" autoFocus onClick={() => setAccesoDenegado(null)} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+            Entendido
+          </button>
+        }
+      >
+        <p style={{ margin: 0, color: C.textoSuave, lineHeight: 1.55 }}>
+          Solicita al administrador que revise o cambie tus permisos si necesitas trabajar en esta sección.
+        </p>
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!revisionGuardado}
+        titulo={`Revisar antes de guardar · ${fechaCaptura}`}
+        subtitulo="Verifica los totales calculados antes de enviar los datos a la base compartida"
+        onClose={() => setRevisionGuardado(null)}
+        ancho={560}
+        pie={
+          <>
+            <button type="button" onClick={() => setRevisionGuardado(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              Volver a editar
+            </button>
+            <button type="button" disabled={guardando} onClick={() => { const id = revisionGuardado; setRevisionGuardado(null); guardarDia(id === "todos" ? null : id); }} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
+              Confirmar y guardar
+            </button>
+          </>
+        }
+      >
+        {activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => {
+          const c = capturas[l.id];
+          const t = totalesGalpon(c);
+          const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id);
+          return (
+            <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
+              <b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento · {c?.muertas || 0} muertas
+              {anterior && <div style={{ color: C.textoSuave, fontSize: 11.5, marginTop: 2 }}>Antes: {anterior.cartones} cartones · {anterior.alimentoKg} kg alimento · {anterior.muertas} muertas</div>}
+            </div>
+          );
+        })}
+        {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => (
+          <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>⚠ {a}</div>
+        ))}
+      </ModalDialog>
+      {modalAdv && (
+        <div onClick={() => setModalAdv(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 99, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: modalAdv.accion === "eliminar" ? C.alerta : C.verde, marginBottom: 4 }}>
+              {modalAdv.accion === "eliminar" ? "🗑 Descartar / Eliminar Advertencia" : "✏️ Modificar Advertencia"}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 12, lineHeight: 1.4, background: C.fondo, padding: "8px 10px", borderRadius: 8 }}>
+              {modalAdv.item.texto}
+            </div>
+
+            {modalAdv.accion === "modificar" && (
+              <label style={{ display: "block", marginBottom: 12 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Texto o nota de la advertencia</span>
+                <textarea rows={3} value={modalAdv.nuevoTexto} onChange={e => setModalAdv({ ...modalAdv, nuevoTexto: e.target.value })} style={{ ...inputStyle, resize: "vertical" }} />
+              </label>
+            )}
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              <label style={{ flex: "1 1 45%", minWidth: 140 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Responsable</span>
+                <input type="text" list="responsables-frecuentes" value={modalAdv.responsable} onChange={e => setModalAdv({ ...modalAdv, responsable: e.target.value })} style={inputStyle} />
+                <datalist id="responsables-frecuentes"><option value="Roxana" /><option value="Ivannia Lizano" /><option value="José Daniel Quesada" /></datalist>
+              </label>
+              <label style={{ flex: "1 1 45%", minWidth: 140 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del ajuste</span>
+                <input type="date" value={modalAdv.fecha} onChange={e => setModalAdv({ ...modalAdv, fecha: e.target.value })} style={inputStyle} />
+              </label>
+            </div>
+
+            <label style={{ display: "block", marginBottom: 14 }}>
+              <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Razón o justificación de la modificación <span style={{ color: C.alerta }}>*</span></span>
+              <textarea rows={2} placeholder="ej. Galpón en muda forzada programada, sin producción esperada." value={modalAdv.razon} onChange={e => setModalAdv({ ...modalAdv, razon: e.target.value })} style={{ ...inputStyle, resize: "vertical" }} />
+            </label>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={guardarAjusteAdvertencia} style={{ ...btnStyle, flex: 1, background: modalAdv.accion === "eliminar" ? C.alerta : C.verde }}>
+                {modalAdv.accion === "eliminar" ? "Confirmar eliminación" : "Guardar modificación"}
+              </button>
+              <button onClick={() => setModalAdv(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalFav && (
+        <div onClick={() => setModalFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde, marginBottom: 4 }}>
+              ➕ Nuevo producto de {modalFav.tipo === "fum" ? "fumigación" : modalFav.tipo === "med" ? "medicamento" : "vitamina"}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Queda guardado en el menú para todo el equipo, con su dosis para autorrellenar.</div>
+            <Campo etiqueta="Nombre del producto" type="text" placeholder="ej. Virkon S" value={modalFav.nombre} onChange={e => setModalFav({ ...modalFav, nombre: e.target.value })} />
+            <Campo etiqueta="Dosis sugerida (editable al usarla)" type="text" placeholder="ej. 25 g por bomba de 18 L" value={modalFav.dosis} onChange={e => setModalFav({ ...modalFav, dosis: e.target.value })} />
+            {modalFav.tipo === "med" && <Campo etiqueta="Días de retiro del huevo (si aplica)" type="text" inputMode="numeric" placeholder="ej. 5" value={modalFav.retiro} onChange={e => setModalFav({ ...modalFav, retiro: e.target.value })} />}
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <button onClick={async () => {
+                if (!modalFav.nombre.trim()) { avisar("⚠ Escribe el nombre del producto"); return; }
+                if (await guardarFavorito(modalFav.tipo, modalFav.nombre, modalFav.dosis, modalFav.retiro)) {
+                  const i2 = modalFav.idx;
+                  if (modalFav.tipo === "fum" && cap?.fums?.[i2] != null) { const fs = [...cap.fums]; fs[i2] = { ...fs[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis }; setCap({ fums: fs }); }
+                  if (modalFav.tipo === "med" && cap?.meds?.[i2] != null) { const ms = [...cap.meds]; ms[i2] = { ...ms[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis, retiro: modalFav.retiro }; setCap({ meds: ms }); }
+                  if (modalFav.tipo === "vit" && cap?.vits?.[i2] != null) { const vs = [...cap.vits]; vs[i2] = { ...vs[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis }; setCap({ vits: vs }); }
+                  setModalFav(null);
+                }
+              }} style={{ ...btnStyle, flex: 1, marginTop: 0 }}>✓ Agregar al menú</button>
+              <button onClick={() => setModalFav(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {gestionFav && (
+        <div onClick={() => setGestionFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde, marginBottom: 4 }}>
+              🗑 Quitar del menú de {gestionFav === "fum" ? "fumigación" : gestionFav === "med" ? "medicamentos" : "vitaminas"}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Esto solo quita la opción del menú desplegable — no borra ningún registro ya guardado.</div>
+            {favoritos.filter(f2 => f2.tipo === gestionFav).length === 0 && (
+              <div style={{ fontSize: 13, color: C.textoSuave, padding: "10px 0" }}>Todavía no hay productos agregados a este menú.</div>
+            )}
+            {favoritos.filter(f2 => f2.tipo === gestionFav).map(f2 => (
+              <div key={f2.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "9px 0", borderBottom: `1px solid ${C.borde}` }}>
+                <span style={{ fontSize: 13.5 }}><b>{f2.nombre}</b>{f2.dosis ? <span style={{ color: C.textoSuave }}> · {f2.dosis}</span> : null}</span>
+                <span onClick={() => borrarFavorito(f2.id)} style={{ cursor: "pointer", color: C.alerta, fontSize: 18, padding: "0 6px", fontWeight: 700 }} title="Quitar del menú">×</span>
+              </div>
+            ))}
+            <button onClick={() => setGestionFav(null)} style={{ ...btnStyle, marginTop: 16, background: "#F1F1EA", color: C.texto }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
+      {elegirReporteActividades && <div role="dialog" aria-modal="true" aria-label="Elegir reporte de actividades" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
+        <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(430px, 100%)" }}>
+          <h2 style={{ margin: "0 0 8px", color: C.verde }}>Tareas por hacer hoy</h2>
+          <p style={{ fontSize: 13, color: C.textoSuave }}>Elige la galera o las tareas generales y añade aquí labores específicas antes de generar el reporte.</p>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>Ámbito del reporte
+            <select value={alcanceReporteActividades} onChange={e => setAlcanceReporteActividades(e.target.value)} style={{ ...inputStyle, marginTop: 6 }}>
+              <option value="">Actividades generales de la granja</option>
+              {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.raza} · lote {l.lote || ""}</option>)}
+            </select>
+          </label>
+          <label style={{ display: "block", marginTop: 14, fontSize: 13, fontWeight: 600 }}>Tareas manuales para hacer hoy (una por línea)
+            <textarea value={tareasManualesReporte} onChange={e => setTareasManualesReporte(e.target.value)} maxLength={2000} rows={5} placeholder={"Ej. Revisar el tanque de agua\nLimpiar la entrada"} style={{ ...inputStyle, width: "100%", marginTop: 6, resize: "vertical", boxSizing: "border-box" }} />
+          </label>
+          <p style={{ fontSize: 12, color: C.textoSuave, margin: "5px 0" }}>Estas tareas solo aparecerán en este reporte; no se guardan ni sustituyen las programadas.</p>
+          <div style={{ padding: "10px 0", fontSize: 13, color: C.textoSuave }}>{actividadesDelDia(tareasProgramadas, hoyISO(), alcanceReporteActividades).length} obligatorias por fecha · {pendientesReporte(alcanceReporteActividades, hoyISO()).length} pendientes de auditoría · {tareasManualesDelReporte(tareasManualesReporte).length} manuales</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { setPrintDoc({ tipo: "actividades", fecha: hoyISO(), lote: alcanceReporteActividades, manuales: tareasManualesDelReporte(tareasManualesReporte) }); setElegirReporteActividades(false); }} style={{ ...btnStyle, flex: 1 }}>Ver reporte para imprimir</button>
+            <button onClick={() => setElegirReporteActividades(false)} style={{ padding: "10px 12px" }}>Cancelar</button>
+          </div>
+        </div>
+      </div>}
+
+      {/* Modal de Pegado Masivo de Tiquetes (Punto 22) */}
+      <ModalPegarTiquetes
+        abierto={modalPegarTiquetes}
+        onCerrar={() => setModalPegarTiquetes(false)}
+        onAplicar={aplicarTiquetesPegados}
+        galponNum={loteActivo?.galpon || galponActivo}
+        tiquetesCompartidos={tiquetesCompartidos}
+      />
+
+      <header className="v10-header" style={{ background: C.verde, padding: "16px 16px 0", color: "#fff", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ maxWidth: 880, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <MarcaRancho />
+              </div>
+              <div style={{ fontSize: 11.5, opacity: 0.75 }}>{totalAves.toLocaleString()} aves · 4 gallineros · último registro: {ultDia.slice(0, 5)} · {mostrarNombre(window.__usuarioEmail)} · {estadoSync === "Sin conexión" ? "Sin conexión (borrador local)" : estadoSync === "Guardando…" || estadoSync === "Error al guardar" ? estadoSync : Object.keys(suciosRef.current).length || notaSuciaRef.current ? "Borrador sin enviar" : estadoSync} · v{VERSION_APP}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button type="button" className="v10-header-mobile-menu-btn" onClick={() => setMenuMovil(v => !v)} aria-label="Abrir menú de navegación" style={{ background: menuMovil ? "#F5B845" : "rgba(255,255,255,0.18)", color: menuMovil ? C.verde : "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 15 }}>☰</span>
+                <span style={{ fontSize: 12 }}>Menú</span>
+              </button>
+              <button onClick={() => cargarTodo(false)} title="Actualizar" style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, color: "#fff", padding: "9px 12px", fontSize: 16, cursor: "pointer", opacity: cargandoFondo ? 0.5 : 1 }}>{cargandoFondo ? "…" : "⟳"}</button>
+              <button className="v10-search-action" onClick={() => setBuscadorAbierto(true)} aria-label="Buscar en la granja">⌕</button>
+              <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 12px", textAlign: "center" }}>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, color: "#F5B845" }}>{posturaDia.toFixed(1)}%</div>
+                <div style={{ fontSize: 10, opacity: 0.75 }}>postura</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="v10-main" style={{ maxWidth: 880, margin: "0 auto", padding: 16 }}>
+        <MigasPan
+          vista={vista}
+          tabs={tabs}
+          gruposMenu={gruposMenu}
+          lotes={lotes}
+          galponActivo={galponActivo}
+          fechaCaptura={fechaCaptura}
+          fechaBodega={fechaBodega}
+          subBodega={subBodega}
+          subReporte={subReporte}
+          subPlanta={subPlanta}
+          subPedidoMP={subPedidoMP}
+          subFormulas={subFormulas}
+          subInsumos={subInsumos}
+          subPesaje={subPesaje}
+          subHistorial={subHistorial}
+          recActiva={recActiva}
+          fPeso={fPeso}
+          histFecha={histFecha}
+          irA={irA}
+          avisar={avisar}
+        />
+        {miRol === "sin_acceso" && <div role="alert" className="v10-security-alert">Tu cuenta no tiene un rol activo. Solicita acceso a un administrador.</div>}
+        {miRol === "consulta" && <div className="v10-security-alert">Acceso de consulta: los cambios están bloqueados por la base de datos.</div>}
+        {vista === "inicio" && <>
+          <Seccion titulo={`Hoy · ${hoyISO()}`} sub="Lo que necesita atención antes de cerrar el día">
+            <div className="v10-home-grid">
+              {preferencias.favoritos.filter(id => idsPermitidos.includes(id)).slice(0, 6).map(id => {
+                const t = tabs.find(x => x.id === id); if (!t) return null;
+                const detalle = id === "captura" ? `${activos.filter(l => registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length}/${activos.length} gallineros guardados` : id === "revision" ? `${hallazgosOperacion.length} asuntos por revisar` : ({ reporte: "Indicadores y reportes", bodega: "Movimientos y cierre del día", pesaje: "Pesajes y actividades", historial: "Consulta y auditoría", planta: "Producción y movimientos", insumos: "Existencias y consumos" })[id] || "Abrir módulo";
+                return <button key={id} onClick={() => irA(id)}><b>{t.nombre}</b><span>{detalle}</span></button>;
+              })}
+            </div>
+          </Seccion>
+          {!!retirosActivos.length && <Seccion titulo="Retiros activos">{retirosActivos.map((m, i) => <p key={i}>G{m.galpon} · {m.producto} · hasta {m.retiroHasta}</p>)}</Seccion>}
+          <Seccion titulo="Próximas actividades">{tareasProgramadas.slice(0, 8).map(t => <div key={t.id} className="v10-home-row">{t.nombre} · {proximaTarea(t) || "sin fecha"}</div>)}{!tareasProgramadas.length && <p>No hay actividades programadas.</p>}</Seccion>
+        </>}
+        {guardado && <div role={guardado.startsWith("⚠") ? "alert" : "status"} style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
+        {(() => {
+          const conteo = new Map();
+          registros.forEach(r => { const k = `${r.fecha}|${r.lote}`; conteo.set(k, (conteo.get(k) || 0) + 1); });
+          const conflictos = [...conteo].filter(([, n]) => n > 1);
+          return conflictos.length ? <div role="alert" style={{ padding: 12, marginBottom: 12, borderRadius: 10, background: C.alertaSuave, color: C.alerta, fontSize: 13 }}>
+            ⚠ {conflictos.length} fecha(s) con producción duplicada. Los totales pueden estar inflados. <button onClick={() => { const fecha = conflictos[0][0].split("|")[0]; setHistFecha(fechaHistorialISO(fecha)); irA("historial"); }} style={{ marginLeft: 8 }}>Revisar en Historial</button>
+          </div> : null;
+        })()}
+        {vista === "revision" && (
+          <>
+            <BarraSubmenu
+              subsecciones={[
+                { id: "alertas", nombre: `Alertas de gestión${numAdvertencias ? ` (${numAdvertencias})` : ""}`, icono: "🚨" },
+                { id: "excepciones", nombre: "Excepciones y alertas", icono: "⚠️" },
+                { id: "cobertura", nombre: "Cobertura concentrado", icono: "⏳" },
+                { id: "conciliacion", nombre: "Conciliación de planta", icono: "⚖️" },
+                { id: "auditoria", nombre: "Exportar auditoría", icono: "📋" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subRevision}
+              onChange={setSubRevision}
+            />
+
+            {(subRevision === "alertas" || subRevision === "todo") && (
+              <Seccion titulo={`Alertas de gestión (${numAdvertencias})`} sub="Aquí aparecen las mismas alertas que explican el número del menú. La X las desactiva con una razón y cada cambio queda en el historial.">
+                {alertasRevision.map((a, i) => (
+                  <div key={`${a.advId}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: a.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5 }}>
+                    <div style={{ display: "flex", gap: 8, flex: 1 }}>
+                      <span>{a.nivel === "rojo" ? "🔴" : "🟡"}</span>
+                      <div><b style={{ fontSize: 11, color: C.textoSuave }}>{a.seccion === "cobertura" ? "Cobertura" : a.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}</b><br />{a.textoAjustado || a.texto}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "modificar")} title="Modificar alerta" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
+                      <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "eliminar")} title="Desactivar alerta; quedará en el historial" aria-label="Desactivar alerta" style={{ padding: "4px 8px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
+                    </div>
+                  </div>
+                ))}
+                {!alertasRevision.length && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>✓ No hay alertas activas. Puedes consultar el historial debajo.</div>}
+                {ajustesAuditoria.length > 0 && (
+                  <details style={{ marginTop: 14, padding: "8px 10px", background: C.fondo, borderRadius: 10 }}>
+                    <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: C.texto }}>📋 Historial de alertas activadas, desactivadas y modificadas ({ajustesAuditoria.length})</summary>
+                    <div style={{ marginTop: 8 }}>
+                      {selectorHistorial("advertencias")}
+                      {historialVisible(ajustesAuditoria, "advertencias").map((aj, idx) => {
+                        const ultimo = advAjustes.find(a2 => a2.advId === aj.advId);
+                        const etiqueta = aj.accion === "eliminar" ? "Desactivada" : aj.accion === "reactivar" ? "Reactivada" : aj.accion === "modificar" ? "Modificada" : "Desactivación conservada";
+                        return <div key={aj.id || idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
+                          <div><div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : aj.seccion === "cobertura" ? "Cobertura" : "Auditoría"}:</b> {aj.textoOriginal}</div><div style={{ color: C.textoSuave, marginTop: 2 }}><span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : aj.accion === "reactivar" ? C.verde : C.yema }}>{etiqueta}</span> por <b>{mostrarNombre(aj.responsable)}</b> el {aj.fecha}{aj.razon ? ` — Razón: "${aj.razon}"` : ""}</div>{aj.accion === "modificar" && aj.nuevoTexto && <div style={{ color: C.verde, marginTop: 2 }}><b>Texto ajustado:</b> {aj.nuevoTexto}</div>}</div>
+                          {ultimo?.id === aj.id && alertaEstaSuprimida(aj) && <button onClick={() => revertirAjusteAdv(aj.advId)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.verde, fontWeight: 600, whiteSpace: "nowrap" }}>Reactivar</button>}
+                        </div>;
+                      })}
+                    </div>
+                  </details>
+                )}
+              </Seccion>
+            )}
+
+            {(subRevision === "excepciones" || subRevision === "todo") && (
+              <Seccion titulo="Excepciones por revisar" sub="Duplicados, controles pendientes, saldos y retiros activos; se actualiza con los datos cargados">
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                  <label>Tipo <select value={filtroExcepciones} onChange={e => setFiltroExcepciones(e.target.value)} style={inputStyle}><option>Todas</option>{[...new Set(hallazgosOperacion.map(h => h.tipo))].map(t => <option key={t}>{t}</option>)}</select></label>
+                  <button onClick={() => window.print()}>Imprimir revisión</button>
+                </div>
+                {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => (
+                  <div key={i} style={{ padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
+                    <b>{h.tipo}</b> · {h.texto}
+                  </div>
+                ))}
+                {!hallazgosOperacion.length && <p>Sin excepciones detectadas.</p>}
+              </Seccion>
+            )}
+
+            {(subRevision === "cobertura" || subRevision === "todo") && (
+              <Seccion titulo="Cobertura de concentrado por fórmula" sub="Existencias verificadas divididas entre el consumo diario promedio de los últimos siete días con datos">
+                {[["Aves", saldosAvesFormula], ["Ganado", saldosGanadoFormula]].map(([categoria, saldos]) => (
+                  <div key={categoria} style={{ marginBottom: 12 }}>
+                    <b>{categoria}</b>
+                    {saldos ? Object.entries(saldos).map(([formula, kg]) => {
+                      const consumo = consumoCobertura(categoria, formula);
+                      const alerta = coberturaVisibles.find(a => a.alertaId === `cobertura:${categoria.toLowerCase()}:${formula.toLowerCase()}:sin-consumo`);
+                      return (
+                        <div key={formula} style={{ padding: 7, borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
+                          <div>{formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : alerta ? "sin consumo suficiente para estimar" : "cobertura no estimada"}`}</div>
+                          {alerta && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 5, color: C.yema, fontSize: 12 }}><span>⚠ {alerta.texto}</span><button onClick={() => abrirModalAjusteAdv(alerta, "cobertura", "eliminar")} title="Desactivar esta alerta" aria-label={`Desactivar alerta de ${formula}`} style={{ padding: "2px 7px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button></div>}
+                        </div>
+                      );
+                    }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por fórmula.</p>}
+                  </div>
+                ))}
+              </Seccion>
+            )}
+
+            {(subRevision === "conciliacion" || subRevision === "todo") && (
+              <Seccion titulo="Conciliación de planta" sub="La diferencia muestra concentrado sin distribución o movimientos que necesitan revisión">
+                {[["Aves", saldoAves, saldosAvesFormula], ["Ganado", saldoGanado, saldosGanadoFormula]].map(([categoria, total, saldos]) => {
+                  const sumaF = saldos ? Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0) : null;
+                  const dif = sumaF != null ? +(total - sumaF).toFixed(1) : null;
+                  return (
+                    <div key={categoria} style={{ padding: 8, fontSize: 13 }}>
+                      <b>{categoria}</b> · total {f2Dec(total)} kg · fórmulas {sumaF != null ? `${f2Dec(sumaF)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${f2Dec(dif)} kg` : "—"}
+                    </div>
+                  );
+                })}
+              </Seccion>
+            )}
+
+            {(subRevision === "auditoria" || subRevision === "todo") && (
+              <Seccion titulo="Exportar auditoría" sub="Producción, bodega, conteos de planta y advertencias">
+                {selectorHistorial("auditoria")}
+                <button onClick={descargarAuditoria} style={btnStyle}>Descargar CSV del período</button>
+              </Seccion>
+            )}
+          </>
+        )}
+        {/* ══ CONTROL DIARIO ══ */}
+        {vista === "captura" && (
+          <>
+            {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay un borrador sin guardar de esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); basesEdicionRef.current = borradorDisponible.bases || {}; setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.nota) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={async () => { await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento); setBorradorDisponible(null); }} style={{ marginLeft: 8 }}>Descartar</button></div>}
+            {conflictoEdicion && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>{conflictoEdicion} <button onClick={async () => {
+              const payload = { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() };
+              await guardarBorrador(fechaCaptura, payload, preferencias.borradores.almacenamiento);
+              suciosRef.current = {}; basesEdicionRef.current = {}; notaSuciaRef.current = false;
+              setConflictoEdicion(""); await cargarTodo(false); setBorradorDisponible(payload);
+            }}>Guardar mi borrador y ver la versión actual</button></div>}
+            {!!retirosActivos.length && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>⚠ Retiro de huevo activo: {retirosActivos.map(m => `G${m.galpon} hasta ${m.retiroHasta} (${m.producto})`).join(" · ")}. Evita comercializar ese huevo.</div>}
+            <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: (fechaCaptura || hoyISO()).split("-").reverse().join("/") })}
+              style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
+              🖨 Imprimir reporte diario ({(fechaCaptura || "").split("-").reverse().join("/") || "hoy"})
+            </button>
+
+            {/* Matriz Visual: Qué falta registrar hoy (Punto 11) */}
+            <MatrizQueFaltaHoy
+              activos={activos}
+              registros={registros}
+              capturas={capturas}
+              fechaCaptura={fechaCaptura}
+              galponActivo={galponActivo}
+              setGalponActivo={setGalponActivo}
+            />
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <label style={{ display: "block", marginBottom: 12, flex: "1 1 40%", minWidth: 150 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del registro</span>
+                <input type="date" value={fechaCaptura} onChange={e => cambiarFechaCaptura(e.target.value)} style={inputStyle} />
+              </label>
+              <Campo mitad etiqueta="Completado por" type="text" placeholder="Nombre de quien captura" value={completadoPor} onChange={e => setCompletadoPor(e.target.value)} />
+            </div>
+            {fechaCaptura !== hoyISO() && (
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9A6605", background: C.yemaSuave, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
+                📅 Estás capturando para el {fechaCaptura.split("-").reverse().join("/")} — si esa fecha ya tiene datos, se reemplazarán (edición).
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+              <div style={{ fontSize: 11, alignSelf: "center" }}>{activos.filter(l => registros.some(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id)).length}/{activos.length} guardados</div>
+              {activos.map(l => {
+                const lleno = totalesGalpon(capturas[l.id]).huevos > 0;
+                return (
+                  <button key={l.id} onClick={() => setGalponActivo(l.id)} style={{
+                    flex: 1, padding: "10px 4px", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif",
+                    border: galponActivo === l.id ? `2px solid ${C.verde}` : `1.5px solid ${C.borde}`,
+                    background: galponActivo === l.id ? C.verdeSuave : C.superficie,
+                  }}>
+                    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 14, color: C.verde }}>G{l.galpon}{lleno ? " ✓" : ""}</div>
+                    <div style={{ fontSize: 9.5, color: C.textoSuave }}>{semanasDe(l.nac).toFixed(0)} sem</div>
+                  </button>
+                );
+              })}
+            </div>
+            {loteActivo && <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 10, marginTop: -6 }}>
+              Gallinero {loteActivo.galpon} · {loteActivo.raza} · nacidas {loteActivo.nac.split("-").reverse().join("/")} · <b>{semanasDe(loteActivo.nac).toFixed(1)} semanas</b> · {loteActivo.aves.toLocaleString()} aves
+            </div>}
+
+            {/* Valores sugeridos del último control (Punto 16) */}
+            {loteActivo && (() => {
+              const prev = registros.filter(r => r.lote === loteActivo.id && fechaHistorialISO(r.fecha) < fechaCaptura).sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))[0];
+              const actual = totalesGalpon(capturas[loteActivo.id]);
+              if (!prev) return null;
+              return (
+                <div style={{ background: C.verdeSuave, border: `1px solid #C4DBC7`, borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12.5, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: C.verde, textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 2 }}>Referencia del último control registrado ({prev.fecha}):</span>
+                    <b>{f2Dec(prev.cartones, "0")} cart</b> ({Math.round(Number(prev.cartones || 0) * 30).toLocaleString()} huevos) · <b>{f2Dec(prev.alimentoKg, "0")} kg alimento</b> ({f2Dec(prev.alimento6am, "0")} am / {f2Dec(prev.alimento1pm, "0")} pm) · <b>{f2Dec(prev.muertas, "0")} muertas</b> · {Number(prev.aguaL || 0) ? `${f2Dec(prev.aguaL)} L agua` : "sin dato agua"}
+                    <div style={{ color: C.textoSuave, fontSize: 11, marginTop: 2 }}>Actual en este formulario: {f2Dec(actual.cartones, "0")} cartones · {actual.huevos.toLocaleString()} huevos</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Carga sugerencias de alimento y agua sin sobreescribir tiquetes de huevos que deben ser nuevos
+                      setCap({
+                        alimento6am: Number(prev.alimento6am || 0) ? f2Dec(prev.alimento6am, "") : "",
+                        alimento1pm: Number(prev.alimento1pm || 0) ? f2Dec(prev.alimento1pm, "") : "",
+                        aguaL: Number(prev.aguaL || 0) ? f2Dec(prev.aguaL, "") : "",
+                        muertas: cap.muertas !== "" ? cap.muertas : "0",
+                      });
+                      avisar(`✓ Raciones de referencia del ${prev.fecha} cargadas como sugerencia — revisa y ajusta`);
+                    }}
+                    style={{ padding: "6px 12px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                    ⚡ Usar referencia de raciones
+                  </button>
+                </div>
+              );
+            })()}
+
+            <Seccion accion={<BotonGuardaMini />} num="1" titulo="Producción por tiquete" sub="Número de tiquete, cartones y peso (kg) — incluye cálculo de peso promedio por huevo">
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setModalPegarTiquetes(true)}
+                  style={{ padding: "7px 13px", fontSize: 12.5, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: `1px solid ${C.borde}`, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                  📋 Pegar tiquetes desde Excel
+                </button>
+              </div>
+
+              {cap.tiquetes.map((t, i) => {
+                const c = Number(t.cartones) || 0;
+                const p = Number(t.peso) || 0;
+                const pesoPromHuevo = c > 0 && p > 0 ? (p * 1000) / (c * 30) : null;
+                const alertaPeso = pesoPromHuevo && (pesoPromHuevo < 45 || pesoPromHuevo > 75);
+                return (
+                  <div key={i} style={{ marginBottom: 10, paddingBottom: 6, borderBottom: i < cap.tiquetes.length - 1 ? `1px dashed ${C.borde}` : "none" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ flex: 0.9 }}>
+                        <input type="text" inputMode="numeric" placeholder={`Tiquete #`} value={t.num}
+                          onChange={e => { const ts = [...cap.tiquetes]; ts[i] = { ...t, num: e.target.value }; setCap({ tiquetes: ts }); }}
+                          style={{ ...inputStyle, padding: "9px 10px", fontSize: 14 }} />
+                      </div>
+                      <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
+                        <input type="text" inputMode="decimal" placeholder="Cartones" value={t.cartones}
+                          onChange={e => { const ts = [...cap.tiquetes]; ts[i] = { ...t, cartones: e.target.value }; setCap({ tiquetes: ts }); }}
+                          style={{ ...inputStyle, padding: "9px 10px", paddingRight: 40, fontSize: 14 }} />
+                        <span style={{ position: "absolute", right: 8, fontSize: 11.5, fontWeight: 600, color: C.textoSuave, pointerEvents: "none" }}>cart</span>
+                      </div>
+                      <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
+                        <input type="text" inputMode="decimal" placeholder="Peso" value={t.peso}
+                          onChange={e => { const ts = [...cap.tiquetes]; ts[i] = { ...t, peso: e.target.value }; setCap({ tiquetes: ts }); }}
+                          onKeyDown={e => { if (e.key !== "Enter") return; e.preventDefault(); const fila = e.currentTarget.parentElement?.parentElement?.parentElement; if (i === cap.tiquetes.length - 1) setCap({ tiquetes: [...cap.tiquetes, { num: "", cartones: "", peso: "" }] }); requestAnimationFrame(() => fila?.nextElementSibling?.querySelector("input")?.focus()); }}
+                          style={{ ...inputStyle, padding: "9px 10px", paddingRight: 32, fontSize: 14 }} />
+                        <span style={{ position: "absolute", right: 8, fontSize: 11.5, fontWeight: 600, color: C.textoSuave, pointerEvents: "none" }}>kg</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ts = cap.tiquetes.length > 1 ? cap.tiquetes.filter((_, j) => j !== i) : [{ num: "", cartones: "", peso: "" }];
+                          setCap({ tiquetes: ts });
+                        }}
+                        style={{ padding: "6px 9px", background: "transparent", border: "none", color: C.textoSuave, fontSize: 16, cursor: "pointer" }}
+                        title="Quitar tiquete">×</button>
+                    </div>
+                    {/* Feedback inline del peso por huevo para este tiquete */}
+                    {pesoPromHuevo && (
+                      <div style={{ fontSize: 11, marginTop: 3, paddingLeft: 4, color: alertaPeso ? C.alerta : C.textoSuave, fontWeight: alertaPeso ? 600 : 400 }}>
+                        {alertaPeso ? `⚠ Peso inusual: ${pesoPromHuevo.toFixed(1)} g/huevo (habitual: 55–68 g) — revisa tiquete y peso` : `✓ Peso promedio: ${pesoPromHuevo.toFixed(1)} g por huevo`}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <button onClick={() => setCap({ tiquetes: [...cap.tiquetes, { num: "", cartones: "", peso: "" }] })}
+                style={{ background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                + Agregar tiquete
+              </button>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.verde, marginTop: 10, display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
+                <span>Total: <b>{tGal.cartones} cartones</b> = {tGal.huevos.toLocaleString()} huevos · <b>{tGal.pesoKg.toFixed(1)} kg</b></span>
+                {tGal.huevos > 0 && tGal.pesoKg > 0 && (
+                  <span>Peso promedio: <b>{((tGal.pesoKg * 1000) / tGal.huevos).toFixed(1)} g/huevo</b></span>
+                )}
+              </div>
+              {!!saltosTiquetes(tiquetesCompartidos).length && <div style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>⚠ Revisa la secuencia de tiquetes entre todos los gallineros: faltan #{saltosTiquetes(tiquetesCompartidos).slice(0, 12).join(", #")}.</div>}
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="2" titulo="Huevo quebrado">
+              {(() => {
+                const q = Number(cap.quebrados) || 0;
+                const totH = tGal.huevos + q;
+                const pctQ = totH > 0 && q > 0 ? (q / totH) * 100 : 0;
+                return (
+                  <Campo
+                    etiqueta="Cantidad de huevos quebrados"
+                    type="text"
+                    inputMode="numeric"
+                    unidad="huevos"
+                    placeholder="ej. 45"
+                    value={cap.quebrados}
+                    onChange={e => setCap({ quebrados: e.target.value })}
+                    advertencia={pctQ > 3 ? `${pctQ.toFixed(1)}% quebrado (superior al estándar del 3%)` : pctQ > 0 ? `${pctQ.toFixed(1)}% quebrado (dentro de rango)` : null}
+                  />
+                );
+              })()}
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="3" titulo="Gallinas muertas" sub="El saldo se calcula solo: saldo inicial − muertas = saldo final">
+              {(() => {
+                const m = Number(cap.muertas) || 0;
+                const alertaM = m > 3;
+                return (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <Campo
+                      mitad
+                      etiqueta="Cantidad de muertas"
+                      type="text"
+                      inputMode="numeric"
+                      unidad="aves"
+                      placeholder="ej. 1"
+                      value={cap.muertas}
+                      onChange={e => setCap({ muertas: e.target.value })}
+                      advertencia={alertaM ? `Mortalidad superior a lo habitual (>3 aves) — registra el diagnóstico o solicita necropsia` : null}
+                    />
+                    <Campo
+                      mitad
+                      etiqueta="Diagnóstico de muerte"
+                      type="text"
+                      placeholder="ej. prolapso, calor..."
+                      value={cap.dx}
+                      onChange={e => setCap({ dx: e.target.value })}
+                      advertencia={m > 0 && !cap.dx.trim() ? "Indica la causa probable de muerte" : null}
+                    />
+                  </div>
+                );
+              })()}
+              <div style={{ fontSize: 14, display: "grid", gap: 6, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial de gallinas (día anterior)</span><b>{(loteActivo?.aves || 0).toLocaleString()}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>(−) Gallinas muertas hoy</span><b>{Number(cap.muertas || 0)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${C.borde}`, paddingTop: 6 }}><b>Saldo final de gallinas (=)</b><b style={{ color: C.verde }}>{((loteActivo?.aves || 0) - Number(cap.muertas || 0)).toLocaleString()}</b></div>
+              </div>
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="4" titulo="Fumigación diaria" sub="Elige el producto del inventario de Insumos — la dosis sugerida es editable">
+              <datalist id="ins-desinf">{insumos.filter(x => ["Desinfección", "Protección Biológica", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "fum").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
+              <datalist id="ins-meds">{insumos.filter(x => ["Medicinas", "Vacunas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "med").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
+              <datalist id="ins-vits">{insumos.filter(x => ["Vitaminas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "vit").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
+              {cap.fums.map((f, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input type="text" list="ins-desinf" placeholder="Producto" value={f.producto}
+                    onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, producto: e.target.value, dosis: f.dosis || dosisSugerida(e.target.value, "fum") }; setCap({ fums: fs }); }}
+                    style={{ ...inputStyle, flex: 1.2 }} />
+                  <input type="text" placeholder="Dosis" value={f.dosis}
+                    onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, dosis: e.target.value }; setCap({ fums: fs }); }}
+                    style={{ ...inputStyle, flex: 1 }} />
+                  <input type="time" value={f.hora}
+                    onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, hora: e.target.value }; setCap({ fums: fs }); }}
+                    style={{ ...inputStyle, flex: 0.9 }} />
+                  {<button onClick={() => setModalFav({ tipo: "fum", idx: i, nombre: f.producto || "", dosis: f.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
+                  {<button onClick={() => setGestionFav("fum")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
+                  <button onClick={() => setCap({ fums: cap.fums.length > 1 ? cap.fums.filter((_, j) => j !== i) : [{ producto: "", dosis: "", hora: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                </div>
+              ))}
+              <button onClick={() => setCap({ fums: [...cap.fums, { producto: "", dosis: "", hora: "" }] })}
+                style={{ background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                + Agregar fumigación
+              </button>
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="5" titulo="Medicamentos" sub="Incluye la enfermedad a tratar y los días de retiro del huevo (si aplica)">
+              {cap.meds.map((m, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input type="text" list="ins-meds" placeholder="Medicamento" value={m.producto}
+                    onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, producto: e.target.value, dosis: m.dosis || dosisSugerida(e.target.value, "med"), retiro: m.retiro || retiroSugerido(e.target.value) }; setCap({ meds: ms }); }}
+                    style={{ ...inputStyle, flex: 1.1 }} />
+                  <input type="text" placeholder="Dosis" value={m.dosis}
+                    onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, dosis: e.target.value }; setCap({ meds: ms }); }}
+                    style={{ ...inputStyle, flex: 0.8 }} />
+                  <input type="text" placeholder="Enfermedad / diagnóstico" value={m.enfermedad}
+                    onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, enfermedad: e.target.value }; setCap({ meds: ms }); }}
+                    style={{ ...inputStyle, flex: 1.2 }} />
+                  <input type="text" inputMode="numeric" placeholder="Retiro (días)" title="Días de retiro del huevo" value={m.retiro}
+                    onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, retiro: e.target.value }; setCap({ meds: ms }); }}
+                    style={{ ...inputStyle, flex: 0.7 }} />
+                  {<button onClick={() => setModalFav({ tipo: "med", idx: i, nombre: m.producto || "", dosis: m.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
+                  {<button onClick={() => setGestionFav("med")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
+                  <button onClick={() => setCap({ meds: cap.meds.length > 1 ? cap.meds.filter((_, j) => j !== i) : [{ producto: "", dosis: "", enfermedad: "", retiro: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                </div>
+              ))}
+              <button onClick={() => setCap({ meds: [...cap.meds, { producto: "", dosis: "", enfermedad: "" }] })}
+                style={{ background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                + Agregar medicamento
+              </button>
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="6" titulo="Vitaminas" sub="Pueden ser varias">
+              {cap.vits.map((v, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input type="text" list="ins-vits" placeholder="Vitamina / suplemento" value={v.producto}
+                    onChange={e => { const vs = [...cap.vits]; vs[i] = { ...v, producto: e.target.value, dosis: v.dosis || dosisSugerida(e.target.value, "vit") }; setCap({ vits: vs }); }}
+                    style={{ ...inputStyle, flex: 1.3 }} />
+                  <input type="text" placeholder="Dosis" value={v.dosis}
+                    onChange={e => { const vs = [...cap.vits]; vs[i] = { ...v, dosis: e.target.value }; setCap({ vits: vs }); }}
+                    style={{ ...inputStyle, flex: 1 }} />
+                  {<button onClick={() => setModalFav({ tipo: "vit", idx: i, nombre: v.producto || "", dosis: v.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
+                  {<button onClick={() => setGestionFav("vit")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
+                  <button onClick={() => setCap({ vits: cap.vits.length > 1 ? cap.vits.filter((_, j) => j !== i) : [{ producto: "", dosis: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                </div>
+              ))}
+              <button onClick={() => setCap({ vits: [...cap.vits, { producto: "", dosis: "" }] })}
+                style={{ background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                + Agregar vitamina
+              </button>
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="7" titulo="Consumo de alimento" sub={`Fórmula: ${loteActivo?.formula || ""}${loteActivo?.racionGAve ? ` · ración definida: ${loteActivo.racionGAve} g/ave/día (40% a las 6 am, 60% a la 1 pm)` : ""}`}>
+              {(() => {
+                const espDia = loteActivo?.racionGAve && loteActivo?.aves ? (loteActivo.racionGAve * loteActivo.aves) / 1000 : 0;
+                const esp6 = espDia * 0.4, esp1 = espDia * 0.6;
+                const real = Number(cap.alimento6am || 0) + Number(cap.alimento1pm || 0);
+                const desv = espDia > 0 && real > 0 ? ((real - espDia) / espDia) * 100 : null;
+                const gAveReal = loteActivo?.aves && real > 0 ? (real * 1000) / loteActivo.aves : 0;
+                const ratioAgua = Number(cap.aguaL) > 0 && real > 0 ? Number(cap.aguaL) / real : null;
+                return (
+                  <>
+                    <label style={{ display: "block", marginBottom: 12 }}>
+                      <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>⚡ Repartir consumo total automáticamente (kg) — al salir de la casilla reparte 40% a las 6 am y 60% a la 1 pm</span>
+                      <input type="text" inputMode="decimal" placeholder="ej. 240 → llena 96 y 144" style={inputStyle}
+                        onBlur={e => {
+                          const tot = parseFloat(String(e.target.value).replace(",", "."));
+                          if (!isNaN(tot) && tot > 0) { setCap({ alimento6am: String(+(tot * 0.4).toFixed(1)), alimento1pm: String(+(tot * 0.6).toFixed(1)) }); e.target.value = ""; }
+                        }} />
+                    </label>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <Campo
+                        mitad
+                        etiqueta={`Toma 6:00 am (40%)`}
+                        sugerencia={esp6 ? `Esperado: ${esp6.toFixed(1)} kg` : null}
+                        unidad="kg"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder={esp6 ? esp6.toFixed(1) : "kg"}
+                        value={cap.alimento6am}
+                        onChange={e => setCap({ alimento6am: e.target.value })}
+                      />
+                      <Campo
+                        mitad
+                        etiqueta={`Toma 1:00 pm (60%)`}
+                        sugerencia={esp1 ? `Esperado: ${esp1.toFixed(1)} kg` : null}
+                        unidad="kg"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder={esp1 ? esp1.toFixed(1) : "kg"}
+                        value={cap.alimento1pm}
+                        onChange={e => setCap({ alimento1pm: e.target.value })}
+                      />
+                    </div>
+                    <Campo etiqueta="Observaciones del consumo" type="text" placeholder="ej. dejaron alimento en comederos, cambio de fórmula, calor fuerte…" value={cap.obsAlimento} onChange={e => setCap({ obsAlimento: e.target.value })} />
+                    <div style={{ fontSize: 13.5, display: "grid", gap: 5, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
+                      {espDia > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Esperado del día</span><b>{f2Dec(espDia)} kg · {f2Dec(loteActivo.racionGAve)} g/ave</b></div>}
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>Servido real</span><b>{real.toFixed(1)} kg{gAveReal ? ` · ${gAveReal.toFixed(0)} g/ave` : ""}</b></div>
+                      {desv != null && <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${C.borde}`, paddingTop: 5, color: Math.abs(desv) > 5 ? C.alerta : C.verde }}>
+                        <b>Diferencia vs ración</b><b>{desv > 0 ? "+" : ""}{desv.toFixed(1)}%{Math.abs(desv) > 5 ? " ⚠" : " ✓"}</b>
+                      </div>}
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <Campo
+                        etiqueta="Consumo de agua del día (litros) — indicador temprano de salud"
+                        unidad="litros"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="ej. 480"
+                        value={cap.aguaL}
+                        onChange={e => setCap({ aguaL: e.target.value })}
+                        advertencia={ratioAgua && (ratioAgua < 1.6 || ratioAgua > 2.6) ? `Relación agua:alimento atípica (${ratioAgua.toFixed(1)}:1) — rango sano: 1.8–2.2` : null}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="8" titulo="Trabajos diarios" sub="Marca lo realizado en este gallinero">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "2px 16px" }}>
+                {TRABAJOS.map((tr, i) => (
+                  <label key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 0", cursor: "pointer" }}>
+                    <input type="checkbox" checked={!!cap.trabajos[i]} onChange={() => setCap({ trabajos: { ...cap.trabajos, [i]: !cap.trabajos[i] } })} style={{ width: 19, height: 19, accentColor: C.verde }} />
+                    <span style={{ fontSize: 13.5, textDecoration: cap.trabajos[i] ? "line-through" : "none", color: cap.trabajos[i] ? C.textoSuave : C.texto }}>{tr}</span>
+                  </label>
+                ))}
+              </div>
+            </Seccion>
+
+            <Seccion titulo="Actividades programadas" sub="Avisos dentro de la app para labores de la granja o de una galera. Marca Realizada para calcular el siguiente aviso.">
+              <button onClick={() => { setAlcanceReporteActividades(""); setTareasManualesReporte(""); setElegirReporteActividades(true); }} style={{ ...btnStyle, marginBottom: 14 }}>🖨 Tareas por hacer hoy</button>
+              {deshacerTarea && <div style={{ background: C.yemaSuave, padding: 9, marginBottom: 10, borderRadius: 8, fontSize: 12 }}>Actividad marcada como realizada. <button onClick={revertirActividadReciente}>Deshacer (30 segundos)</button></div>}
+              <label style={{ fontSize: 12 }}>Plantilla frecuente<select value="" onChange={e => { const t = JSON.parse(e.target.value || "null"); if (t) setFormTarea(v => ({ ...v, nombre: t.nombre, repeticion: t.repeticion, cadaDias: t.cadaDias || 22, diasSemana: t.diasSemana || [5] })); }} style={inputStyle}><option value="">Elegir plantilla</option>{[{ nombre: "Mantenimiento del zacate", repeticion: "dias", cadaDias: 22 }, { nombre: "Revisión de bebederos", repeticion: "semanal", diasSemana: [5] }, { nombre: "Limpieza profunda de galera", repeticion: "dias", cadaDias: 30 }, { nombre: "Conteo físico de inventario", repeticion: "dias", cadaDias: 30 }, ...plantillasTarea].map(t => <option key={t.nombre} value={JSON.stringify(t)}>{t.nombre}</option>)}</select></label>
+              <button onClick={async () => { const nombre = formTarea.nombre.trim(); if (!nombre) { avisar("⚠ Escribe el nombre de la plantilla"); return; } const actuales = await leer(K.plantillasTarea, []); const nuevos = [...actuales.filter(t => t.nombre !== nombre), { nombre, repeticion: formTarea.repeticion, cadaDias: formTarea.cadaDias, diasSemana: formTarea.diasSemana }]; if (await escribir(K.plantillasTarea, nuevos)) { setPlantillasTarea(nuevos); avisar("✓ Plantilla guardada para todos los dispositivos"); } }} style={{ marginBottom: 12 }}>Guardar actividad como plantilla</button>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                <Campo mitad etiqueta="Actividad" placeholder="ej. Mantenimiento del zacate" value={formTarea.nombre} onChange={e => setFormTarea({ ...formTarea, nombre: e.target.value })} />
+                <Campo mitad etiqueta="Asignada a" placeholder="Nombre de quien hará la actividad" value={formTarea.responsable || ""} onChange={e => setFormTarea({ ...formTarea, responsable: e.target.value })} />
+                <label style={{ flex: "1 1 190px", fontSize: 12.5 }}>Ámbito
+                  <select value={formTarea.lote} onChange={e => setFormTarea({ ...formTarea, lote: e.target.value })} style={selectStyle}>
+                    <option value="">Toda la granja</option>
+                    {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.raza}</option>)}
+                  </select>
+                </label>
+                <label style={{ flex: "1 1 160px", fontSize: 12.5 }}>Primera fecha
+                  <input type="date" value={formTarea.inicio} onChange={e => setFormTarea({ ...formTarea, inicio: e.target.value })} style={inputStyle} />
+                </label>
+                <label style={{ flex: "1 1 160px", fontSize: 12.5 }}>Repetición
+                  <select value={formTarea.repeticion} onChange={e => setFormTarea({ ...formTarea, repeticion: e.target.value })} style={selectStyle}>
+                    <option value="dias">Cada cierto número de días</option><option value="semanal">Días de la semana</option><option value="una">Una sola vez</option>
+                  </select>
+                </label>
+                {formTarea.repeticion === "dias" && <Campo tercio etiqueta="Cada cuántos días" type="number" min="1" max="3650" value={formTarea.cadaDias} onChange={e => setFormTarea({ ...formTarea, cadaDias: e.target.value })} />}
+              </div>
+              {formTarea.repeticion === "semanal" && <div style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "8px 0" }}>
+                {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((dia, i) => <label key={dia} style={{ fontSize: 13 }}>
+                  <input type="checkbox" checked={formTarea.diasSemana.includes(i)} onChange={e => setFormTarea(t => ({ ...t, diasSemana: e.target.checked ? [...t.diasSemana, i] : t.diasSemana.filter(x => x !== i) }))} /> {dia}
+                </label>)}
+              </div>}
+              <button onClick={guardarActividad} disabled={guardandoTarea || cargandoFondo} style={btnStyle}>{formTarea.id ? "Guardar cambios" : "Agregar actividad"}</button>
+              {formTarea.id && <button onClick={() => setFormTarea({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] })} style={{ marginLeft: 8 }}>Cancelar edición</button>}
+              <div style={{ marginTop: 14 }}>
+                {tareasProgramadas.map(t => {
+                  const prox = proximaTarea(t);
+                  const dias = prox ? diasHastaTarea(prox, hoyISO()) : null;
+                  const alcance = t.lote ? `Galera ${lotes.find(l => l.id === t.lote)?.galpon || t.lote}` : "Toda la granja";
+                  return <div key={t.id} style={{ borderTop: `1px solid ${C.borde}`, padding: "11px 0", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ flex: "1 1 240px", fontSize: 13 }}><b>{t.nombre}</b> · {alcance}{t.responsable ? ` · ${t.responsable}` : ""}<br />
+                      <small style={{ color: dias != null && dias <= 0 ? C.alerta : C.textoSuave }}>
+                        {prox ? `${dias < 0 ? `Atrasada ${-dias} día(s)` : dias === 0 ? "Para hoy" : `En ${dias} día(s)`} · ${prox}` : "Finalizada"}
+                        {t.repeticion === "dias" ? ` · cada ${t.cadaDias} días` : t.repeticion === "semanal" ? " · semanal" : " · una vez"}
+                      </small>
+                      {!!t.historialRealizaciones?.length && <details><summary>Historial ({t.historialRealizaciones.length})</summary>{t.historialRealizaciones.slice().reverse().map((h, i) => <div key={i}>{h.fecha} · {h.accion === "reversión" ? "Realización deshecha" : "Realizada"} por {mostrarNombre(h.por)}{h.responsable && ` · asignada a ${h.responsable}`}</div>)}</details>}
+                    </span>
+                    {prox && <button disabled={guardandoTarea} onClick={() => completarActividad(t)}>✓ Realizada</button>}
+                    <button disabled={guardandoTarea} onClick={() => setFormTarea({ ...t })}>Editar</button>
+                    <button disabled={guardandoTarea} onClick={() => borrarActividad(t)}>Eliminar</button>
+                  </div>;
+                })}
+                {!tareasProgramadas.length && <span style={{ fontSize: 13, color: C.textoSuave }}>Todavía no hay actividades programadas.</span>}
+              </div>
+            </Seccion>
+
+            <Seccion accion={<BotonGuardaMini />} num="9" titulo="Chequeo sanitario y ambiente" sub="Observación diaria del galpón — 2 minutos que detectan problemas antes que los números">
+              {(() => {
+                const ch = cap.chequeo || {};
+                const setCh = (campo, v) => setCap({ chequeo: { ...ch, [campo]: v } });
+                const Sel = ({ campo, etiqueta, ops }) => (
+                  <label style={{ display: "block", marginBottom: 10, flex: "1 1 45%", minWidth: 130 }}>
+                    <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>{etiqueta}</span>
+                    <select value={ch[campo] || ""} onChange={e => setCh(campo, e.target.value)} style={inputStyle}>
+                      <option value="">— sin revisar —</option>
+                      {ops.map(o => <option key={o}>{o}</option>)}
+                    </select>
+                  </label>
+                );
+                return (
+                  <>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <Sel campo="cascara" etiqueta="Calidad de cáscara" ops={["Buena", "Regular", "Mala (frágil)"]} />
+                      <Sel campo="cresta" etiqueta="Color de cresta" ops={["Rojo normal", "Roja intensa", "Pálida", "Morada/oscura"]} />
+                      <Sel campo="consumoObs" etiqueta="Consumo alimento observado" ops={["Normal", "Bajo", "Seleccionan / botan"]} />
+                      <Sel campo="aguaObs" etiqueta="Consumo agua observado" ops={["Normal", "Bajo", "Alto"]} />
+                      <Sel campo="heces" etiqueta="Consistencia de heces" ops={["Normal", "Diarrea", "Con sangre"]} />
+                      <Sel campo="respiratorio" etiqueta="Sonidos respiratorios" ops={["No", "Sí"]} />
+                      <Sel campo="secrecion" etiqueta="Secreción nasal" ops={["No", "Sí"]} />
+                      <Sel campo="comederos" etiqueta="Uniformidad de comederos" ops={["Buena", "Mala"]} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <Campo tercio etiqueta="pH del agua" unidad="pH" type="text" inputMode="decimal" placeholder="ej. 6.5" value={ch.ph || ""} onChange={e => setCh("ph", e.target.value)} />
+                      <Campo tercio etiqueta="Cloro residual" unidad="ppm" type="text" placeholder="ej. 0.08" value={ch.cloro || ""} onChange={e => setCh("cloro", e.target.value)} />
+                      <Campo tercio etiqueta="Temperatura" unidad="°C" type="text" inputMode="decimal" placeholder="27–29" value={ch.temp || ""} onChange={e => setCh("temp", e.target.value)} />
+                      <Campo tercio etiqueta="Humedad relativa" unidad="%" type="text" inputMode="numeric" placeholder="50–70" value={ch.humedad || ""} onChange={e => setCh("humedad", e.target.value)} />
+                      <Campo tercio etiqueta="Horas de luz" unidad="horas" type="text" inputMode="decimal" placeholder="16" value={ch.luz || ""} onChange={e => setCh("luz", e.target.value)} />
+                    </div>
+                    <Campo etiqueta="Observaciones del chequeo" type="text" placeholder="ej. tolvas llenas al fondo, poca actividad" value={ch.obs || ""} onChange={e => setCh("obs", e.target.value)} />
+                    <button onClick={() => setPrintDoc({ tipo: "medidas", lote: galponActivo })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir boleta de medidas de producción</button>
+                  </>
+                );
+              })()}
+            </Seccion>
+
+            <Seccion titulo="Bitácora de novedades" sub="UNA sola para toda la granja — compartida entre los gallineros y guardada con el control">
+              <textarea value={notaDia} onChange={e => { notaSuciaRef.current = true; setNotaDia(e.target.value); }} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
+            </Seccion>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => setRevisionGuardado(loteActivo?.id || "todos")} disabled={guardando} style={{ ...btnStyle, flex: 1, background: C.verdeSuave, color: C.verde }}>Revisar Gallinero {loteActivo?.galpon || ""}</button>
+              <button onClick={() => setRevisionGuardado("todos")} disabled={guardando} style={{ ...btnStyle, flex: 1.4 }}>Revisar control diario completo</button>
+            </div>
+            <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>
+              Guarda los gallineros de una vez. El huevo pasa a Bodega y el consumo descuenta de Planta.
+            </div>
+          </>
+        )}
+        {/* ══ REPORTE ══ */}
+        {vista === "reporte" && (
+          <>
+            <BarraSubmenu
+              subsecciones={[
+                { id: "resumen", nombre: "Resumen", icono: "📌" },
+                { id: "comparativo", nombre: "Comparativo", icono: "↔" },
+                { id: "decisiones", nombre: "Decisiones", icono: "⚠️" },
+                { id: "bitacora", nombre: "Bitácora", icono: "📝" },
+                { id: "auditoria", nombre: "Auditoría", icono: "🔍" },
+                { id: "kpis", nombre: "KPIs técnicos", icono: "📊" },
+                { id: "economia", nombre: "Economía", icono: "₡" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subReporte}
+              onChange={setSubReporte}
+            />
+            <button onClick={() => setPrintDoc({ tipo: "reporte", seccion: subReporte })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir: {nombreSeccionReporte}</button>
+          </>
+        )}
+        {vista === "reporte" && dHoy && (() => {
+          const Delta = ({ hoy, contra, invertir, unidad = "", dec = 1 }) => {
+            if (contra == null || !isFinite(contra)) return <span style={{ color: C.textoSuave }}>—</span>;
+            const d = hoy - contra;
+            const mejora = invertir ? d < 0 : d > 0;
+            const igual = Math.abs(d) < 0.05;
+            const color = igual ? C.textoSuave : mejora ? C.verde : C.alerta;
+            return <span style={{ color, fontWeight: 600 }}>{igual ? "=" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(dec)}${unidad}`}</span>;
+          };
+          const filas = [
+            { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dFechaCercana?.cartones, hoy: dHoy.cartones, u: "" },
+            { n: "% Postura", v: `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dFechaCercana?.postura, hoy: dHoy.postura, u: " pts" },
+            { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: dFechaCercana?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
+            { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: dFechaCercana?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
+            { n: "Mortalidad", v: `${dHoy.muertas} aves`, a: dAyer?.muertas, m: dFechaCercana?.muertas, hoy: dHoy.muertas, u: "", inv: true, dec: 0 },
+            { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: dFechaCercana?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
+            { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dFechaCercana?.pesoH, hoy: dHoy.pesoH, u: " g" },
+          ];
+          const brechaGen = metaGenetica == null ? null : metaGenetica - dHoy.postura;
+          const notasHoy = bitacora.filter(b => b.fecha === fHoy);
+          return (
+            <>
+              {verReporte("resumen") && <div style={{ background: C.verde, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 14 }}>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>Reporte del día · {fHoy}</div>
+                <div style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.6, opacity: 0.95 }}>
+                  Se produjeron <b>{dHoy.cartones.toFixed(1)} cartones</b> con postura de <b>{dHoy.postura.toFixed(1)}%</b>
+                  {dAyer && <> ({dHoy.postura >= dAyer.postura ? "▲" : "▼"} {Math.abs(dHoy.postura - dAyer.postura).toFixed(1)} pts vs ayer)</>},
+                  {brechaGen != null && <> a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta genética ({metaGenetica.toFixed(1)}%).</>}
+                  Mortalidad: <b>{dHoy.muertas}</b>. Quebrado: <b>{dHoy.pctQueb.toFixed(1)}%</b>. Concentrado en planta: <b>{saldoPlanta.toFixed(0)} kg</b>.
+                </div>
+              </div>}
+
+              {verReporte("comparativo") && <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} día(s) ${diasDiferencia < 0 ? "antes" : "después"}`}` : ""}). ${fechasDescartadas ? `${fechasDescartadas} control(es) con producción superior a las aves alojadas excluido(s).` : ""}`}>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
+                    <thead>
+                      <tr style={{ color: C.textoSuave, textAlign: "right", fontSize: 12 }}>
+                        <th style={{ textAlign: "left", padding: "6px 4px" }}>Indicador</th>
+                        <th style={{ padding: "6px 4px" }}>Datos {fHoy}</th>
+                        <th style={{ padding: "6px 4px" }}>vs {fAyer || "—"}</th>
+                        <th style={{ padding: "6px 4px" }}>vs {fechaComparacion || "—"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filas.map((f, i) => (
+                        <tr key={i} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
+                          <td style={{ textAlign: "left", padding: "9px 4px", fontWeight: 600 }}>{f.n}</td>
+                          <td style={{ padding: "9px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{f.v}</td>
+                          <td style={{ padding: "9px 4px" }}><Delta hoy={f.hoy} contra={f.a} invertir={f.inv} unidad={f.u} dec={f.dec ?? 1} /></td>
+                          <td style={{ padding: "9px 4px" }}><Delta hoy={f.hoy} contra={f.m} invertir={f.inv} unidad={f.u} dec={f.dec ?? 1} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Seccion>}
+
+              {verReporte("comparativo") && <Seccion titulo="vs Genética — por gallinero" sub="Postura del día contra la tabla de la casa genética">
+                {activos.map(l => {
+                  const r = registros.find(x => x.fecha === fHoy && x.lote === l.id);
+                  const p = r ? (r.cartones * HXC / l.aves) * 100 : null;
+                  return (
+                    <div key={l.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: p != null ? 0 : 4 }}>
+                        <b>Gallinero {l.galpon} · {l.raza} ({semanasDe(l.nac).toFixed(0)} sem){l.estadoProd && l.estadoProd !== "Producción normal" ? <span style={{ color: "#9A6605", fontWeight: 700 }}> · {l.estadoProd}</span> : null}</b>
+                        {p == null && <span style={{ color: C.textoSuave }}>sin registro hoy</span>}
+                      </div>
+                      {p != null && <BarraPostura actual={p} meta={metaPosturaLote(l, fHoy)} />}
+                    </div>
+                  );
+                })}
+              </Seccion>}
+
+              {verReporte("comparativo") && <Seccion titulo="⚖️ Peso corporal vs tabla genética" sub="Tu medida crítica — del último pesaje de cada gallinero">
+                {activos.map(l => {
+                  const pes = pesajes.find(p2 => p2.lote === l.id);
+                  if (!pes || !pes.pesos?.length) return (
+                    <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13.5 }}>
+                      <b>Gallinero {l.galpon}</b><span style={{ color: C.textoSuave }}>sin pesaje registrado</span>
+                    </div>
+                  );
+                  const prom = pes.pesos.reduce((a, b) => a + b, 0) / pes.pesos.length;
+                  const meta = metaPesoLote(l, pes.fecha, pes);
+                  const brechaG = meta ? prom - meta : null;
+                  const brechaP = meta ? (brechaG / meta) * 100 : null;
+                  const color = brechaP == null ? C.textoSuave : brechaP <= -10 ? C.alerta : brechaP <= -4 ? "#9A6605" : brechaP >= 8 ? "#9A6605" : C.verde;
+                  const [pd2, pm2, py2] = pes.fecha.split("/").map(Number);
+                  const dias = Math.round((new Date() - new Date(py2, pm2 - 1, pd2)) / 86400000);
+                  return (
+                    <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, flexWrap: "wrap", gap: 4 }}>
+                        <b>Gallinero {l.galpon} · {l.raza}</b>
+                        <span style={{ fontSize: 12, color: C.textoSuave }}>pesaje {pes.fecha.slice(0, 5)} · {pes.pesos.length} aves{dias > 21 ? " ⚠ viejo" : ""}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3 }}>
+                        <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>{prom.toFixed(0)} g</span>
+                        {meta > 0
+                          ? <b style={{ color, fontSize: 13.5 }}>{brechaG >= 0 ? "+" : ""}{brechaG.toFixed(0)} g vs tabla ({brechaP >= 0 ? "+" : ""}{brechaP.toFixed(1)}%) · meta {meta} g</b>
+                          : <span style={{ fontSize: 12.5, color: C.textoSuave }}>define el peso meta en Lotes para comparar</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </Seccion>}
+
+              {verReporte("decisiones") && <Seccion titulo="Para decidir hoy" sub={decisiones.length ? "Generado automáticamente con los datos del día — puedes modificar o descartar cada punto" : ""}>
+                {decisionesVisibles.length === 0 && <div style={{ fontSize: 14, color: C.verde, fontWeight: 500 }}>✓ Sin alertas — el día se comportó dentro de los rangos esperados.</div>}
+                {decisionesVisibles.map((d, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: d.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5 }}>
+                    <div style={{ display: "flex", gap: 8, flex: 1 }}>
+                      <span>{d.nivel === "rojo" ? "🔴" : "🟡"}</span>
+                      <div>
+                        <span>{d.textoAjustado || d.texto}</span>
+                        {d.ajuste && (
+                          <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>
+                            ✏️ Modificado por <b>{mostrarNombre(d.ajuste.responsable)}</b> ({d.ajuste.fecha}): <i>"{d.ajuste.razon}"</i>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "modificar")} title="Modificar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
+                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "eliminar")} title="Descartar / eliminar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
+                    </div>
+                  </div>
+                ))}
+              </Seccion>}
+
+              {verReporte("bitacora") && notasHoy.length > 0 && (
+                <Seccion titulo="Bitácora del día">
+                  {notasHoy.map((n, i) => (
+                    <div key={i} style={{ fontSize: 13.5, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
+                      {n.texto}{n.por && <span style={{ color: C.textoSuave }}> — {mostrarNombre(n.por)}</span>}
+                    </div>
+                  ))}
+                </Seccion>
+              )}
+              {verReporte("bitacora") && notasHoy.length === 0 && <Seccion titulo="Bitácora del día"><div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin novedades registradas para esta fecha.</div></Seccion>}
+            </>
+          );
+        })()}
+        {vista === "reporte" && !dHoy && verReporte("resumen", "comparativo", "decisiones", "bitacora") && (
+          <Seccion titulo="Reporte del día">
+            <div style={{ fontSize: 14, color: C.textoSuave }}>Aún no hay registros. Captura el control diario y el reporte se genera solo.</div>
+          </Seccion>
+        )}
+        {/* ══ BODEGA ══ */}
+        {vista === "bodega" && (
+          <>
+            {bodegaBorradorConsulta && !bodegaTieneCambios && (
+              <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.yemaSuave, border: `1px solid ${C.yema}`, fontSize: 12.5, lineHeight: 1.45 }}>
+                <b>📝 Hay un borrador de bodega sin enviar.</b>
+                <div style={{ marginTop: 3 }}>Se guardó antes de consultar el historial. Recuperarlo vuelve a colocar el movimiento y sus salidas en el formulario.</div>
+                <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
+                  <button type="button" onClick={() => {
+                    const b = bodegaBorradorConsulta;
+                    const movOriginal = bodegaMovs.find(m => String(m.id) === String(b.movimientoId)) || null;
+                    setFechaBodega(b.fecha || hoyISO());
+                    fechaBodegaRef.current = b.fecha || hoyISO();
+                    setMovBodegaId(movOriginal?.id ?? b.movimientoId ?? null);
+                    movBodegaIdRef.current = movOriginal?.id ?? b.movimientoId ?? null;
+                    movBodegaOriginalRef.current = movOriginal ? snapshotBodega(movOriginal) : null;
+                    setMovBodega(b.movBodega || { comprado: "", vendGranja: "", destruido: "", regalado: "" });
+                    setRepartos(b.repartos || []);
+                    setObsInv(b.obsInv || "");
+                    setAjusteBodega(b.ajusteBodega || "");
+                    setPasosBodega(b.pasosBodega || { salidas: false, devoluciones: false, conteo: false });
+                    setBodegaBorradorConsulta(null);
+                    avisar("✓ Borrador de bodega recuperado");
+                  }} style={{ padding: "7px 11px", border: "none", borderRadius: 8, background: C.verde, color: "#fff", cursor: "pointer", fontWeight: 600 }}>Recuperar borrador</button>
+                  <button type="button" onClick={async () => { await eliminarBorrador("consulta-bodega", "local").catch(() => {}); setBodegaBorradorConsulta(null); avisar("✓ Borrador descartado"); }} style={{ padding: "7px 11px", border: `1px solid ${C.borde}`, borderRadius: 8, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Descartar</button>
+                </div>
+              </div>
+            )}
+            {retirosActivos.length > 0 && (
+              <div style={{ background: C.alertaSuave, border: `1px solid #EBC0B5`, borderRadius: 14, padding: "12px 15px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.5 }}>
+                <b>🔴 Retiro de medicamento activo:</b> {retirosActivos.map(m => `G${m.galpon} (${m.producto}) hasta ${m.retiroHasta}`).join(" · ")}. No comercializar huevo de esos gallineros.
+              </div>
+            )}
+            <button onClick={() => setPrintDoc({ tipo: "bodega" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir movimiento de bodega</button>
+            <label id="form-bodega" style={{ display: "block", marginBottom: 10, scrollMarginTop: 110 }}>
+              <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del movimiento de bodega</span>
+              <input type="date" value={fechaBodega} onChange={e => cambiarFechaBodegaSegura(e.target.value)} style={inputStyle} />
+            </label>
+            {bodegaMovs.filter(m => fechaHistorialISO(m.fecha) === fechaBodega).length > 1 && <div style={{ padding: "9px 12px", marginBottom: 10, background: C.alertaSuave, borderRadius: 9, fontSize: 12.5, color: C.alerta }}>
+              Hay movimientos duplicados para {fechaB}. Elige «Editar / conservar» en la fila correcta del historial; al guardar con un motivo se unificarán y quedará copia de los otros valores en la bitácora.
+            </div>}
+            {fechaBodega !== hoyISO() && (
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9A6605", background: C.yemaSuave, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
+                📅 Estás en la bodega del {fechaB} — al guardar se {bodegaMovs.some(m => m.fecha === fechaB) ? "editará ese día y se recalcularán los saldos siguientes" : "creará ese día y se recalculará la cadena de saldos"}.
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+              <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
+              <KPI etiqueta="Entradas (+)" valor={f2Dec(producidoHoyCart + Number(movBodega.comprado || 0))} unidad="cart" tono="ok" sub={`Producido ${producidoHoyCart.toFixed(1)}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${Number(movBodega.comprado).toFixed(1)}` : ""}`} />
+              <KPI etiqueta="Salidas (−)" valor={f2Dec(rutaNeta + Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0))} unidad="cart" tono={rutaNeta > 0 ? "alerta" : undefined} sub={`Ruta neta ${rutaNeta.toFixed(1)}${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)) > 0 ? ` + otras ${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)).toFixed(1)}` : ""}`} />
+              <KPI etiqueta="Saldo proyectado" valor={f2Dec(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : "= inicial + entradas − salidas"} />
+            </div>
+
+            {/* Sub-menú de funciones de Bodega */}
+            <div className="v10-subnav" style={{ display: "flex", gap: 7, overflowX: "auto", padding: "4px 2px 14px", marginBottom: 14, borderBottom: `1px solid ${C.borde}` }}>
+              {[
+                { id: "producido", nombre: "1. Huevo producido", icono: "🥚" },
+                { id: "ruta", nombre: "2. Salida a ruta", icono: "🚚" },
+                { id: "otros", nombre: "3. Otros movimientos", icono: "📦" },
+                { id: "cierre", nombre: "4. Cierre del día", icono: "🔒" },
+                { id: "historial", nombre: "Historial", icono: "📋" },
+                { id: "apertura", nombre: "Apertura", icono: "⚙️" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ].map(sub => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => cambiarSubBodega(sub.id)}
+                  style={{
+                    padding: "8px 14px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: 20,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    border: subBodega === sub.id ? `2px solid ${C.verde}` : `1.5px solid ${C.borde}`,
+                    background: subBodega === sub.id ? C.verdeSuave : C.superficie,
+                    color: subBodega === sub.id ? C.verde : C.texto,
+                    fontFamily: "'Inter', sans-serif",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {sub.icono} {sub.nombre}
+                </button>
+              ))}
+            </div>
+
+            {(subBodega === "producido" || subBodega === "todo") && (
+            <Seccion num="1" titulo="Huevo producido por gallinero" sub={`Automático desde el Control diario del ${fechaB}`}>
+              {producidoPorGalpon.map(g => (
+                <div key={g.galpon} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 14 }}>
+                  <span><b>Gallinero {g.galpon}</b> <span style={{ color: C.textoSuave, fontSize: 12 }}>· {g.raza}</span></span>
+                  <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: g.cartones > 0 ? C.verde : C.textoSuave }}>
+                    {g.cartones > 0 ? `${g.cartones.toFixed(1)} cart` : "sin registro"}
+                  </span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 0", fontSize: 14.5 }}>
+                <b>Total granja</b>
+                <b style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.verde }}>{producidoHoyCart.toFixed(1)} cartones</b>
+              </div>
+              {subBodega !== "todo" && (
+                <button type="button" onClick={() => setSubBodega("ruta")} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 12, padding: "10px", fontSize: 13.5 }}>
+                  Siguiente: 2. Salida a ruta por repartidor ›
+                </button>
+              )}
+            </Seccion>
+            )}
+
+            {(subBodega === "ruta" || subBodega === "todo") && (
+            <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Salida menos devoluciones = salida neta de ruta">
+              {repartos.map((r, i) => {
+                const neto = Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0);
+                return (
+                  <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: i === 0 ? `1px solid ${C.borde}` : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <input type="text" value={r.nombre} placeholder="Nombre del repartidor"
+                        onChange={e => {
+                          const rs = [...repartos]; rs[i] = { ...r, nombre: e.target.value }; setRepartos(rs);
+                          guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });
+                        }}
+                        style={{ ...inputStyle, flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 700 }} />
+                      <span style={{ color: C.verde, fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>neto {neto.toFixed(1)}</span>
+                      <button onClick={() => {
+                        const rs = repartos.filter((_, j) => j !== i); setRepartos(rs);
+                        guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });
+                      }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
+                    </div>
+                    {(() => {
+                      const nums = String(r.tiq || "").trim().split(/[\s,;]+/).filter(Boolean);
+                      const buscarTiquete = (num) => {
+                        for (const reg of registros) {
+                          const t = (reg.tiquetes || []).find(x => String(x.num).trim() === num);
+                          if (t) { const l2 = lotes.find(x => x.id === reg.lote); return { cartones: Number(t.cartones || 0), peso: Number(t.peso || 0), fecha: reg.fecha, galpon: l2?.galpon }; }
+                        }
+                        return null;
+                      };
+                      const yaSalio = (num) => bodegaMovs.some(mv => (mv.repartos || []).some(rp => (rp.tiquetesDet || []).some(td => String(td.num) === num)));
+                      const det = nums.map(num => { const info = buscarTiquete(num); return { num, ...info, hallado: !!info, repetido: info && yaSalio(num) }; });
+                      const hallados = det.filter(d => d.hallado);
+                      const totalCart = hallados.reduce((a, d) => a + d.cartones, 0);
+                      const totalKg = hallados.reduce((a, d) => a + d.peso, 0);
+                      return (
+                        <div style={{ marginBottom: 8 }}>
+                          <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textoSuave, marginBottom: 3 }}>
+                            Tiquetes que se lleva — NÚMEROS separados por espacio: el sistema busca cada tiquete y suma sus cartones
+                          </span>
+                          <input type="text" placeholder="ej. 4521 4522 4530" value={r.tiq || ""}
+                            onChange={e => {
+                              const crudo = e.target.value;
+                              const ns2 = crudo.trim().split(/[\s,;]+/).filter(Boolean);
+                              const dets = ns2.map(num => { const info = buscarTiquete(num); return info ? { num, cartones: info.cartones, peso: info.peso } : null; }).filter(Boolean);
+                              const tot = dets.reduce((a, d) => a + d.cartones, 0);
+                              const rs = [...repartos];
+                              rs[i] = { ...r, tiq: crudo, tiquetesDet: dets, ...(dets.length ? { salida: String(+tot.toFixed(1)) } : {}) };
+                              setRepartos(rs);
+                            }}
+                            style={{ ...inputStyle, marginBottom: 4, padding: "8px 10px", fontSize: 13.5, background: hallados.length ? C.verdeSuave : C.superficie }} />
+                          {det.length > 0 && (
+                            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                              {det.map((d, j) => (
+                                <span key={j} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 10,
+                                  background: !d.hallado ? "#FBEAE6" : d.repetido ? C.yemaSuave : C.verdeSuave,
+                                  color: !d.hallado ? C.alerta : d.repetido ? "#9A6605" : C.verde }}>
+                                  #{d.num}{d.hallado ? `: ${d.cartones} cart` + (d.peso ? ` · ${d.peso.toFixed(1)} kg` : "") + ` (G${d.galpon} ${String(d.fecha).slice(0, 5)})` : ": no existe en producción"}{d.repetido ? " ⚠ ya salió antes" : ""}
+                                </span>
+                              ))}
+                              {hallados.length > 0 && (
+                                <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: C.verde, color: "#fff" }}>
+                                  Σ {hallados.length} tiq · {totalCart.toFixed(1)} cart{totalKg > 0 ? ` · ${totalKg.toFixed(1)} kg` : ""} → Salida
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input type="text" inputMode="decimal" placeholder="Salida" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Dev. bueno" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Dev. malo" value={r.devMalo} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devMalo: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <button onClick={() => setRepartos([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
+                style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Agregar repartidor</button>
+            </Seccion>
+            )}
+
+            {(subBodega === "otros" || subBodega === "todo") && (
+            <Seccion num="3" titulo="Otros movimientos del día" sub="Solo si aplica — en cartones">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Campo mitad etiqueta="Huevo comprado (+)" type="text" inputMode="decimal" placeholder="0" value={movBodega.comprado} onChange={e => setMovBodega({ ...movBodega, comprado: e.target.value })} />
+                <Campo mitad etiqueta="Vendido en granja (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.vendGranja} onChange={e => setMovBodega({ ...movBodega, vendGranja: e.target.value })} />
+                <Campo mitad etiqueta="Destruido/quebrado en bodega (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => setMovBodega({ ...movBodega, destruido: e.target.value })} />
+                <Campo mitad etiqueta="Regalado / salida gratis (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => setMovBodega({ ...movBodega, regalado: e.target.value })} />
+              </div>
+              {subBodega !== "todo" && (
+                <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => setSubBodega("ruta")} style={{ padding: "10px 14px", fontSize: 13, background: "transparent", border: `1px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>‹ 2. Salida a ruta</button>
+                  <button type="button" onClick={() => setSubBodega("cierre")} style={{ ...btnStyle, flex: 1, margin: 0, padding: "10px", fontSize: 13.5 }}>Siguiente: 4. Cierre del día ›</button>
+                </div>
+              )}
+            </Seccion>
+            )}
+
+            {(subBodega === "cierre" || subBodega === "todo") && (
+            <Seccion num="4" titulo="Cierre del día" sub="Revisa el movimiento completo, ajusta si contaste, y guarda">
+              <div style={{ fontSize: 14, marginBottom: 12, display: "grid", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del día (=)</span><b>{f2Dec(saldoBase)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Huevo producido (+)</span><b>{f2Dec(producidoHoyCart)}</b></div>
+                {Number(movBodega.comprado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Comprado (+)</span><b>{Number(movBodega.comprado).toFixed(1)}</b></div>}
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Salida neta a ruta (−)</span><b>{rutaNeta.toFixed(1)}</b></div>
+                {Number(movBodega.vendGranja || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Vendido en granja (−)</span><b>{Number(movBodega.vendGranja).toFixed(1)}</b></div>}
+                {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (−)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}
+                {Number(movBodega.regalado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Regalado (−)</span><b>{Number(movBodega.regalado).toFixed(1)}</b></div>}
+              </div>
+              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${f2Dec(saldoCalculado)})`} type="text" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
+              {hayAjuste && <div style={{ fontSize: 12.5, color: difAjuste === 0 ? C.verde : "#9A6605", marginTop: -6, marginBottom: 10 }}>
+                {difAjuste === 0 ? "✓ El conteo coincide con lo calculado" : `El saldo se fijará en ${f2Dec(ajusteBodega)} cartones — diferencia de ${difAjuste > 0 ? "+" : ""}${f2Dec(difAjuste)} vs lo calculado (quedará registrada)`}
+              </div>}
+              <Campo etiqueta="Observaciones del día" type="text" placeholder="Opcional" value={obsInv} onChange={e => setObsInv(e.target.value)} />
+              {movBodegaId != null && <Campo etiqueta="Motivo del cambio (obligatorio para editar)" type="text" placeholder="Ej. corregir devolución de ruta del 25" value={motivoEdicionBodega} onChange={e => setMotivoEdicionBodega(e.target.value)} />}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, marginBottom: 12 }}>
+                <b>Saldo final en bodega (=)</b><b style={{ color: C.verde }}>{saldoFinal.toFixed(1)} cartones</b>
+              </div>
+              <button onClick={guardarBodega} disabled={guardando} style={btnStyle}>{guardando ? "Guardando…" : "Guardar movimiento del día"}</button>
+              <details style={{ marginTop: 12, padding: 10, background: C.verdeSuave, borderRadius: 10 }}><summary style={{ fontWeight: 700 }}>Cierre guiado de bodega</summary>
+                <p style={{ fontSize: 12 }}>Revisa los tiquetes de cada ruta, digita las devoluciones y cuenta los cartones físicos arriba. Guarda el movimiento antes de confirmar el cierre.</p>
+                {[["salidas", "Tiquetes y salidas revisados"], ["devoluciones", "Devoluciones buenas y malas revisadas"], ["conteo", "Saldo físico contado y registrado"]].map(([k, etiqueta]) => <label key={k} style={{ display: "block", fontSize: 12, padding: 5 }}><input type="checkbox" checked={pasosBodega[k]} onChange={e => setPasosBodega(v => ({ ...v, [k]: e.target.checked }))} /> {etiqueta}</label>)}
+                {bodegaMovs.find(m => String(m.id) === String(movBodegaId))?.cierreVerificado && <div style={{ color: C.verde, fontSize: 12 }}>✓ Cerrado por {mostrarNombre(bodegaMovs.find(m => String(m.id) === String(movBodegaId)).cierreVerificado.responsable)}</div>}
+                <button disabled={guardando} onClick={cerrarBodegaDia} style={{ ...btnStyle, marginTop: 8 }}>Confirmar cierre del día</button>
+              </details>
+              <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>Los cambios de movimientos existentes conservan la versión anterior y el motivo en el historial.</div>
+            </Seccion>
+            )}
+
+            {(subBodega === "apertura" || subBodega === "todo") && (
+            <Seccion titulo="Apertura de bodega — saldo inicial" sub="El punto de arranque oficial: desde esta fecha corren los balances; lo anterior queda como histórico sin afectar">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Campo mitad etiqueta="Cartones iniciales" type="text" inputMode="decimal" placeholder="ej. 1470" value={bodegaCfg.inicialCart}
+                  onChange={e => guardarCfgBodega({ ...bodegaCfg, inicialCart: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de apertura</span>
+                  <input type="date" value={bodegaCfg.inicialFecha || ""} onChange={e => guardarCfgBodega({ ...bodegaCfg, inicialFecha: e.target.value })} style={inputStyle} />
+                </label>
+              </div>
+              {bodegaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La bodega abre el {bodegaCfg.inicialFecha.split("-").reverse().join("/")} con {bodegaCfg.inicialCart || 0} cartones.</div>}
+            </Seccion>
+            )}
+
+            {(subBodega === "historial" || subBodega === "todo") && bodegaMovs.length > 0 && (
+              <Seccion titulo="Historial de bodega">
+                {selectorHistorial("bodega")}
+                {historialVisible(bodegaMovs, "bodega").map(m => {
+                  const duplicados = bodegaMovs.filter(x => fechaHistorialISO(x.fecha) === fechaHistorialISO(m.fecha)).length;
+                  return <div key={m.id} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 7 }}>
+                      <span><b>{m.fecha}</b> · +{m.producido} prod · −{Number(m.rutaNeta || 0).toFixed(1)} ruta{duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> · cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
+                      <b style={{ color: C.verde }}>= {f2Dec(m.saldoFinal)} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
+                      <button onClick={() => { cambiarFechaBodegaSegura(fechaHistorialISO(m.fecha), m.id); setSubBodega("cierre"); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
+                      <button onClick={() => setPrintDoc({ tipo: "bodega", movimientoId: m.id })} style={{ padding: "5px 9px", fontSize: 11.5, background: "#fff", color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>🖨 Imprimir</button>
+                    </div>
+                    {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
+                      {m.historialEdiciones.map((c, i) => <div key={i} style={{ padding: "7px 0", borderTop: `1px solid ${C.borde}`, fontSize: 11.5 }}>
+                        <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> · {mostrarNombre(c.por)} · {c.motivo}<br />
+                        Antes: {f2Dec(c.anterior?.saldoFinal)} cart → después: {f2Dec(c.nuevo?.saldoFinal)} cart.
+                        {!!c.duplicadosRetirados?.length && <details><summary>Registros duplicados retirados ({c.duplicadosRetirados.length})</summary>{c.duplicadosRetirados.map((retirado, j) => <ResumenMovimientoBodega key={j} movimiento={retirado} />)}</details>}
+                        <details><summary>Ver datos modificados</summary><CambiosBodega anterior={c.anterior} nuevo={c.nuevo} /></details>
+                      </div>)}
+                    </details>}
+                  </div>;
+                })}
+                {!historialVisible(bodegaMovs, "bodega").length && <div style={{ fontSize: 12.5, color: C.textoSuave }}>Sin movimientos en este período. Elige «Todo el historial» para ver fechas anteriores.</div>}
+              </Seccion>
+            )}
+          </>
+        )}
+        {/* ══ PLANTA DE CONCENTRADO ══ */}
+        {vista === "planta" && (
+          <>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+              <KPI etiqueta="Concentrado AVES" valor={f2Dec(saldoAves)} unidad="kg" tono={saldoAves < entregadoHoyKg * 2 && entregadoHoyKg > 0 ? "alerta" : "ok"} sub={`${f2Dec(saldoAves / 1000)} ton`} />
+              <KPI etiqueta="Concentrado GANADO" valor={f2Dec(saldoGanado)} unidad="kg" tono={saldoGanado < 0 ? "alerta" : "ok"} sub={`${f2Dec(saldoGanado / 1000)} ton`} />
+              <KPI etiqueta="Producido hoy" valor={f2Dec(producidoPlantaHoy)} unidad="kg" sub={`${plantaHoy.filter(m => m.tipo === "bache").reduce((s, m) => s + Number(m.baches || 0), 0)} baches`} />
+            </div>
+            <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 12, padding: "0 2px" }}>
+              Esquema por categoría: inventario inicial + baches producidos − servido (aves automático del Control diario · ganado se digita aquí) ± ajustes = inventario final.
+            </div>
+            {[["Aves", saldosAvesFormula, saldoAves], ["Ganado", saldosGanadoFormula, saldoGanado]].map(([categoria, saldos, total]) => <div key={categoria} style={{ padding: 12, background: C.superficie, borderRadius: 12, marginBottom: 10, fontSize: 13 }}>
+              <b>Existencias por fórmula · {categoria}</b>
+              {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por fórmula. El total de {total.toFixed(1)} kg aún no tiene distribución verificada.</div> : <>
+                {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg == null ? C.textoSuave : kg < 0 ? C.alerta : C.verde }}>{kg == null ? "Sin conteo" : `${f2Dec(kg)} kg`}</b></div>)}
+                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."}</div> : null; })()}
+              </>}
+            </div>)}
+
+            <BarraSubmenu
+              subsecciones={[
+                { id: "baches", nombre: "1. Baches producidos", icono: "🏗️" },
+                { id: "nucleo", nombre: "2. Núcleo (micros)", icono: "🧪" },
+                { id: "ganado", nombre: "3. Servido a ganado", icono: "🐄" },
+                { id: "ajustes", nombre: "4. Conteo y ajustes", icono: "⚖️" },
+                { id: "facturas", nombre: "5. Facturas MP", icono: "🧾" },
+                { id: "historial", nombre: "Historial", icono: "📋" },
+                { id: "apertura", nombre: "Apertura", icono: "⚙️" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subPlanta}
+              onChange={setSubPlanta}
+            />
+
+            {(subPlanta === "baches" || subPlanta === "todo") && (
+            <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
+              <select value={fBache.formula} onChange={e => setFBache({ ...fBache, formula: e.target.value })} style={selectStyle}>
+                {Object.keys(recetas.formulas).map(f => <option key={f} value={f}>{f} — {usoFormula(f)}</option>)}
+              </select>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Campo mitad etiqueta={`Cantidad de baches (mixer ${recetas.bacheKg} kg)`} type="text" inputMode="numeric" placeholder="ej. 2" value={fBache.baches} onChange={e => setFBache({ ...fBache, baches: e.target.value, kg: e.target.value ? String(Number(e.target.value) * recetas.bacheKg) : fBache.kg })} />
+                <Campo mitad etiqueta="Kilogramos totales" type="text" inputMode="decimal" placeholder="ej. 1380" value={fBache.kg} onChange={e => setFBache({ ...fBache, kg: e.target.value })} />
+                <Campo mitad etiqueta="No. de bache (control de planta)" type="text" placeholder="ej. B-0245" value={fBache.numBache} onChange={e => setFBache({ ...fBache, numBache: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del bache</span>
+                  <input type="date" value={fBache.fecha} onChange={e => setFBache({ ...fBache, fecha: e.target.value })} style={inputStyle} />
+                </label>
+              </div>
+              <button onClick={guardarBache} disabled={guardando} style={btnStyle}>Registrar producción</button>
+              <button onClick={() => setPrintDoc({ tipo: "bache", formula: fBache.formula, kg: fBache.kg || recetas.bacheKg })}
+                style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
+                🖨 Imprimir checklist del bache (básculas 1–4)
+              </button>
+            </Seccion>
+            )}
+
+            {(subPlanta === "nucleo" || subPlanta === "todo") && (
+            <Seccion titulo="Núcleo — premezcla de micros (báscula 4)" sub="Produce porciones por adelantado; cada bache de concentrado descuenta 1 porción automáticamente">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                {Object.entries(recetas.formulas).filter(([n2]) => kgNucleoDe(n2) > 0).map(([n2]) => {
+                  const disp = nucleoInv[n2] || 0;
+                  return (
+                    <div key={n2} style={{ flex: "1 1 130px", background: disp < 2 ? C.alertaSuave : C.fondo, borderRadius: 12, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 11.5, color: C.textoSuave }}>{n2} · {kgNucleoDe(n2).toFixed(1)} kg/bache</div>
+                      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: disp < 0 ? C.alerta : C.texto }}>{disp} porciones</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <select value={fNucleo.formula} onChange={e => setFNucleo({ ...fNucleo, formula: e.target.value })} style={{ ...inputStyle, flex: "1 1 40%", marginBottom: 12 }}>
+                  {Object.keys(recetas.formulas).filter(n2 => kgNucleoDe(n2) > 0).map(n2 => <option key={n2}>{n2}</option>)}
+                </select>
+                <Campo mitad etiqueta="Porciones producidas (1 = un bache de concentrado)" type="text" inputMode="numeric" placeholder="ej. 10" value={fNucleo.porciones} onChange={e => setFNucleo({ ...fNucleo, porciones: e.target.value })} />
+                <Campo mitad etiqueta="No. de producción de núcleo" type="text" placeholder="ej. N-012" value={fNucleo.numNucleo} onChange={e => setFNucleo({ ...fNucleo, numNucleo: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de producción</span>
+                  <input type="date" value={fNucleo.fecha} onChange={e => setFNucleo({ ...fNucleo, fecha: e.target.value })} style={inputStyle} />
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={producirNucleo} style={{ ...btnStyle, flex: 1 }}>Registrar núcleo producido</button>
+                <button onClick={() => setPrintDoc({ tipo: "nucleo", formula: fNucleo.formula, baches: fNucleo.porciones || 1 })}
+                  style={{ flex: 1, padding: "12px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                  🖨 Imprimir hoja de núcleo
+                </button>
+              </div>
+            </Seccion>
+            )}
+
+            {(subPlanta === "ganado" || subPlanta === "todo") && (
+            <Seccion titulo="B. Servido a ganado" sub="Calcula el servido de hoy desde animales × kg por animal configurados en Materias primas, o registra el peso real manualmente.">
+              {(() => {
+                const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), plantaMovs);
+                return <div style={{ background: C.verdeSuave, borderRadius: 12, padding: 13, marginBottom: 16 }}>
+                  <b style={{ color: C.verde, fontSize: 14 }}>Servido calculado de hoy · {hoyStr()}</b>
+                  <div style={{ fontSize: 12, color: C.textoSuave, margin: "4px 0 9px" }}>Confirma el servido real antes de registrarlo. Se descontará del inventario de ganado una sola vez por corral.</div>
+                  {plan.filas.map(g => <div key={g.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, borderTop: "1px solid #c7d8c9", padding: "7px 0", fontSize: 13, flexWrap: "wrap" }}>
+                    <span><b>{g.nombre}</b> · {g.formula}<br /><small>{g.animales} animales × {g.kgAnimal} kg</small></span>
+                    <label style={{ fontSize: 11 }}>Porción kg/animal<input type="number" min="0.01" step="0.01" value={racionesGanado[g.key] ?? (mpConfig.ganado || [])[Number(g.key)]?.kgAnimal ?? ""} onChange={e => setRacionesGanado(v => ({ ...v, [g.key]: e.target.value }))} style={{ ...inputStyle, width: 90, margin: 0 }} /></label>
+                    <b style={{ color: g.registrado ? C.textoSuave : C.verde, whiteSpace: "nowrap" }}>{g.kg.toFixed(1)} kg {g.registrado ? "✓ registrado" : ""}</b>
+                  </div>)}
+                  {Object.keys(racionesGanado).length > 0 && <button onClick={guardarRacionesGanado} style={{ ...btnStyle, marginTop: 8 }}>Guardar nuevas porciones</button>}
+                  {!plan.filas.length && <div style={{ fontSize: 12.5 }}>Configura animales, ración y fórmula para cada corral en Materias primas → Consumo proyectado.</div>}
+                  {plan.sinGrupo.length > 0 && <div style={{ color: C.alerta, fontSize: 12, marginBottom: 8 }}>Hay {plan.sinGrupo.length} servido(s) manual(es) de hoy sin corral. El registro calculado se detiene para evitar duplicarlos.</div>}
+                  <div style={{ fontWeight: 700, fontSize: 13, margin: "8px 0" }}>Pendiente: {plan.pendientes.reduce((s, g) => s + g.kg, 0).toFixed(1)} kg en {plan.pendientes.length} corral(es) · inventario actual: {saldoGanado.toFixed(1)} kg</div>
+                  <button onClick={registrarServidoCalculado} disabled={guardando || cargandoFondo || !!Object.keys(racionesGanado).length || !plan.pendientes.length || !!plan.sinGrupo.length} style={btnStyle}>Registrar servido calculado de hoy</button>
+                </div>;
+              })()}
+              <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 9 }}>Registrar servido real manualmente</div>
+              <label style={{ display: "block", marginBottom: 12, maxWidth: 220 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del servido</span>
+                <input type="date" value={fServGan.fecha} onChange={e => setFServGan({ ...fServGan, fecha: e.target.value })} style={inputStyle} />
+              </label>
+              <label style={{ display: "block", fontSize: 12.5 }}>Corral / grupo
+                <select value={fServGan.grupoKey} onChange={e => {
+                  const key = e.target.value;
+                  const g = key === "" ? null : (mpConfig.ganado || [])[Number(key)];
+                  setFServGan({ ...fServGan, grupoKey: key, detalle: g?.nombre || fServGan.detalle, formula: g?.formula || fServGan.formula, kg: g ? String(+(Number(g.animales || 0) * Number(g.kgAnimal || 0)).toFixed(2)) : fServGan.kg });
+                }} style={selectStyle}>
+                  <option value="">Otro / sin corral</option>
+                  {(mpConfig.ganado || []).map((g, i) => <option key={i} value={String(i)}>{g.nombre}</option>)}
+                </select>
+              </label>
+              <select value={fServGan.formula} onChange={e => setFServGan({ ...fServGan, formula: e.target.value })} style={selectStyle}>
+                <option value="">Tipo de concentrado (obligatorio)</option>
+                {Object.keys(recetas.formulas).filter(f => usoFormula(f) === "Ganado").map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Campo mitad etiqueta="Kg servidos hoy" type="text" inputMode="decimal" placeholder="ej. 189" value={fServGan.kg} onChange={e => setFServGan({ ...fServGan, kg: e.target.value })} />
+                <Campo mitad etiqueta="Detalle / corral" type="text" placeholder="ej. Potreros + toros" value={fServGan.detalle} onChange={e => setFServGan({ ...fServGan, detalle: e.target.value })} />
+              </div>
+              <button onClick={guardarServidoGanado} disabled={guardando} style={btnStyle}>Registrar servido a ganado</button>
+            </Seccion>
+            )}
+
+            {(subPlanta === "ajustes" || subPlanta === "todo") && (
+            <Seccion titulo="C. Ajuste por conteo físico" sub="Cuenta el concentrado real y la app registra la diferencia">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 40%" }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
+                  <select value={fAjPlanta.categoria} onChange={e => setFAjPlanta({ ...fAjPlanta, categoria: e.target.value, formula: "", saldoReal: "" })} style={inputStyle}>
+                    <option>Aves</option><option>Ganado</option><option>Núcleo</option>
+                  </select>
+                </label>
+                <label style={{ flex: "1 1 160px", fontSize: 12 }}>{fAjPlanta.categoria === "Núcleo" ? "Núcleo / fórmula" : "Tipo de concentrado"}<select value={fAjPlanta.formula} onChange={e => setFAjPlanta({ ...fAjPlanta, formula: e.target.value, saldoReal: "" })} style={inputStyle}><option value="">Elegir fórmula</option>{(fAjPlanta.categoria === "Núcleo" ? [...new Set([...Object.keys(recetas.formulas).filter(n => kgNucleoDe(n) > 0), ...Object.keys(nucleoInv)])] : Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria)).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+                <Campo mitad etiqueta={`Saldo real de esta fórmula (app: ${fAjPlanta.categoria === "Núcleo" ? Number(nucleoInv[fAjPlanta.formula] || 0).toFixed(1) : (fAjPlanta.categoria === "Aves" ? saldosAvesFormula : saldosGanadoFormula)?.[fAjPlanta.formula]?.toFixed(1) ?? "Sin conteo"} ${fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"})`} type="text" inputMode="decimal" placeholder={fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"} value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
+                <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre de quien contó" value={fAjPlanta.responsable} onChange={e => setFAjPlanta({ ...fAjPlanta, responsable: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
+                  <input type="date" value={fAjPlanta.fecha} onChange={e => setFAjPlanta({ ...fAjPlanta, fecha: e.target.value })} style={inputStyle} />
+                </label>
+              </div>
+              {fAjPlanta.categoria !== "Núcleo" && <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 10 }}>Cuenta una fórmula a la vez. Los kilos sin fórmula asignada permanecen como pendientes hasta que cuentes las demás. Anota 0 si no queda de la fórmula elegida.</div>}
+              <button onClick={guardarAjustePlanta} disabled={guardando} style={btnStyle}>Registrar ajuste</button>
+              <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes físicos</div>
+              {selectorHistorial("ajustesPlanta")}
+              {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => (
+                <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                  <div>
+                    <b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}
+                    {m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" · ")}</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button type="button" onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ fontSize: 11, padding: "3px 8px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Editar</button>
+                    <button type="button" onClick={() => eliminarMovPlanta(m)} style={{ fontSize: 11, padding: "3px 8px", background: confirmar === `delplanta:${m.id}` ? C.alerta : "#F1F1EA", color: confirmar === `delplanta:${m.id}` ? "#fff" : C.alerta, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>{confirmar === `delplanta:${m.id}` ? "Confirmar" : "Eliminar"}</button>
+                  </div>
+                </div>
+              ))}
+            </Seccion>
+            )}
+
+            {(subPlanta === "facturas" || subPlanta === "todo") && (
+            <Seccion titulo="D. Productos y facturas recibidas">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Campo tercio etiqueta="Proveedor" type="text" placeholder="ej. AVIN" value={fFactura.proveedor} onChange={e => setFFactura({ ...fFactura, proveedor: e.target.value })} />
+                <Campo tercio etiqueta="Producto" type="text" placeholder="ej. Maíz 2 ton" value={fFactura.producto} onChange={e => setFFactura({ ...fFactura, producto: e.target.value })} />
+                <Campo tercio etiqueta="Monto ₡" type="text" inputMode="decimal" placeholder="0" value={fFactura.monto} onChange={e => setFFactura({ ...fFactura, monto: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha</span>
+                  <input type="date" value={fFactura.fecha} onChange={e => setFFactura({ ...fFactura, fecha: e.target.value })} style={inputStyle} />
+                </label>
+              </div>
+              <button onClick={guardarFactura} style={btnStyle}>Registrar factura</button>
+              <div style={{ marginTop: 12 }}>
+                {selectorHistorial("facturasPlanta")}
+                {historialVisible(facturas, "facturasPlanta").map((f, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                    <span><b>{f.fecha.slice(0, 5)}</b> · {f.proveedor} — {f.producto}</span>
+                    {f.monto && <b>₡{Number(f.monto).toLocaleString()}</b>}
+                    <button onClick={() => eliminarFacturaPlanta(f)} title="Eliminar" style={{ padding: "0 9px", fontSize: 14, background: "transparent", color: C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </Seccion>
+            )}
+
+            {(subPlanta === "historial" || subPlanta === "todo") && movsPlanta.length > 0 && (
+              <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. Puedes editar cualquier detalle o ajuste, o eliminar movimientos.">
+                <div className="v10-plant-filters">
+                  <input aria-label="Buscar movimiento de planta" placeholder="Fórmula, detalle, número o responsable" value={filtroPlanta.texto} onChange={e => setFiltroPlanta(v => ({ ...v, texto: e.target.value }))} />
+                  <select aria-label="Tipo de movimiento" value={filtroPlanta.tipo} onChange={e => setFiltroPlanta(v => ({ ...v, tipo: e.target.value }))}><option value="">Todos los tipos</option>{["bache", "nucleo", "servido", "ajuste"].map(t => <option key={t}>{t}</option>)}</select>
+                  <select aria-label="Categoría" value={filtroPlanta.categoria} onChange={e => setFiltroPlanta(v => ({ ...v, categoria: e.target.value }))}><option value="">Todas las categorías</option>{["Aves", "Ganado", "Núcleo"].map(t => <option key={t}>{t}</option>)}</select>
+                  <select aria-label="Fórmula" value={filtroPlanta.formula} onChange={e => setFiltroPlanta(v => ({ ...v, formula: e.target.value }))}><option value="">Todas las fórmulas</option>{Object.keys(recetas.formulas).map(f => <option key={f}>{f}</option>)}</select>
+                  <label>Desde <input type="date" value={filtroPlanta.desde} onChange={e => setFiltroPlanta(v => ({ ...v, desde: e.target.value }))} /></label><label>Hasta <input type="date" value={filtroPlanta.hasta} onChange={e => setFiltroPlanta(v => ({ ...v, hasta: e.target.value }))} /></label>
+                  <button onClick={() => setFiltroPlanta(filtroPlantaInicial())}>Limpiar</button>
+                </div>
+                <div className="v10-history-actions">{selectorHistorial("planta")}<span>{historialVisible(plantaFiltrada, "planta").length} de {movsPlanta.length} movimientos</span><button onClick={() => setPrintDoc({ tipo: "planta_historial", items: historialVisible(plantaFiltrada, "planta") })}>🖨 Imprimir filtrados</button></div>
+                {historialVisible(plantaFiltrada, "planta").map((m, i) => (
+                  <div key={m.id || i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
+                    <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
+                    <button onClick={() => eliminarMovPlanta(m)} title="Eliminar movimiento" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
+                    </div>
+                    {m.tipo === "ajuste" && (
+                      <button onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ marginTop: 7, fontSize: 12, marginRight: 8, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 600 }}>Editar ajuste</button>
+                    )}
+                    <button onClick={() => { setEditarDetallePlanta({ original: plantaMovs.find(x => String(x.id) === String(m.id)) || m, campos: { detalle: m.detalle || "", numBache: m.numBache || "", numNucleo: m.numNucleo || "", responsable: m.responsable || m.por || completadoPor } }); setMotivoDetallePlanta(""); }} style={{ marginTop: 7, fontSize: 12 }}>Corregir detalle</button>
+                    {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} · {mostrarNombre(ed.por)} · {ed.motivo}<div>Antes: {ed.anterior?.detalle || ed.anterior?.numBache || ed.anterior?.numNucleo || "—"} → Después: {ed.nuevo?.detalle || ed.nuevo?.numBache || ed.nuevo?.numNucleo || "—"}</div></div>)}</details>}
+                  </div>
+                ))}
+                {!historialVisible(plantaFiltrada, "planta").length && <p>No hay movimientos con estos filtros.</p>}
+              </Seccion>
+            )}
+
+            {(subPlanta === "apertura" || subPlanta === "todo") && (
+            <Seccion titulo="Apertura de planta — inventario inicial" sub="Desde la fecha de apertura corren los balances; baches y consumos anteriores quedan como histórico sin afectar">
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Campo tercio etiqueta="Inicial AVES (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialAves} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialAves: e.target.value })} />
+                <Campo tercio etiqueta="Inicial GANADO (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialGanado} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialGanado: e.target.value })} />
+                <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 130 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de apertura</span>
+                  <input type="date" value={plantaCfg.inicialFecha || ""} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialFecha: e.target.value })} style={inputStyle} />
+                </label>
+              </div>
+              {plantaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La planta abre el {plantaCfg.inicialFecha.split("-").reverse().join("/")} con {plantaCfg.inicialAves || 0} kg (aves) y {plantaCfg.inicialGanado || 0} kg (ganado).</div>}
+            </Seccion>
+            )}
+          </>
+        )}
+        {/* ══ PEDIDO MATERIA PRIMA ══ */}
+        {vista === "pedidomp" && (
+          <>
+                        <BarraSubmenu
+              subsecciones={[
+                { id: "kardex", nombre: "Kardex MP", icono: "📦" },
+                { id: "consumo", nombre: "1. Consumo", icono: "📊" },
+                { id: "inventario", nombre: "2. Inventario", icono: "📋" },
+                { id: "calculado", nombre: "3. Calculado", icono: "🧮" },
+                { id: "proveedor", nombre: "4. Proveedor", icono: "📱" },
+                { id: "pedidos", nombre: "5. Historial", icono: "🚚" },
+                { id: "todo", nombre: "Ver todo", icono: "☰" },
+              ]}
+              activo={subPedidoMP}
+              onChange={setSubPedidoMP}
+            />
+
+            {(subPedidoMP === "kardex" || subPedidoMP === "todo") && (
+              <Seccion titulo="📦 Kardex de materias primas" sub="Perpetuo: entradas por facturas − salidas por baches y núcleo = saldo teórico, conciliado contra tu conteo físico">
+              {kardex.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Aún sin movimientos — se llena solo con las facturas (PDF con líneas) y la producción registrada.</div>}
+              {kardex.length > 0 && (() => {
+                const codigos = [...new Set(kardex.map(m2 => m2.mp))];
+                return (
+                  <>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 520 }}>
+                        <thead><tr style={{ color: C.textoSuave, fontSize: 11, textAlign: "right" }}>
+                          <th style={{ textAlign: "left", padding: "5px 4px" }}>Materia prima</th>
+                          <th style={{ padding: "5px 4px" }}>Entradas</th><th style={{ padding: "5px 4px" }}>Salidas</th>
+                          <th style={{ padding: "5px 4px" }}>Saldo kardex</th><th style={{ padding: "5px 4px" }}>Conteo físico</th><th style={{ padding: "5px 4px" }}>Diferencia</th>
+                        </tr></thead>
+                        <tbody>
+                          {codigos.map(c2 => {
+                            const mp = mpCat.find(m2 => m2.c === c2) || { n: c2 };
+                            const ent = kardex.filter(m2 => m2.mp === c2 && m2.tipo !== "salida").reduce((a, m2) => a + Number(m2.kg || 0), 0);
+                            const sal = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "salida").reduce((a, m2) => a + Number(m2.kg || 0), 0);
+                            const teorico = ent - sal;
+                            const invF = mpInvUltimo[c2];
+                            const fisico = invF && (invF.sacos || invF.kg) ? Number(invF.sacos || 0) * (mp.pres || 1) + Number(invF.kg || 0) : null;
+                            const dif = fisico != null ? fisico - teorico : null;
+                            return (
+                              <tr key={c2} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
+                                <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>{mp.n}</td>
+                                <td style={{ padding: "8px 4px", color: C.verde }}>{ent.toFixed(1)}</td>
+                                <td style={{ padding: "8px 4px", color: C.alerta }}>{sal.toFixed(1)}</td>
+                                <td style={{ padding: "8px 4px", fontWeight: 700 }}>{teorico.toFixed(1)} kg</td>
+                                <td style={{ padding: "8px 4px" }}>{fisico != null ? `${fisico.toFixed(1)} kg` : "—"}</td>
+                                <td style={{ padding: "8px 4px", fontWeight: 700, color: dif == null ? C.textoSuave : Math.abs(dif) <= Math.max(5, Math.abs(teorico) * 0.03) ? C.verde : "#9A6605" }}>{dif != null ? `${dif > 0 ? "+" : ""}${dif.toFixed(1)}` : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Diferencia = conteo físico − saldo kardex. Positiva: hay más de lo esperado (falta registrar facturas). Negativa: merma o consumo sin registrar.</div>
+                    <details style={{ marginTop: 10 }}>
+                      <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Últimos movimientos del kardex</summary>
+                      {selectorHistorial("kardex")}
+                      {historialVisible(kardex, "kardex").map(m2 => (
+                        <div key={m2.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "6px 0", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
+                          <span>{m2.fecha.slice(0, 5)} · <b>{(mpCat.find(x => x.c === m2.mp) || { n: m2.mp }).n}</b> · {m2.ref}</span>
+                          <b style={{ color: m2.tipo === "salida" ? C.alerta : C.verde }}>{m2.tipo === "salida" ? "−" : "+"}{Number(m2.kg).toFixed(1)} kg</b>
+                        </div>
+                      ))}
+                    </details>
+                  </>
+                );
+              })()}
+            </Seccion>
+            )}
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+              <KPI etiqueta="Consumo diario total" valor={Object.values(consumoFormulas).reduce((a, b) => a + b, 0).toFixed(0)} unidad="kg" sub="Aves (desde Lotes) + ganado" />
+              <KPI etiqueta="Cobertura" valor={mpConfig.cobertura} unidad="días" sub="Jueves → lunes de entrega" />
+              <KPI etiqueta="Último conteo" valor={mpFechaConteo ? mpFechaConteo.slice(0, 5) : "—"} unidad="" sub={mpResponsable || "sin responsable"} />
+            </div>
+
+            {(subPedidoMP === "consumo" || subPedidoMP === "todo") && (
+              <Seccion titulo="1 · Consumo proyectado" sub="Las aves se calculan solas desde Lotes (aves vivas × ración). Asigna la fórmula de receta de cada lote.">
+              {activos.map(l => {
+                const kgDia = l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0;
+                return (
+                  <div key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                    <span style={{ flex: "1 1 150px", fontSize: 13.5 }}><b>G{l.galpon}</b> · {l.aves.toLocaleString()} aves · <b>{l.racionGAve || 0} g/ave</b> · {kgDia.toFixed(0)} kg/día</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: recetas.formulas[l.formula] ? C.verde : C.alerta, background: recetas.formulas[l.formula] ? C.verdeSuave : C.alertaSuave, padding: "6px 12px", borderRadius: 16 }}>
+                      {formulaDelLote(l)}{!recetas.formulas[l.formula] && " (asigna la fórmula en Lotes)"}
+                    </span>
+                  </div>
+                );
+              })}
+              <div style={{ fontSize: 13.5, fontWeight: 700, margin: "12px 0 8px", color: C.verde }}>Ganado</div>
+              {(mpConfig.ganado || []).map((g, i) => (
+                <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                  <span style={{ flex: "1 1 110px", fontSize: 12.5 }}>{g.nombre}</span>
+                  <select value={g.formula} onChange={e => { const gs = [...mpConfig.ganado]; gs[i] = { ...g, formula: e.target.value }; guardarConfigMP({ ...mpConfig, ganado: gs }); }}
+                    style={{ ...inputStyle, flex: "0 1 110px", padding: "8px 8px", fontSize: 13 }}>
+                    {formulasGanado.map(f => <option key={f}>{f}</option>)}
+                  </select>
+                  <input type="text" inputMode="numeric" title="Animales" placeholder="# anim" value={g.animales}
+                    onChange={e => { const gs = [...mpConfig.ganado]; gs[i] = { ...g, animales: e.target.value }; guardarConfigMP({ ...mpConfig, ganado: gs }); }}
+                    style={{ ...inputStyle, flex: "0 1 84px", padding: "8px 10px", fontSize: 14 }} />
+                  <input type="text" inputMode="decimal" title="kg por animal" placeholder="kg/anim" value={g.kgAnimal}
+                    onChange={e => { const gs = [...mpConfig.ganado]; gs[i] = { ...g, kgAnimal: e.target.value }; guardarConfigMP({ ...mpConfig, ganado: gs }); }}
+                    style={{ ...inputStyle, flex: "0 1 84px", padding: "8px 10px", fontSize: 14 }} />
+                  <b style={{ fontSize: 13, color: C.verde, flex: "0 0 62px", textAlign: "right" }}>{(Number(g.animales || 0) * Number(g.kgAnimal || 0)).toFixed(0)} kg</b>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "flex-end" }}>
+                <Campo mitad etiqueta="Días de cobertura" type="text" inputMode="numeric" value={mpConfig.cobertura}
+                  onChange={e => guardarConfigMP({ ...mpConfig, cobertura: e.target.value })} />
+              </div>
+            </Seccion>
+            )}
+
+            {(subPedidoMP === "inventario" || subPedidoMP === "todo") && (
+              <Seccion titulo="2 · Inventario físico" sub="El encargado cuenta el jueves: sacos completos + saldo suelto en kg de cada materia prima">
+              {mpBorradorConsulta && !mpInvTieneCambios && (
+                <div style={{ marginBottom: 12, padding: "11px 13px", borderRadius: 10, background: C.yemaSuave, border: `1px solid ${C.yema}`, fontSize: 12.5, lineHeight: 1.45 }}>
+                  <b>📝 Hay un borrador de inventario sin enviar.</b>
+                  <div style={{ marginTop: 3 }}>Se guardó al consultar el historial{mpBorradorConsulta.fecha ? ` del ${mpBorradorConsulta.fecha.split("-").reverse().join("/")}` : ""}. Recuperarlo vuelve a colocar los datos en esta tabla.</div>
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
                     <button type="button" onClick={() => {
                       setMpInv(mpBorradorConsulta.items || {});
                       setMpFechaInput(mpBorradorConsulta.fecha || hoyISO());
@@ -5497,4 +8002,3 @@ export default function App() {
     </div>
   );
 }
-
