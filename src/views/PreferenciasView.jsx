@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { normalizarPreferencias, ordenarPorPreferencia } from "../preferences";
+import { completarOrdenNavegacion, normalizarPreferencias, ordenarPorPreferencia } from "../preferences";
 
 const seccion = { background: "var(--v10-surface, #fff)", border: "1px solid var(--v10-border, #e4e4dc)", borderRadius: 14, padding: 16, marginBottom: 12 };
 const select = { width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid var(--v10-border, #d8d8cf)", borderRadius: 9, background: "var(--v10-surface, #fff)", color: "inherit", font: "inherit" };
@@ -9,11 +9,12 @@ function Interruptor({ checked, onChange, children }) {
 }
 
 export default function PreferenciasView({ preferencias, tabs, onGuardar, guardando }) {
-  const [form, setForm] = useState(() => normalizarPreferencias(preferencias));
-  useEffect(() => setForm(normalizarPreferencias(preferencias)), [preferencias]);
+  const modulosOrdenables = tabs.filter(t => !["administracion", "preferencias"].includes(t.id));
+  const [form, setForm] = useState(() => normalizarPreferencias({ ...preferencias, ordenNavegacion: completarOrdenNavegacion(modulosOrdenables, preferencias.ordenNavegacion) }));
+  useEffect(() => setForm(normalizarPreferencias({ ...preferencias, ordenNavegacion: completarOrdenNavegacion(modulosOrdenables, preferencias.ordenNavegacion) })), [preferencias, tabs]);
   const patch = cambio => setForm(v => normalizarPreferencias({ ...v, ...cambio }));
   const patchGrupo = (grupo, cambio) => patch({ [grupo]: { ...form[grupo], ...cambio } });
-  const ordenadas = ordenarPorPreferencia(tabs.filter(t => !["administracion", "preferencias"].includes(t.id)), form.ordenNavegacion);
+  const ordenadas = ordenarPorPreferencia(modulosOrdenables, form.ordenNavegacion);
   const mover = (id, delta) => {
     const orden = ordenadas.map(t => t.id);
     const i = orden.indexOf(id); const j = i + delta;
@@ -49,8 +50,7 @@ export default function PreferenciasView({ preferencias, tabs, onGuardar, guarda
 
     <section style={seccion}><h3>Borradores</h3><Interruptor checked={form.borradores.autoguardado} onChange={v => patchGrupo("borradores", { autoguardado: v })}>Guardar automáticamente mientras trabajo</Interruptor><div className="v10-preference-grid"><label>Intervalo<select value={form.borradores.intervaloSegundos} onChange={e => patchGrupo("borradores", { intervaloSegundos: Number(e.target.value) })} style={select}><option value="5">Cada 5 segundos</option><option value="10">Cada 10 segundos</option><option value="30">Cada 30 segundos</option><option value="60">Cada minuto</option></select></label><label>Ubicación<select value={form.borradores.almacenamiento} onChange={e => patchGrupo("borradores", { almacenamiento: e.target.value })} style={select}><option value="local">Este dispositivo</option><option value="nube">Nube y respaldo local</option></select></label></div><Interruptor checked={form.borradores.recuperarAutomaticamente} onChange={v => patchGrupo("borradores", { recuperarAutomaticamente: v })}>Recuperar automáticamente el borrador al volver a la fecha</Interruptor></section>
 
-    <button className="v10-primary-action" disabled={guardando} onClick={() => onGuardar(form)}>{guardando ? "Guardando…" : "Guardar mis preferencias"}</button>
+    <button className="v10-primary-action" disabled={guardando} onClick={() => onGuardar({ ...form, ordenNavegacion: completarOrdenNavegacion(modulosOrdenables, form.ordenNavegacion) })}>{guardando ? "Guardando…" : "Guardar mis preferencias"}</button>
   </div>;
 }
-
 
