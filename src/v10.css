@@ -232,8 +232,8 @@
 
 /* Alto contraste: no depender de colores de la paleta clara para textos, controles o datos. */
 .app-v10.v10-theme-contraste :is(button, .v10-primary-action) {
-  background: #fff !important;
-  color: #000 !important;
+  background: #000 !important;
+  color: #fff !important;
   border: 2px solid #fff !important;
 }
 .app-v10.v10-theme-contraste :is(button:hover, button:focus-visible, .v10-primary-action:hover) {
@@ -254,10 +254,25 @@
   color: #fff !important;
   border-color: #fff !important;
 }
+.app-v10.v10-theme-contraste [style*="background: var(--v10-green-soft"] {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+.app-v10.v10-theme-contraste [style*="background: var(--v10-green"] {
+  background: #ffff00 !important;
+  color: #000 !important;
+  border-color: #ffff00 !important;
+}
 .app-v10.v10-theme-contraste :is(.v10-desktop-nav, .v10-mobile-nav, .v10-mobile-more, .v10-overlay, .v10-modal-box, .v10-search) {
   background: #000 !important;
   color: #fff !important;
   border-color: #fff !important;
+}
+.app-v10.v10-theme-contraste .v10-header {
+  background: #000 !important;
+  color: #fff !important;
+  border-bottom: 1px solid #fff !important;
 }
 .app-v10.v10-theme-contraste .v10-desktop-nav button,
 .app-v10.v10-theme-contraste .v10-mobile-nav button,
