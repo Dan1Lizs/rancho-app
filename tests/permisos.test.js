@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { puedeAccederVista, vistasPermitidas } from "../src/permisos.js";
+import { puedeAccederVista, resolverVistaSegura, vistasPermitidas } from "../src/permisos.js";
 
 const todas = ["inicio", "captura", "reporte", "historial", "cxp"];
 
@@ -15,5 +15,11 @@ test("Historial queda reservado a admin y encargado", () => {
 test("admin recibe todas las vistas y encargado no recibe cuentas por pagar", () => {
   assert.deepEqual(vistasPermitidas("admin", todas), todas);
   assert.equal(puedeAccederVista("encargado", "cxp", todas), false);
+});
+
+test("un enlace profundo se conserva mientras carga el rol", () => {
+  assert.equal(resolverVistaSegura("cargando", "reporte", todas), "reporte");
+  assert.equal(resolverVistaSegura("encargado", "historial", todas), "historial");
+  assert.equal(resolverVistaSegura("consulta", "historial", todas), "inicio");
 });
 

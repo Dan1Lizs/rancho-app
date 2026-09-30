@@ -14,3 +14,8 @@ export const vistasPermitidas = (rol, todasLasVistas = []) => {
 export const puedeAccederVista = (rol, vista, todasLasVistas = []) =>
   vistasPermitidas(rol, todasLasVistas).includes(vista);
 
+export const resolverVistaSegura = (rol, vista, todasLasVistas = []) => {
+  if (rol === "cargando") return vista;
+  return puedeAccederVista(rol, vista, todasLasVistas) ? vista : "inicio";
+};
+

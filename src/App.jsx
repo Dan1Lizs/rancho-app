@@ -20,7 +20,7 @@ import { ModalDialog } from "./components/ModalDialog";
 import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
 import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
 import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
-import { vistasPermitidas } from "./permisos";
+import { resolverVistaSegura, vistasPermitidas } from "./permisos";
 import { DEFAULT_PREFERENCES, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
 import "./v10.css";
@@ -28,7 +28,7 @@ import "./v10.css";
 const PreferenciasView = lazy(() => import("./views/PreferenciasView"));
 const AdministracionView = lazy(() => import("./views/AdministracionView"));
 
-// ─── Tokens ─────────────────────────────────────────────────────
+// ��� Tokens �����������������������������������������������������
 const C = {
   fondo: "#F6F6F1", superficie: "#FFFFFF",
   verde: "#14432A", verdeSuave: "#E7EFE8",
@@ -117,32 +117,32 @@ const metaPesoLote = (l, fecha, pesaje) => {
 const SEED_COSTOS = { "Postura F1": "", "Ponedora 18+": "", "Impulsor": "" };
 const SEED_PLANTA = { saldoKg: 3850 };
 
-// ─── Identidad ───
-const RAZON_SOCIAL = "Granja Avícola y Ganadería Rancho El Soñado LTDA.";
+// ��� Identidad ���
+const RAZON_SOCIAL = "Granja Av�cola y Ganader�a Rancho El So�ado LTDA.";
 const MarcaRancho = ({ impresion = false }) => (
-  <img src={logoOficial} alt="Logo oficial de Granja Avícola Rancho El Soñado" style={{ display: "block", width: impresion ? 190 : 108, height: "auto", margin: impresion ? "0 auto" : undefined, background: "white", borderRadius: impresion ? 0 : 6 }} />
+  <img src={logoOficial} alt="Logo oficial de Granja Av�cola Rancho El So�ado" style={{ display: "block", width: impresion ? 190 : 108, height: "auto", margin: impresion ? "0 auto" : undefined, background: "white", borderRadius: impresion ? 0 : 6 }} />
 );
 
-// ─── Materias primas y recetas (del archivo Pedido de Materia Prima) ───
+// ��� Materias primas y recetas (del archivo Pedido de Materia Prima) ���
 const MP_LISTA = [
-  { c: "MP001", n: "MAÍZ AMARILLO", prov: "AVIN", pres: 46 },
-  { c: "MP003", n: "MAÍZ FINO", prov: "AVIN", pres: 46 },
+  { c: "MP001", n: "MAIZ AMARILLO", prov: "AVIN", pres: 46 },
+  { c: "MP003", n: "MAIZ FINO", prov: "AVIN", pres: 46 },
   { c: "MP004", n: "HARINA DE SOYA", prov: "AVIN", pres: 46 },
   { c: "MP005", n: "ACEMITE", prov: "AVIN", pres: 46 },
   { c: "MP006", n: "ACEITE DE SOYA", prov: "AVIN", pres: 1 },
   { c: "MP007", n: "CARBONATO DE CALCIO", prov: "AVIN", pres: 50 },
   { c: "MP008", n: "CARB DE CALCIO 39%", prov: "AVIN", pres: 50 },
   { c: "MP009", n: "SAL", prov: "Coonaprosal", pres: 50 },
-  { c: "MP013", n: "Núcleo Gortech", prov: "Gortech", pres: 22.7 },
+  { c: "MP013", n: "N�cleo Gortech", prov: "Gortech", pres: 22.7 },
   { c: "MP022", n: "H. DE COQUITO (Premium)", prov: "AVIN", pres: 46 },
   { c: "MP023", n: "LEVADURA", prov: "AVIN", pres: 1 },
   { c: "MP026", n: "BICARBONATO DE SODIO", prov: "AVIN", pres: 25 },
   { c: "MP028", n: "LIV-52", prov: "Agrokuvo", pres: 20 },
   { c: "MP029", n: "MONENSIN 7%", prov: "AVIN", pres: 15 },
   { c: "MP030", n: "TECNOVIT", prov: "Agrokuvo", pres: 20 },
-  { c: "MP031", n: "MELAZA DE CAÑA", prov: "Dos Pinos", pres: 1 },
-  { c: "MP033", n: "DDGS MAÍZ", prov: "AVIN", pres: 46 },
-  { c: "MP035", n: "FOSFATO MONOCÁLCICO", prov: "AVIN", pres: 25 },
+  { c: "MP031", n: "MELAZA DE CA�A", prov: "Dos Pinos", pres: 1 },
+  { c: "MP033", n: "DDGS MAIZ", prov: "AVIN", pres: 46 },
+  { c: "MP035", n: "FOSFATO MONOCALCICO", prov: "AVIN", pres: 25 },
   { c: "MP036", n: "DL-METIONINA", prov: "AVIN", pres: 25 },
   { c: "MP037", n: "CL-COLINA", prov: "AVIN", pres: 25 },
   { c: "MP038", n: "PREM. GALLINAS TROPICAL", prov: "AVIN", pres: 25 },
@@ -154,8 +154,8 @@ const MP_LISTA = [
   { c: "MP044", n: "CLOSTAT", prov: "AVIN", pres: 1 },
   { c: "MP045", n: "ACTIGEN (MOS)", prov: "AVIN", pres: 1 },
   { c: "MP046", n: "ENRRAMIX", prov: "AVIN", pres: 1 },
-  { c: "MP047", n: "L-TRIPTÓFANO", prov: "AVIN", pres: 1 },
-  { c: "MP048", n: "BX POSTURA MÁXIMA", prov: "VYMISA", pres: 20 },
+  { c: "MP047", n: "L-TRIPTOFANO", prov: "AVIN", pres: 1 },
+  { c: "MP048", n: "BX POSTURA MAXIMA", prov: "VYMISA", pres: 20 },
 ];
 
 const RECETAS_MP = {
@@ -163,7 +163,7 @@ const RECETAS_MP = {
   "Fase 1": { MP001: .524875, MP004: .217415, MP005: .03, MP006: .025652, MP007: .067001, MP008: .027696, MP009: .003, MP022: .038946, MP023: .001, MP026: .002641, MP031: .03, MP033: .015, MP035: .005141, MP036: .002913, MP037: .00175, MP038: .0015, MP039: .001413, MP040: .001, MP042: .000554, MP043: .000587, MP044: .0005, MP045: .000402, MP046: .000196, MP047: .000152 },
   "Impulsor Gortech": { MP001: .63004, MP004: .22379, MP006: .013105, MP007: .078629, MP008: .03629, MP009: .003024, MP013: .015121 },
   "651 Impulsor VYMISA": { MP001: .521036, MP004: .252432, MP006: .031411, MP007: .0677, MP008: .029666, MP009: .003, MP022: .048486, MP026: .002128, MP033: .019802, MP035: .006258, MP036: .00346, MP037: .0015, MP039: .000808, MP040: .001, MP041: .00063, MP042: .000638, MP043: .000592, MP045: .0004, MP046: .0002, MP047: .000104, MP048: .01 },
-  "Cría": { MP003: .623522, MP004: .217326, MP009: .021696, MP028: .008043, MP029: .001522, MP030: .021696, MP031: .106196 },
+  "Cr�a": { MP003: .623522, MP004: .217326, MP009: .021696, MP028: .008043, MP029: .001522, MP030: .021696, MP031: .106196 },
   "Desarrollo": { MP003: .65999, MP004: .259996, MP009: .017507, MP022: .044999, MP030: .017507 },
   "Engorde": { MP003: .475, MP004: .013507, MP009: .008, MP022: .411696, MP029: .000797, MP030: .008, MP031: .083 },
 };
@@ -173,17 +173,17 @@ const BASCULA_MP = {
   MP007: 3, MP008: 3, MP009: 3,
 };
 const basculaDe = (c) => BASCULA_MP[c] || 4;
-const NOMBRE_BASCULA = { 1: "BÁSCULA 1 — MACROS", 2: "BÁSCULA 2 — LÍQUIDOS", 3: "BÁSCULA 3 — MEDIOS", 4: "BÁSCULA 4 — MICROS (NÚCLEO)" };
+const NOMBRE_BASCULA = { 1: "BASCULA 1 - MACROS", 2: "BASCULA 2 - LIQUIDOS", 3: "BASCULA 3 - MEDIOS", 4: "BASCULA 4 - MICROS (NUCLEO)" };
 
 const BACHE_KG_DEFAULT = 690;
 const SEED_RECETAS = {
   bacheKg: BACHE_KG_DEFAULT,
   formulas: Object.fromEntries(Object.entries(RECETAS_MP).map(([n, r]) => [n, {
-    uso: ["Cría", "Desarrollo", "Engorde"].includes(n) ? "Ganado" : "Aves",
+    uso: ["Cr�a", "Desarrollo", "Engorde"].includes(n) ? "Ganado" : "Aves",
     items: Object.fromEntries(Object.entries(r).map(([c, pct]) => [c, +(pct * BACHE_KG_DEFAULT).toFixed(2)])),
   }])),
 };
-const CATEGORIAS_INSUMOS = ["Vacunas", "Medicinas", "Vitaminas", "Protección Biológica", "Desinfección", "Otros"];
+const CATEGORIAS_INSUMOS = ["Vacunas", "Medicinas", "Vitaminas", "Protecci�n Biol�gica", "Desinfecci�n", "Otros"];
 const SEED_INSUMOS = [
   { id: 1, nombre: "Interflox", categoria: "Medicinas", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
   { id: 2, nombre: "Tylvax", categoria: "Medicinas", unidad: "sobres", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
@@ -193,45 +193,45 @@ const SEED_INSUMOS = [
   { id: 6, nombre: "Farvital", categoria: "Vitaminas", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
   { id: 7, nombre: "Promotor L", categoria: "Vitaminas", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
   { id: 8, nombre: "Calciphy", categoria: "Vitaminas", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
-  { id: 9, nombre: "Sanivir", categoria: "Desinfección", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
-  { id: 10, nombre: "Mevisan", categoria: "Desinfección", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
-  { id: 11, nombre: "Mevipow", categoria: "Desinfección", unidad: "g", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
-  { id: 12, nombre: "Yodo 2.5%", categoria: "Desinfección", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
-  { id: 13, nombre: "Sanivet", categoria: "Desinfección", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
-  { id: 14, nombre: "Viroguard", categoria: "Desinfección", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
+  { id: 9, nombre: "Sanivir", categoria: "Desinfecci�n", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
+  { id: 10, nombre: "Mevisan", categoria: "Desinfecci�n", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
+  { id: 11, nombre: "Mevipow", categoria: "Desinfecci�n", unidad: "g", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
+  { id: 12, nombre: "Yodo 2.5%", categoria: "Desinfecci�n", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
+  { id: 13, nombre: "Sanivet", categoria: "Desinfecci�n", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
+  { id: 14, nombre: "Viroguard", categoria: "Desinfecci�n", unidad: "ml", saldo: 0, presentacion: "", dosis: "", proveedor: "" },
   { id: 15, nombre: "Vacuna Newcastle + Bronquitis (Ma5+Clon30)", categoria: "Vacunas", unidad: "frascos", saldo: 0, presentacion: "frasco 1000 dosis", dosis: "", proveedor: "Ciencias Pecuarias" },
 ];
 
 const GANADO_SEMILLA = [
-  { nombre: "Potrero 1 — Cría vacas", formula: "Cría", animales: 24, kgAnimal: 2.5 },
-  { nombre: "Potrero 2 — Novillas", formula: "Desarrollo", animales: 0, kgAnimal: 1 },
-  { nombre: "Potrero 3 — Terneros", formula: "Desarrollo", animales: 27, kgAnimal: 2 },
-  { nombre: "Estabulados — Toros", formula: "Engorde", animales: 15, kgAnimal: 5 },
+  { nombre: "Potrero 1 - Cr�a vacas", formula: "Cr�a", animales: 24, kgAnimal: 2.5 },
+  { nombre: "Potrero 2 - Novillas", formula: "Desarrollo", animales: 0, kgAnimal: 1 },
+  { nombre: "Potrero 3 - Terneros", formula: "Desarrollo", animales: 27, kgAnimal: 2 },
+  { nombre: "Estabulados - Toros", formula: "Engorde", animales: 15, kgAnimal: 5 },
 ];
 
 const PLAN_VACUNAS_ESTANDAR = [
-  { id: 1, dia: 0, vacuna: "Marek + Gumboro (HVT-IBD) + RISP", cepa: "", via: "Subcutánea", proveedor: "Incubadora" },
+  { id: 1, dia: 0, vacuna: "Marek + Gumboro (HVT-IBD) + RISP", cepa: "", via: "Subcut�nea", proveedor: "Incubadora" },
   { id: 2, dia: 3, vacuna: "Salmonella (S. enteritidis) viva", cepa: "", via: "Al agua", proveedor: "Vetim" },
-  { id: 3, dia: 12, vacuna: "Newcastle + Bronquitis", cepa: "Entérica + H120", via: "Al agua", proveedor: "Faryvet" },
+  { id: 3, dia: 12, vacuna: "Newcastle + Bronquitis", cepa: "Ent�rica + H120", via: "Al agua", proveedor: "Faryvet" },
   { id: 4, dia: 18, vacuna: "Gumboro", cepa: "Intermedia", via: "Al agua", proveedor: "Corpeco" },
   { id: 5, dia: 22, vacuna: "Salmonella", cepa: "Sub Unidades", via: "Al agua", proveedor: "Vetanco" },
   { id: 6, dia: 28, vacuna: "Bronquitis + Newcastle", cepa: "Ma5 + Clon 30", via: "Al agua", proveedor: "Ciencias Pecuarias" },
   { id: 7, dia: 35, vacuna: "Salmonella", cepa: "Sub Unidades", via: "Al agua", proveedor: "Vetanco" },
-  { id: 8, dia: 45, vacuna: "Laringotraqueítis + Viruela", cepa: "Recombinante LT", via: "Ala", proveedor: "Faryvet" },
+  { id: 8, dia: 45, vacuna: "Laringotraque�tis + Viruela", cepa: "Recombinante LT", via: "Ala", proveedor: "Faryvet" },
   { id: 9, dia: 45, vacuna: "Micoplasma", cepa: "Cefa F", via: "Ojo", proveedor: "Vetim" },
   { id: 10, dia: 63, vacuna: "Bronquitis + Newcastle", cepa: "Ma5 + Clon 30", via: "Al agua", proveedor: "Ciencias Pecuarias" },
   { id: 11, dia: 70, vacuna: "Coryza", cepa: "ABC", via: "Pechuga", proveedor: "Corpeco" },
   { id: 12, dia: 70, vacuna: "Encefalomielitis", cepa: "Calnek", via: "Ala", proveedor: "Corpeco" },
   { id: 13, dia: 90, vacuna: "Bronquitis + Newcastle", cepa: "Ma5 + Clon 30", via: "Al agua", proveedor: "Ciencias Pecuarias" },
-  { id: 14, dia: 98, vacuna: "Oleosa cuádruple + Salmonella", cepa: "IBND + EDS + Coryza + Salmonella", via: "IM pechuga", proveedor: "Ciencias Pecuarias" },
+  { id: 14, dia: 98, vacuna: "Oleosa cu�druple + Salmonella", cepa: "IBND + EDS + Coryza + Salmonella", via: "IM pechuga", proveedor: "Ciencias Pecuarias" },
 ];
 
 const TRABAJOS = [
   "Lavar bebederos", "Sacudir felpas", "Sacudir nidos por dentro", "Fumigar la cama",
-  "Lavado de estañones de agua", "Volteo de la cama", "Sacudir mallas", "Lavado de basureros",
-  "Limpieza de ventiladores", "Limpiar malla recolección", "Lavado de aceras",
+  "Lavado de esta�ones de agua", "Volteo de la cama", "Sacudir mallas", "Lavado de basureros",
+  "Limpieza de ventiladores", "Limpiar malla recolecci�n", "Lavado de aceras",
   "Botar gallinas muertas", "Enterrar huevo descartado", "Limpieza perimetral",
-  "Lavado de caños", "Limpieza caja de registro", "Limpieza de trampas de ratas",
+  "Lavado de ca�os", "Limpieza caja de registro", "Limpieza de trampas de ratas",
 ];
 
 const fechaVal = (f) => { const p = String(f || "").split("/"); return p.length === 3 ? Number(p[2]) * 10000 + Number(p[1]) * 100 + Number(p[0]) : 0; };
@@ -271,7 +271,7 @@ function BarraPostura({ actual, meta }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 11.5, color: C.textoSuave }}>
         <span><b style={{ color: C.texto }}>{actual.toFixed(1)}%</b> postura</span>
-        <span style={{ color: brecha == null ? C.textoSuave : brecha > 0 ? C.alerta : C.verde, fontWeight: 500 }}>{brecha == null ? "sin dato de postura para esta semana" : `${brecha > 0 ? `−${brecha}` : `+${Math.abs(brecha)}`} pts vs tabla`}</span>
+        <span style={{ color: brecha == null ? C.textoSuave : brecha > 0 ? C.alerta : C.verde, fontWeight: 500 }}>{brecha == null ? "sin dato de postura para esta semana" : `${brecha > 0 ? `-${brecha}` : `+${Math.abs(brecha)}`} pts vs tabla`}</span>
       </div>
     </div>
   );
@@ -279,7 +279,7 @@ function BarraPostura({ actual, meta }) {
 
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, border: `1.5px solid #E4E4DC`, borderRadius: 10, background: "#fff", fontFamily: "'Inter', sans-serif", outline: "none" };
 
-// ── Campo mejorado con Unidades Fijas (Punto 14) y Validación Inline (Puntos 12, 13) ──
+// �� Campo mejorado con Unidades Fijas (Punto 14) y Validaci�n Inline (Puntos 12, 13) ��
 function Seccion({ titulo, sub, children, num, accion }) {
   return (
     <div style={{ background: C.superficie, border: `1px solid ${C.borde}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
@@ -308,23 +308,23 @@ function FiltrosLista({ filtro, setFiltro, lotes, estados = [], total, visibles 
   const cambiar = (k, v) => setFiltro(f => ({ ...f, [k]: v }));
   return <div style={{ padding: 10, background: C.fondo, borderRadius: 10, margin: "10px 0", fontSize: 12.5 }}>
     <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
-      <input aria-label="Buscar por palabra, hoja o fecha" placeholder="Buscar palabra, galera, hoja o fecha…" value={filtro.texto} onChange={e => cambiar("texto", e.target.value)} style={{ ...inputStyle, flex: "1 1 210px" }} />
+      <input aria-label="Buscar por palabra, hoja o fecha" placeholder="Buscar palabra, galera, hoja o fecha." value={filtro.texto} onChange={e => cambiar("texto", e.target.value)} style={{ ...inputStyle, flex: "1 1 210px" }} />
       <button type="button" onClick={() => setAvanzados(v => !v)}>{avanzados ? "Menos filtros" : "+ Filtros"}</button>
       <button type="button" onClick={() => setFiltro(filtroVacio())}>Limpiar</button>
       <span>{visibles} de {total}</span>
     </div>
     {avanzados && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-      <label>Galera / lote<select value={filtro.lote} onChange={e => cambiar("lote", e.target.value)} style={inputStyle}><option value="">Todas</option>{lotes.map(l => <option key={l.id} value={l.id}>G{l.galpon} · {l.lote || l.id}</option>)}</select></label>
+      <label>Galera / lote<select value={filtro.lote} onChange={e => cambiar("lote", e.target.value)} style={inputStyle}><option value="">Todas</option>{lotes.map(l => <option key={l.id} value={l.id}>G{l.galpon} � {l.lote || l.id}</option>)}</select></label>
       <label>Desde<input type="date" value={filtro.desde} onChange={e => cambiar("desde", e.target.value)} style={inputStyle} /></label>
       <label>Hasta<input type="date" value={filtro.hasta} onChange={e => cambiar("hasta", e.target.value)} style={inputStyle} /></label>
       {!!estados.length && <label>Estado<select value={filtro.estado} onChange={e => cambiar("estado", e.target.value)} style={inputStyle}><option value="">Todos</option>{estados.map(x => <option key={x} value={x}>{x}</option>)}</select></label>}
-      <label>Orden<select value={filtro.orden} onChange={e => cambiar("orden", e.target.value)} style={inputStyle}><option value="desc">Más recientes</option><option value="asc">Más antiguos</option></select></label>
+      <label>Orden<select value={filtro.orden} onChange={e => cambiar("orden", e.target.value)} style={inputStyle}><option value="desc">M�s recientes</option><option value="asc">M�s antiguos</option></select></label>
     </div>}
   </div>;
 }
 
-// ── Componente Matriz "Qué falta hoy" (Punto 11) ──
-// ── Componente Modal para Pegar Tiquetes desde Excel (Punto 22) ──
+// �� Componente Matriz "Qu� falta hoy" (Punto 11) ��
+// �� Componente Modal para Pegar Tiquetes desde Excel (Punto 22) ��
 function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, subPlanta, subPedidoMP, subFormulas, subInsumos, subPesaje, subHistorial, recActiva, fPeso, histFecha, irA, avisar }) {
   if (vista === "inicio") return null;
 
@@ -334,30 +334,30 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
   let subdetalle = null;
   if (vista === "captura") {
     const l = lotes.find(x => x.id === galponActivo);
-    subdetalle = `Galpón ${l?.galpon || galponActivo || "1"} · ${fechaCaptura ? fechaCaptura.split("-").reverse().join("/") : "Hoy"}`;
+    subdetalle = `Galp�n ${l?.galpon || galponActivo || "1"} � ${fechaCaptura ? fechaCaptura.split("-").reverse().join("/") : "Hoy"}`;
   } else if (vista === "bodega") {
-    const nombresSubBodega = { producido: "Huevo producido", ruta: "Salida a ruta", otros: "Otros movimientos", cierre: "Cierre del día", historial: "Historial", apertura: "Apertura", todo: "Todo" };
+    const nombresSubBodega = { producido: "Huevo producido", ruta: "Salida a ruta", otros: "Otros movimientos", cierre: "Cierre del d�a", historial: "Historial", apertura: "Apertura", todo: "Todo" };
     const nomSub = nombresSubBodega[subBodega] || "Movimiento";
-    subdetalle = `${nomSub} · ${fechaBodega ? fechaBodega.split("-").reverse().join("/") : "Hoy"}`;
+    subdetalle = `${nomSub} � ${fechaBodega ? fechaBodega.split("-").reverse().join("/") : "Hoy"}`;
   } else if (vista === "reporte") {
-    subdetalle = ({ resumen: "Resumen", comparativo: "Comparativo", decisiones: "Decisiones", bitacora: "Bitácora", auditoria: "Auditoría", kpis: "KPIs técnicos", economia: "Economía", todo: "Ver todo" })[subReporte] || "Ver todo";
+    subdetalle = ({ resumen: "Resumen", comparativo: "Comparativo", decisiones: "Decisiones", bitacora: "Bit�cora", auditoria: "Auditor�a", kpis: "KPIs t�cnicos", economia: "Econom�a", todo: "Ver todo" })[subReporte] || "Ver todo";
   } else if (vista === "planta") {
-    const nomSub = { baches: "Baches producidos", nucleo: "Núcleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
+    const nomSub = { baches: "Baches producidos", nucleo: "N�cleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
     subdetalle = nomSub;
   } else if (vista === "pedidomp") {
-    const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo físico", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Pedido MP";
+    const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo f�sico", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Pedido MP";
     subdetalle = nomSub;
   } else if (vista === "formulas") {
-    const nomSub = { recetas: `Fórmulas (${recActiva || "activas"})`, nueva: "Crear fórmula", catalogo: "Catálogo MP", todo: "Todo" }[subFormulas] || "Fórmulas";
+    const nomSub = { recetas: `F�rmulas (${recActiva || "activas"})`, nueva: "Crear f�rmula", catalogo: "Cat�logo MP", todo: "Todo" }[subFormulas] || "F�rmulas";
     subdetalle = nomSub;
   } else if (vista === "insumos") {
-    const nomSub = { catalogo: "Inventario por categoría", conteo: "Conteo general", movimiento: "Registrar movimiento", nuevo: "Agregar insumo", todo: "Todo" }[subInsumos] || "Insumos";
+    const nomSub = { catalogo: "Inventario por categor�a", conteo: "Conteo general", movimiento: "Registrar movimiento", nuevo: "Agregar insumo", todo: "Todo" }[subInsumos] || "Insumos";
     subdetalle = nomSub;
   } else if (vista === "pesaje") {
-    const nomSub = { pesajes: "Pesajes de parvada", histpesajes: "Buscar / corregir", vacunas: "Vacunación", enfermedades: "Expediente médico", necropsias: "Necropsias", todo: "Todo" }[subPesaje] || "Bienestar";
+    const nomSub = { pesajes: "Pesajes de parvada", histpesajes: "Buscar / corregir", vacunas: "Vacunaci�n", enfermedades: "Expediente m�dico", necropsias: "Necropsias", todo: "Todo" }[subPesaje] || "Bienestar";
     subdetalle = nomSub;
   } else if (vista === "historial") {
-    const nomSub = { dia: `Día ${histFecha ? histFecha.split("-").reverse().join("/") : "Consulta"}`, mes: "Resumen mensual", correcciones: "Correcciones", todo: "Todo" }[subHistorial] || "Historial";
+    const nomSub = { dia: `D�a ${histFecha ? histFecha.split("-").reverse().join("/") : "Consulta"}`, mes: "Resumen mensual", correcciones: "Correcciones", todo: "Todo" }[subHistorial] || "Historial";
     subdetalle = nomSub;
   }
 
@@ -374,25 +374,25 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
         document.execCommand("copy");
         document.body.removeChild(inp);
       }
-      avisar?.("✓ Enlace directo copiado al portapapeles");
+      avisar?.("� Enlace directo copiado al portapapeles");
     } catch {
-      avisar?.("⚠ No se pudo copiar el enlace");
+      avisar?.("? No se pudo copiar el enlace");
     }
   };
 
   return (
-    <nav className="v10-breadcrumbs" aria-label="Ruta de navegación">
+    <nav className="v10-breadcrumbs" aria-label="Ruta de navegaci�n">
       <div className="v10-breadcrumbs-trail">
         <button type="button" className="v10-breadcrumbs-crumb" onClick={() => irA("inicio")}>
           Inicio
         </button>
         {grupoActual && (
           <>
-            <span className="v10-breadcrumbs-sep">›</span>
+            <span className="v10-breadcrumbs-sep">></span>
             <span style={{ color: C.textoSuave }}>{grupoActual.nombre}</span>
           </>
         )}
-        <span className="v10-breadcrumbs-sep">›</span>
+        <span className="v10-breadcrumbs-sep">></span>
         <button
           type="button"
           className={`v10-breadcrumbs-crumb ${!subdetalle ? "v10-breadcrumbs-current" : ""}`}
@@ -402,7 +402,7 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
         </button>
         {subdetalle && (
           <>
-            <span className="v10-breadcrumbs-sep">›</span>
+            <span className="v10-breadcrumbs-sep">></span>
             <span className="v10-breadcrumbs-current">{subdetalle}</span>
           </>
         )}
@@ -413,7 +413,7 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
         onClick={copiarEnlace}
         title="Copiar enlace directo a esta vista"
       >
-        🔗 Copiar enlace
+        ?? Copiar enlace
       </button>
     </nav>
   );
@@ -477,7 +477,7 @@ export default function App() {
   const [preferencias, setPreferencias] = useState(DEFAULT_PREFERENCES);
   const [preferenciasCargadas, setPreferenciasCargadas] = useState(false);
   const [guardandoPreferencias, setGuardandoPreferencias] = useState(false);
-  const [configOrganizacion, setConfigOrganizacion] = useState({ nombre: "Rancho El Soñado" });
+  const [configOrganizacion, setConfigOrganizacion] = useState({ nombre: "Rancho El So�ado" });
   const vistaInicialAplicadaRef = useRef(false);
   useEffect(() => { localStorage.setItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`, vista); }, [vista]);
   useEffect(() => {
@@ -532,7 +532,7 @@ export default function App() {
   const [filtroExcepciones, setFiltroExcepciones] = useState("Todas");
   const [conflictoEdicion, setConflictoEdicion] = useState("");
   useEffect(() => {
-    const actualizar = () => setEstadoSync(navigator.onLine ? "Sincronizado" : "Sin conexión");
+    const actualizar = () => setEstadoSync(navigator.onLine ? "Sincronizado" : "Sin conexi�n");
     const sincronizar = e => setEstadoSync(e.detail);
     addEventListener("online", actualizar); addEventListener("offline", actualizar);
     addEventListener("granja:sync", sincronizar);
@@ -543,7 +543,7 @@ export default function App() {
   // Bodega
   const [movBodega, setMovBodega] = useState({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
   const [repartos, setRepartos] = useState([
-    { nombre: "Andrés", salida: "", devBueno: "", devMalo: "" },
+    { nombre: "Andr�s", salida: "", devBueno: "", devMalo: "" },
     { nombre: "Bryan", salida: "", devBueno: "", devMalo: "" },
   ]);
   const [obsInv, setObsInv] = useState("");
@@ -642,7 +642,7 @@ export default function App() {
         const a = actuales.find(x => x.fecha === fecha && x.lote === id);
         return JSON.stringify(r || null) !== JSON.stringify(a || null);
       });
-      setConflictoEdicion(cambia ? "Otro dispositivo cambió esta fecha. Revisa y actualiza antes de guardar." : "");
+      setConflictoEdicion(cambia ? "Otro dispositivo cambi� esta fecha. Revisa y actualiza antes de guardar." : "");
     };
     const timer = setInterval(revisar, 30000);
     return () => clearInterval(timer);
@@ -695,7 +695,7 @@ export default function App() {
         setBorradorDisponible(null);
       } else setBorradorDisponible(vigente);
     } catch { setBorradorDisponible(null); }
-    if (cargados > 0) avisar(`✓ Se cargó lo guardado del ${dmy} (${cargados} gallinero(s)) — edita solo lo necesario`);
+    if (cargados > 0) avisar(`� Se carg� lo guardado del ${dmy} (${cargados} gallinero(s)) - edita solo lo necesario`);
   };
   useEffect(() => {
     if (!preferencias.borradores.autoguardado || (!Object.keys(suciosRef.current).length && !notaSuciaRef.current)) return;
@@ -742,14 +742,14 @@ export default function App() {
   const [semanaReferencia, setSemanaReferencia] = useState(26);
 
   const guardarLote = async () => {
-    if (!formLote.galpon || !formLote.raza || !formLote.nac) { avisar("⚠ Galpón, raza y fecha de nacimiento son obligatorios"); return; }
+    if (!formLote.galpon || !formLote.raza || !formLote.nac) { avisar("? Galp�n, raza y fecha de nacimiento son obligatorios"); return; }
     setGuardando(true);
     let nuevos;
     const campos = {
       galpon: Number(formLote.galpon), lote: formLote.lote || "01", raza: formLote.raza, nac: formLote.nac,
       formula: formLote.formula || "", racionGAve: Number(formLote.racionGAve || 0),
       posturaIdeal: Number(formLote.posturaIdeal || 90), pesoMeta: Number(formLote.pesoMeta || 0),
-      proveedor: formLote.proveedor || "", estadoProd: formLote.estadoProd || "Producción normal",
+      proveedor: formLote.proveedor || "", estadoProd: formLote.estadoProd || "Producci�n normal",
     };
     if (formLote.id) {
       nuevos = lotes.map(l => l.id === formLote.id ? { ...l, ...campos, avesIniciales: Number(formLote.avesIniciales || l.avesIniciales), aves: Number(formLote.aves ?? l.aves) } : l);
@@ -759,8 +759,8 @@ export default function App() {
       nuevos = [...lotes, { id, ...campos, avesIniciales: avesIni, aves: avesIni, mortAcum: 0, acumHuevos: 0, acumAlimentoKg: 0, acumMasaKg: 0 }];
       setCapturas(c => ({ ...c, [id]: capturaVacia() }));
     }
-    if (await escribir(K.lotes, nuevos)) { setLotes(nuevos); setFormLote(null); avisar("✓ Lote guardado"); }
-    else avisar("⚠ No se pudo guardar el lote");
+    if (await escribir(K.lotes, nuevos)) { setLotes(nuevos); setFormLote(null); avisar("� Lote guardado"); }
+    else avisar("? No se pudo guardar el lote");
     setGuardando(false);
   };
 
@@ -774,25 +774,25 @@ export default function App() {
   };
 
   const cerrarLote = async (id) => {
-    if (!pideConfirm(`cerrar-${id}`, "⚠ Toca 'Cerrar lote' otra vez para confirmar — el historial se conserva")) return;
+    if (!pideConfirm(`cerrar-${id}`, "? Toca 'Cerrar lote' otra vez para confirmar - el historial se conserva")) return;
     const nuevos = lotes.map(l => l.id === id ? { ...l, estado: "cerrado", cerradoFecha: hoyStr() } : l);
-    if (await escribir(K.lotes, nuevos)) { setLotes(nuevos); avisar("✓ Lote cerrado"); }
-    else avisar("⚠ No se pudo guardar — revisa la señal e intenta de nuevo");
+    if (await escribir(K.lotes, nuevos)) { setLotes(nuevos); avisar("� Lote cerrado"); }
+    else avisar("? No se pudo guardar - revisa la se�al e intenta de nuevo");
   };
 
   const reabrirLote = async (id) => {
     const nuevos = lotes.map(l => l.id === id ? { ...l, estado: "activo" } : l);
-    if (await escribir(K.lotes, nuevos)) { setLotes(nuevos); avisar("✓ Lote reabierto"); }
+    if (await escribir(K.lotes, nuevos)) { setLotes(nuevos); avisar("� Lote reabierto"); }
   };
 
   const eliminarLote = async (id) => {
-    if (!pideConfirm(`elimLote-${id}`, "⚠ Toca 'Eliminar' otra vez para BORRAR DEFINITIVAMENTE este lote")) return;
+    if (!pideConfirm(`elimLote-${id}`, "? Toca 'Eliminar' otra vez para BORRAR DEFINITIVAMENTE este lote")) return;
     const nuevos = lotes.filter(l => l.id !== id);
-    if (await eliminarLotePorId(id)) { setLotes(nuevos); avisar("✓ Lote eliminado"); }
-    else avisar("⚠ No se pudo eliminar el lote; revisa la conexión");
+    if (await eliminarLotePorId(id)) { setLotes(nuevos); avisar("� Lote eliminado"); }
+    else avisar("? No se pudo eliminar el lote; revisa la conexi�n");
   };
 
-  // ── Carga inicial ──
+  // �� Carga inicial ��
   const cargarTodo = async (primera, silencioso = false) => {
     if (!silencioso) setCargando(true);
     let baseLista = false;
@@ -831,7 +831,7 @@ export default function App() {
       const mcat = mcat0 ?? (siembras.push(escribir(K.mpCat, MP_LISTA)), MP_LISTA);
       let ins = ins0 ?? (siembras.push(escribir(K.insumos, SEED_INSUMOS)), SEED_INSUMOS);
       if (siembras.length) await Promise.all(siembras);
-      ins = ins.map(it => ({ presentacion: "", dosis: "", proveedor: "", ...it, categoria: it.categoria === "Desinfectantes" ? "Desinfección" : it.categoria }));
+      ins = ins.map(it => ({ presentacion: "", dosis: "", proveedor: "", ...it, categoria: it.categoria === "Desinfectantes" ? "Desinfecci�n" : it.categoria }));
       if (pcfg) setPlantaCfg(pcfg);
       if (bcfg) {
         setBodegaCfg(bcfg);
@@ -941,8 +941,8 @@ export default function App() {
     try {
       const { preferencias: guardadas, nube } = await guardarPreferencias(nuevas);
       setPreferencias(guardadas);
-      avisar(nube ? "✓ Preferencias guardadas y sincronizadas" : "✓ Preferencias guardadas en este dispositivo");
-    } catch (error) { avisar(`⚠ No se pudieron sincronizar: ${error.message}`); }
+      avisar(nube ? "� Preferencias guardadas y sincronizadas" : "� Preferencias guardadas en este dispositivo");
+    } catch (error) { avisar(`? No se pudieron sincronizar: ${error.message}`); }
     setGuardandoPreferencias(false);
   };
   useEffect(() => {
@@ -984,21 +984,21 @@ export default function App() {
   };
 
   const guardarDia = async (soloLoteId = null) => {
-    if (cargandoFondo) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
+    if (cargandoFondo) { avisar("? Sincronizando datos - intenta en unos segundos"); return; }
     const soloLote = soloLoteId ? lotes.find(x => x.id === soloLoteId) : null;
     setGuardando(true);
     const fecha = (fechaCaptura || hoyISO()).split("-").reverse().join("/");
     const vigentes = await leer(K.registros, null);
-    if (!vigentes) { avisar("⚠ No se pudo comprobar la producción actual. Intenta de nuevo."); setGuardando(false); return; }
+    if (!vigentes) { avisar("? No se pudo comprobar la producci�n actual. Intenta de nuevo."); setGuardando(false); return; }
     const aGuardar = lotes.filter(l => (!soloLoteId || l.id === soloLoteId) && capturas[l.id] && (totalesGalpon(capturas[l.id]).huevos || capturas[l.id].muertas || capturas[l.id].alimento6am || capturas[l.id].alimento1pm));
     if (aGuardar.some(l => vigentes.filter(r => r.fecha === fecha && r.lote === l.id).length > 1)) {
-      avisar("⚠ Hay controles duplicados para esta fecha. Corrígelos desde Historial antes de guardar."); setGuardando(false); return;
+      avisar("? Hay controles duplicados para esta fecha. Corr�gelos desde Historial antes de guardar."); setGuardando(false); return;
     }
     if (aGuardar.some(l => {
       const actual = vigentes.find(r => r.fecha === fecha && r.lote === l.id);
       const visto = registros.find(r => r.fecha === fecha && r.lote === l.id);
       return actual?.id !== visto?.id || (actual && JSON.stringify(actual) !== JSON.stringify(visto));
-    })) { avisar("⚠ Esta fecha cambió en otro dispositivo. Actualiza la app antes de guardar."); setGuardando(false); return; }
+    })) { avisar("? Esta fecha cambi� en otro dispositivo. Actualiza la app antes de guardar."); setGuardando(false); return; }
     {
       const enFormulario = [];
       lotes.forEach(l => {
@@ -1007,7 +1007,7 @@ export default function App() {
       });
       const repetidoForm = enFormulario.find((n2, i) => enFormulario.indexOf(n2) !== i);
       if (repetidoForm) {
-        avisar(`⚠ El tiquete #${repetidoForm} está repetido DENTRO de este formulario — corrige antes de guardar`);
+        avisar(`? El tiquete #${repetidoForm} est� repetido DENTRO de este formulario - corrige antes de guardar`);
         setGuardando(false); return;
       }
       let choque = null;
@@ -1018,7 +1018,7 @@ export default function App() {
       }
       if (choque && confirmar !== "tiqDup") {
         setConfirmar("tiqDup");
-        avisar(`⚠ El tiquete #${choque.num} ya se usó el ${String(choque.fecha).slice(0, 5)}${choque.galpon ? ` en G${choque.galpon}` : ""}. Si es correcto (talonario reinicia números), toca Guardar OTRA VEZ para guardar así.`);
+        avisar(`? El tiquete #${choque.num} ya se us� el ${String(choque.fecha).slice(0, 5)}${choque.galpon ? ` en G${choque.galpon}` : ""}. Si es correcto (talonario reinicia n�meros), toca Guardar OTRA VEZ para guardar as�.`);
         setTimeout(() => setConfirmar(c2 => c2 === "tiqDup" ? null : c2), 12000);
         setGuardando(false); return;
       }
@@ -1100,9 +1100,9 @@ export default function App() {
     lotes.forEach(l => {
       if (soloLoteId && l.id !== soloLoteId) return;
       const c = capturas[l.id]; if (!c) return;
-      c.meds.forEach(m2 => m2.producto && descontarInsumo(m2.producto, m2.dosis, `Medicación G${l.galpon}`));
+      c.meds.forEach(m2 => m2.producto && descontarInsumo(m2.producto, m2.dosis, `Medicaci�n G${l.galpon}`));
       c.vits.forEach(v2 => v2.producto && descontarInsumo(v2.producto, v2.dosis, `Vitamina G${l.galpon}`));
-      c.fums.forEach(f2 => f2.producto && descontarInsumo(f2.producto, f2.dosis, `Fumigación G${l.galpon}`));
+      c.fums.forEach(f2 => f2.producto && descontarInsumo(f2.producto, f2.dosis, `Fumigaci�n G${l.galpon}`));
     });
     if (movsAuto.length || movsAutoPrevios.length) {
       await escribir(K.insumos, insumosDia);
@@ -1116,7 +1116,7 @@ export default function App() {
     let nBitacora = bitacora;
     if (notaDia.trim()) nBitacora = [{ fecha, texto: notaDia.trim(), por: completadoPor }, ...bitacora];
 
-    setEstadoSync("Guardando…");
+    setEstadoSync("Guardando.");
     const ok1 = await escribir(K.registros, nuevosRegistros);
     const ok2 = await escribir(K.lotes, nuevosLotes);
     if (nMeds !== medicaciones) await escribir(K.meds, nMeds);
@@ -1134,12 +1134,12 @@ export default function App() {
         else await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento);
         setBorradorDisponible(null);
       } catch { /* sin espacio local */ }
-      avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}`);
-    } else { setEstadoSync("Error al guardar"); avisar("⚠ No se pudo guardar. Revisa la conexión."); }
+      avisar(`� Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " - se reemplaz� lo anterior de esa fecha" : ""}`);
+    } else { setEstadoSync("Error al guardar"); avisar("? No se pudo guardar. Revisa la conexi�n."); }
     setGuardando(false);
   };
 
-  // ── Bodega ──
+  // �� Bodega ��
   const activos = lotes.filter(l => l.estado !== "cerrado").sort((a, b) => Number(a.galpon) - Number(b.galpon));
   const filasExcelVisibles = filtrarLista(excelPesajes.map((p, indice) => {
     const l = lotes.find(x => x.id === p.lote);
@@ -1163,7 +1163,7 @@ export default function App() {
     if (!previos.length) return Number(bodegaCfg.inicialCart || 0);
     return previos.reduce((mejor, m) => (!mejor || aDate(m.fecha) > aDate(mejor.fecha) ? m : mejor), null).saldoFinal;
   })();
-  const guardarCfgBodega = async (cfg) => { if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; } setBodegaCfg(cfg); await escribir(K.bodegaCfg, cfg); };
+  const guardarCfgBodega = async (cfg) => { if (cargandoFondo) { avisar("? Sincronizando - espera unos segundos"); return; } setBodegaCfg(cfg); await escribir(K.bodegaCfg, cfg); };
   const cambiarFechaBodega = (iso, id = null) => {
     setFechaBodega(iso);
     fechaBodegaRef.current = iso;
@@ -1174,12 +1174,12 @@ export default function App() {
     setMotivoEdicionBodega("");
     if (mov) {
       setMovBodega({ comprado: mov.comprado || "", vendGranja: mov.vendGranja || "", destruido: mov.destruido || "", regalado: mov.regalado || "" });
-      setRepartos((mov.repartos?.length ? mov.repartos : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
+      setRepartos((mov.repartos?.length ? mov.repartos : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andr�s", "Bryan"]).map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
       setObsInv(mov.obs || "");
       setAjusteBodega(mov.ajusteConteo == null ? "" : String(mov.ajusteConteo));
     } else {
       setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
-      setRepartos((bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map(n2 => ({ nombre: n2, salida: "", devBueno: "", devMalo: "" })));
+      setRepartos((bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andr�s", "Bryan"]).map(n2 => ({ nombre: n2, salida: "", devBueno: "", devMalo: "" })));
       setObsInv("");
     }
   };
@@ -1190,16 +1190,16 @@ export default function App() {
   const difAjuste = hayAjuste ? +(Number(ajusteBodega) - saldoCalculado).toFixed(1) : 0;
 
   const guardarBodega = async () => {
-    if (cargandoFondo || guardando) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
+    if (cargandoFondo || guardando) { avisar("? Sincronizando datos - intenta en unos segundos"); return; }
     setGuardando(true);
     try {
     const actuales = await leerBodegaActual();
-    if (!actuales) { avisar("⚠ No se pudo consultar la bodega actual. No se guardó ningún cambio."); return; }
+    if (!actuales) { avisar("? No se pudo consultar la bodega actual. No se guard� ning�n cambio."); return; }
     const { delDia, elegido, id: idMovimiento } = elegirMovimientoBodega(actuales, fechaBodega, movBodegaIdRef.current);
-    if (movBodegaIdRef.current != null && !elegido) { avisar("⚠ Este registro cambió en otro dispositivo. Actualiza y vuelve a elegirlo."); return; }
-    if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("⚠ El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
-    if (delDia.length && movBodegaIdRef.current == null) { avisar("⚠ Ya hay un movimiento para esta fecha. Cárgalo desde el historial antes de editarlo."); return; }
-    if (elegido && !motivoEdicionBodega.trim()) { avisar("⚠ Escribe el motivo de la modificación para dejar constancia."); return; }
+    if (movBodegaIdRef.current != null && !elegido) { avisar("? Este registro cambi� en otro dispositivo. Actualiza y vuelve a elegirlo."); return; }
+    if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("? El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
+    if (delDia.length && movBodegaIdRef.current == null) { avisar("? Ya hay un movimiento para esta fecha. C�rgalo desde el historial antes de editarlo."); return; }
+    if (elegido && !motivoEdicionBodega.trim()) { avisar("? Escribe el motivo de la modificaci�n para dejar constancia."); return; }
     const nuevoMov = {
       id: idMovimiento,
       fecha: fechaB, producido: +producidoHoyCart.toFixed(1),
@@ -1242,27 +1242,27 @@ export default function App() {
       movBodegaOriginalRef.current = snapshotBodega(nuevos.find(m => String(m.id) === String(nuevoMov.id)));
       setMotivoEdicionBodega("");
       setAjusteBodega(nuevoMov.ajusteConteo == null ? "" : String(nuevoMov.ajusteConteo));
-      avisar(delDia.length > 1 ? `✓ Fecha ${fechaB} unificada; ${delDia.length - 1} duplicado(s) conservados en la bitácora` : elegido ? "✓ Movimiento editado con registro de cambios" : "✓ Movimiento de bodega guardado");
+      avisar(delDia.length > 1 ? `� Fecha ${fechaB} unificada; ${delDia.length - 1} duplicado(s) conservados en la bit�cora` : elegido ? "� Movimiento editado con registro de cambios" : "� Movimiento de bodega guardado");
     }
-    else avisar("⚠ No se pudo guardar la bodega");
-    } catch (e) { console.error("Guardar bodega:", e); avisar("⚠ No se pudo guardar la bodega"); }
+    else avisar("? No se pudo guardar la bodega");
+    } catch (e) { console.error("Guardar bodega:", e); avisar("? No se pudo guardar la bodega"); }
     finally { setGuardando(false); }
   };
 
   const cerrarBodegaDia = async () => {
-    if (!Object.values(pasosBodega).every(Boolean) || !completadoPor.trim()) { avisar("⚠ Revisa salidas, devoluciones y conteo físico; indica responsable"); return; }
-    if (ajusteBodega === "" || !Number.isFinite(Number(ajusteBodega))) { avisar("⚠ Para cerrar el día anota el saldo físico contado"); return; }
+    if (!Object.values(pasosBodega).every(Boolean) || !completadoPor.trim()) { avisar("? Revisa salidas, devoluciones y conteo f�sico; indica responsable"); return; }
+    if (ajusteBodega === "" || !Number.isFinite(Number(ajusteBodega))) { avisar("? Para cerrar el d�a anota el saldo f�sico contado"); return; }
     const actuales = await leerBodegaActual();
     const mov = actuales?.find(m => fechaHistorialISO(m.fecha) === fechaBodega && String(m.id) === String(movBodegaIdRef.current));
-    if (!mov || mov.ajusteConteo == null || Number(mov.ajusteConteo) !== Number(ajusteBodega) || JSON.stringify(mov.repartos) !== JSON.stringify(repartos)) { avisar("⚠ Guarda primero el movimiento con el conteo físico y confirma que no cambió en otro dispositivo"); return; }
-    if (mov.cierreVerificado) { avisar("✓ Este día ya tiene cierre verificado"); return; }
+    if (!mov || mov.ajusteConteo == null || Number(mov.ajusteConteo) !== Number(ajusteBodega) || JSON.stringify(mov.repartos) !== JSON.stringify(repartos)) { avisar("? Guarda primero el movimiento con el conteo f�sico y confirma que no cambi� en otro dispositivo"); return; }
+    if (mov.cierreVerificado) { avisar("� Este d�a ya tiene cierre verificado"); return; }
     const evento = { fechaHora: new Date().toISOString(), por: window.__usuarioEmail || completadoPor, responsable: completadoPor, pasos: { ...pasosBodega } };
     const nuevos = actuales.map(m => String(m.id) === String(mov.id) ? { ...m, cierreVerificado: evento } : m);
-    if (await escribir(K.movs, nuevos)) { setBodegaMovs(ordenarPorFecha(nuevos)); avisar("✓ Cierre de bodega verificado y registrado"); }
-    else avisar("⚠ No se pudo guardar el cierre");
+    if (await escribir(K.movs, nuevos)) { setBodegaMovs(ordenarPorFecha(nuevos)); avisar("� Cierre de bodega verificado y registrado"); }
+    else avisar("? No se pudo guardar el cierre");
   };
 
-  // ── Planta de concentrado ──
+  // �� Planta de concentrado ��
   const usoFormula = (f) => recetas.formulas[f]?.uso || "Aves";
   const movsPlanta = plantaMovs.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) });
   const entregadoHoyKg = regsHoy.reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
@@ -1276,7 +1276,7 @@ export default function App() {
   const extraerKilosConteo = (m, fKey) => {
     if (m?.conteosFormula?.[fKey] != null && !isNaN(Number(m.conteosFormula[fKey]))) return Number(m.conteosFormula[fKey]);
     if (m?.saldoReal != null && Number(m.saldoReal) > 0) return Number(m.saldoReal);
-    const match = String(m?.detalle || "").match(/Conteo físico.*:\s*([0-9.]+)/i);
+    const match = String(m?.detalle || "").match(/Conteo f�sico.*:\s*([0-9.]+)/i);
     if (match && !isNaN(Number(match[1]))) return Number(match[1]);
     return Number(m?.kg || 0);
   };
@@ -1373,7 +1373,7 @@ export default function App() {
 
   const kgNucleoDe = (formula) => {
     const f = recetas.formulas[formula];
-    if (!f) return 0;
+    if (!f || f.uso === "Ganado") return 0;
     return Object.entries(f.items).reduce((a, [c, kg]) => a + (basculaDe(c) === 4 ? Number(kg || 0) : 0), 0);
   };
 
@@ -1387,25 +1387,26 @@ export default function App() {
       if (nBaches > 0) {
         const f2 = recetas.formulas[fBache.formula];
         if (f2) {
+          const usaNucleo = f2.uso === "Aves" && kgNucleoDe(fBache.formula) > 0;
           const salidas = Object.entries(f2.items)
-            .filter(([c2, kg]) => basculaDe(c2) !== 4 && Number(kg) > 0)
-            .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaBache, mp: c2, tipo: "salida", kg: +(Number(kg) * nBaches).toFixed(2), ref: `Bache ${fBache.formula} ×${nBaches}${fBache.numBache ? ` #${fBache.numBache}` : ""}` }));
+            .filter(([c2, kg]) => (!usaNucleo || basculaDe(c2) !== 4) && Number(kg) > 0)
+            .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaBache, mp: c2, tipo: "salida", kg: +(Number(kg) * nBaches).toFixed(2), ref: `Bache ${fBache.formula} x${nBaches}${fBache.numBache ? ` #${fBache.numBache}` : ""}` }));
           await registrarKardex(salidas);
         }
       }
-      if (nBaches > 0 && kgNucleoDe(fBache.formula) > 0) {
+      if (nBaches > 0 && usoFormula(fBache.formula) === "Aves" && kgNucleoDe(fBache.formula) > 0) {
         const invReal = await leer(K.nucleo, {});
         const inv = { ...invReal, [fBache.formula]: +((invReal[fBache.formula] || 0) - nBaches).toFixed(2) };
         await escribir(K.nucleo, inv); setNucleoInv(inv);
       }
       setPlantaMovs(nuevo); setFBache({ ...fBache, baches: "", kg: "", numBache: "", fecha: hoyISO() });
-      avisar(`✓ Bache registrado — concentrado ${usoFormula(fBache.formula)}`);
-    } else avisar("⚠ No se pudo guardar");
+      avisar(`� Bache registrado - concentrado ${usoFormula(fBache.formula)}`);
+    } else avisar("? No se pudo guardar");
     setGuardando(false);
   };
 
   const producirNucleo = async () => {
-    if (cargandoFondo) { avisar("⏳ Sincronizando datos — espera unos segundos"); return; }
+    if (cargandoFondo) { avisar("? Sincronizando datos - espera unos segundos"); return; }
     const n = Number(fNucleo.porciones || 0);
     if (!n) return;
     const fechaNuc = (fNucleo.fecha || hoyISO()).split("-").reverse().join("/");
@@ -1418,25 +1419,25 @@ export default function App() {
       if (f2) {
         const salidas = Object.entries(f2.items)
           .filter(([c2, kg]) => basculaDe(c2) === 4 && Number(kg) > 0)
-          .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaNuc, mp: c2, tipo: "salida", kg: +(Number(kg) * n).toFixed(3), ref: `Núcleo ${fNucleo.formula} ×${n}${fNucleo.numNucleo ? ` #${fNucleo.numNucleo}` : ""}` }));
+          .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaNuc, mp: c2, tipo: "salida", kg: +(Number(kg) * n).toFixed(3), ref: `N�cleo ${fNucleo.formula} x${n}${fNucleo.numNucleo ? ` #${fNucleo.numNucleo}` : ""}` }));
         await registrarKardex(salidas);
       }
-      setNucleoInv(inv); setFNucleo({ ...fNucleo, porciones: "", numNucleo: "", fecha: hoyISO() }); avisar(`✓ Núcleo producido: ${n} porción(es) de ${fNucleo.formula} — kardex actualizado`);
+      setNucleoInv(inv); setFNucleo({ ...fNucleo, porciones: "", numNucleo: "", fecha: hoyISO() }); avisar(`� N�cleo producido: ${n} porci�n(es) de ${fNucleo.formula} - kardex actualizado`);
     }
-    else avisar("⚠ No se pudo guardar");
+    else avisar("? No se pudo guardar");
   };
 
   const guardarServidoGanado = async () => {
-    if (!Number.isFinite(Number(fServGan.kg)) || Number(fServGan.kg) <= 0 || !fechaPesajeISO(fServGan.fecha) || fServGan.fecha > hoyISO()) { avisar("⚠ Revisa los kilos y la fecha del servido"); return; }
-    if (!fServGan.formula) { avisar("⚠ Elige el tipo de concentrado para descontarlo del inventario correcto"); return; }
+    if (!Number.isFinite(Number(fServGan.kg)) || Number(fServGan.kg) <= 0 || !fechaPesajeISO(fServGan.fecha) || fServGan.fecha > hoyISO()) { avisar("? Revisa los kilos y la fecha del servido"); return; }
+    if (!fServGan.formula) { avisar("? Elige el tipo de concentrado para descontarlo del inventario correcto"); return; }
     setGuardando(true);
     try {
       const actuales = await leer(K.planta, null);
       if (!actuales) throw new Error("No se pudo consultar el inventario actual");
       const nuevo = [{ id: crypto.randomUUID(), fecha: fServGan.fecha.split("-").reverse().join("/"), registradoEl: new Date().toISOString(), tipo: "servido", categoria: "Ganado", kg: Number(fServGan.kg), formula: fServGan.formula || "", detalle: fServGan.detalle || "", ...(fServGan.grupoKey !== "" ? { grupoKey: fServGan.grupoKey } : {}), por: completadoPor }, ...actuales];
       if (!(await escribir(K.planta, nuevo))) throw new Error("No se pudo guardar");
-      setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() }); avisar("✓ Servido a ganado registrado");
-    } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
+      setPlantaMovs(nuevo); setFServGan({ kg: "", detalle: "", formula: "", grupoKey: "", fecha: hoyISO() }); avisar("� Servido a ganado registrado");
+    } catch (e) { console.error(e); avisar(`? ${e.message}`); }
     finally { setGuardando(false); }
   };
 
@@ -1448,13 +1449,13 @@ export default function App() {
       if (!actuales) throw new Error("No se pudo consultar el servido actual");
       const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), actuales);
       if (plan.sinGrupo.length) throw new Error("Ya hay servido manual de hoy sin corral asignado. Revisa esos movimientos antes del registro calculado para evitar descontarlo dos veces.");
-      if (!plan.pendientes.length) { avisar("✓ Todos los corrales configurados ya tienen servido registrado hoy"); return; }
+      if (!plan.pendientes.length) { avisar("� Todos los corrales configurados ya tienen servido registrado hoy"); return; }
       const nuevos = plan.pendientes.map(g => ({ id: `ganado:auto:${hoyISO()}:${g.key}`, fecha: plan.fecha, registradoEl: new Date().toISOString(), tipo: "servido", categoria: "Ganado", kg: g.kg, formula: g.formula, detalle: g.nombre, grupoKey: g.key, calculado: true, por: completadoPor }));
       const lista = [...nuevos, ...actuales];
       if (!(await escribir(K.planta, lista))) throw new Error("No se pudo guardar el servido calculado");
       setPlantaMovs(lista);
-      avisar(`✓ Servido calculado registrado: ${nuevos.length} corrales, ${nuevos.reduce((s, m) => s + m.kg, 0).toFixed(1)} kg`);
-    } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
+      avisar(`� Servido calculado registrado: ${nuevos.length} corrales, ${nuevos.reduce((s, m) => s + m.kg, 0).toFixed(1)} kg`);
+    } catch (e) { console.error(e); avisar(`? ${e.message}`); }
     finally { setGuardando(false); }
   };
 
@@ -1463,7 +1464,7 @@ export default function App() {
     if (!editarAjustePlanta) return;
     const real = Number(editarAjustePlanta.nuevoSaldoReal);
     if (!Number.isFinite(real) || real < 0) {
-      avisar("⚠ Digita un saldo real válido mayor o igual a cero");
+      avisar("? Digita un saldo real v�lido mayor o igual a cero");
       return;
     }
     setGuardando(true);
@@ -1473,27 +1474,27 @@ export default function App() {
       const nuevoMov = {
         ...editarAjustePlanta,
         saldoReal: real,
-        kg: editarAjustePlanta.categoria === "Núcleo" ? editarAjustePlanta.kg : real,
-        porciones: editarAjustePlanta.categoria === "Núcleo" ? real : editarAjustePlanta.porciones,
+        kg: editarAjustePlanta.categoria === "N�cleo" ? editarAjustePlanta.kg : real,
+        porciones: editarAjustePlanta.categoria === "N�cleo" ? real : editarAjustePlanta.porciones,
         responsable: editarAjustePlanta.responsable || completadoPor,
         historialEdiciones: [
           ...(editarAjustePlanta.historialEdiciones || []),
           {
             fechaHora: new Date().toISOString(),
             por: completadoPor,
-            motivo: editarAjustePlanta.motivoCambio || "Ajuste físico modificado",
+            motivo: editarAjustePlanta.motivoCambio || "Ajuste f�sico modificado",
             anterior: { saldoReal: antReal, fecha: editarAjustePlanta.fecha },
             nuevo: { saldoReal: real, fecha: editarAjustePlanta.fecha },
           }
         ]
       };
       const lista = plantaMovs.map(m => String(m.id) === String(id) ? nuevoMov : m);
-      if (!(await escribir(K.planta, lista))) throw new Error("No se pudo guardar la modificación");
+      if (!(await escribir(K.planta, lista))) throw new Error("No se pudo guardar la modificaci�n");
       setPlantaMovs(lista);
       setEditarAjustePlanta(null);
-      avisar("✓ Ajuste de planta modificado y guardado");
+      avisar("� Ajuste de planta modificado y guardado");
     } catch (e) {
-      avisar(`⚠ ${e.message}`);
+      avisar(`? ${e.message}`);
     } finally {
       setGuardando(false);
     }
@@ -1501,17 +1502,17 @@ export default function App() {
 
   const eliminarMovPlanta = async (m) => {
     const clave = `delplanta:${m.id}`;
-    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para ELIMINAR este movimiento — sus efectos se revierten"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    if (confirmar !== clave) { setConfirmar(clave); avisar("? Toca x otra vez para ELIMINAR este movimiento - sus efectos se revierten"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
     setConfirmar(null); setGuardando(true);
     const nuevo = plantaMovs.filter(x => x.id !== m.id);
-    if (!(await escribir(K.planta, nuevo))) { avisar("⚠ No se pudo eliminar"); setGuardando(false); return; }
+    if (!(await escribir(K.planta, nuevo))) { avisar("? No se pudo eliminar"); setGuardando(false); return; }
     setPlantaMovs(nuevo);
     const f2 = recetas.formulas[m.formula];
     if (m.tipo === "bache" && f2) {
       const nB = Number(m.baches || 0);
       const reversas = Object.entries(f2.items)
         .filter(([c2, kg]) => basculaDe(c2) !== 4 && Number(kg) > 0)
-        .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nB).toFixed(2), ref: `Reversión bache ${m.formula} ×${nB}${m.numBache ? ` #${m.numBache}` : ""}` }));
+        .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nB).toFixed(2), ref: `Reversi�n bache ${m.formula} x${nB}${m.numBache ? ` #${m.numBache}` : ""}` }));
       await registrarKardex(reversas);
       if (nB > 0 && kgNucleoDe(m.formula) > 0) {
         const invReal = await leer(K.nucleo, {});
@@ -1526,25 +1527,25 @@ export default function App() {
       if (await escribir(K.nucleo, inv)) setNucleoInv(inv);
       const reversas = Object.entries(f2.items)
         .filter(([c2, kg]) => basculaDe(c2) === 4 && Number(kg) > 0)
-        .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nP).toFixed(3), ref: `Reversión núcleo ${m.formula} ×${nP}${m.numNucleo ? ` #${m.numNucleo}` : ""}` }));
+        .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nP).toFixed(3), ref: `Reversi�n n�cleo ${m.formula} x${nP}${m.numNucleo ? ` #${m.numNucleo}` : ""}` }));
       await registrarKardex(reversas);
     }
-    avisar("✓ Movimiento eliminado y efectos revertidos");
+    avisar("� Movimiento eliminado y efectos revertidos");
     setGuardando(false);
   };
 
   const eliminarFacturaPlanta = async (f) => {
     const clave = `delfacpl:${f.id || f.fecha + f.proveedor}`;
-    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para eliminar esta factura"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    if (confirmar !== clave) { setConfirmar(clave); avisar("? Toca x otra vez para eliminar esta factura"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
     setConfirmar(null);
     const nuevo = facturas.filter(x => x !== f && x.id !== f.id);
-    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); avisar("✓ Factura eliminada"); }
-    else avisar("⚠ No se pudo eliminar");
+    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); avisar("� Factura eliminada"); }
+    else avisar("? No se pudo eliminar");
   };
 
   const eliminarMovInsumo = async (m) => {
     const clave = `delins:${m.id}`;
-    if (confirmar !== clave) { setConfirmar(clave); avisar(`⚠ Toca × otra vez para eliminar${m.tipo === "ajuste" ? " (el saldo actual no se recalcula)" : " — el saldo se revierte"}`); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    if (confirmar !== clave) { setConfirmar(clave); avisar(`? Toca x otra vez para eliminar${m.tipo === "ajuste" ? " (el saldo actual no se recalcula)" : " - el saldo se revierte"}`); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
     setConfirmar(null);
     const nuevoMovs = insumosMovs.filter(x => x.id !== m.id);
     let nuevoIns = insumos;
@@ -1553,25 +1554,25 @@ export default function App() {
     }
     const ok1 = await escribir(K.insumosMovs, nuevoMovs);
     const ok2 = nuevoIns === insumos ? true : await escribir(K.insumos, nuevoIns);
-    if (ok1 && ok2) { setInsumosMovs(nuevoMovs); setInsumos(nuevoIns); avisar("✓ Movimiento eliminado"); }
-    else avisar("⚠ No se pudo eliminar");
+    if (ok1 && ok2) { setInsumosMovs(nuevoMovs); setInsumos(nuevoIns); avisar("� Movimiento eliminado"); }
+    else avisar("? No se pudo eliminar");
   };
 
   const guardarAjustePlanta = async () => {
-    const esConcentrado = fAjPlanta.categoria !== "Núcleo";
+    const esConcentrado = fAjPlanta.categoria !== "N�cleo";
     const formulas = Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria);
     const real = Number(fAjPlanta.saldoReal);
     const responsable = fAjPlanta.responsable.trim();
-    const esNucleo = fAjPlanta.categoria === "Núcleo";
+    const esNucleo = fAjPlanta.categoria === "N�cleo";
     const formula = fAjPlanta.formula;
-    if (!responsable || fAjPlanta.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esConcentrado ? !formulas.includes(formula) : !formula)) { avisar("⚠ Elige una fórmula e indica responsable, cantidad real y fecha válida"); return; }
-    if (esConcentrado && fAjPlanta.fecha > hoyISO()) { avisar("⚠ La fecha del conteo no puede ser futura"); return; }
+    if (!responsable || fAjPlanta.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaPesajeISO(fAjPlanta.fecha) || fAjPlanta.fecha > hoyISO() || (esConcentrado ? !formulas.includes(formula) : !formula)) { avisar("? Elige una f�rmula e indica responsable, cantidad real y fecha v�lida"); return; }
+    if (esConcentrado && fAjPlanta.fecha > hoyISO()) { avisar("? La fecha del conteo no puede ser futura"); return; }
     setGuardando(true);
     try {
       const movimientos = await leer(K.planta, null);
       if (!movimientos) throw new Error("No se pudo consultar el historial actual");
       const inv = esNucleo ? await leer(K.nucleo, null) : null;
-      if (esNucleo && !inv) throw new Error("No se pudo consultar el inventario de núcleos");
+      if (esNucleo && !inv) throw new Error("No se pudo consultar el inventario de n�cleos");
       const actual = esNucleo ? Number(inv[formula] || 0) : Number(plantaCfg[fAjPlanta.categoria === "Aves" ? "inicialAves" : "inicialGanado"] || 0)
         + movimientos.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) }).filter(m => (!aperturaP || aDate(m.fecha) >= aperturaP) && m.categoria === fAjPlanta.categoria).reduce((s, m) => s + (m.tipo === "bache" || m.tipo === "ajuste" ? Number(m.kg || 0) : m.tipo === "servido" ? -Number(m.kg || 0) : 0), 0)
         - (fAjPlanta.categoria === "Aves" ? servidoAvesTotal : 0);
@@ -1580,25 +1581,25 @@ export default function App() {
       const saldos = esConcentrado ? saldosFormulasDesdeConteo(fAjPlanta.categoria, formulas, movimientos, registrosActuales) : null;
       const anteriorFormula = saldos?.[formula] ?? null;
       const delta = +(real - actual).toFixed(2);
-      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { formula, kg: delta, saldoFormulaAnterior: anteriorFormula, conteosFormula: { [formula]: real } }), saldoAnterior: actual, saldoReal: real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo físico de ${formula}: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
+      const evento = { id: crypto.randomUUID(), fecha: fAjPlanta.fecha.split("-").reverse().join("/"), tipo: "ajuste", categoria: fAjPlanta.categoria, ...(esNucleo ? { formula, porciones: delta } : { formula, kg: delta, saldoFormulaAnterior: anteriorFormula, conteosFormula: { [formula]: real } }), saldoAnterior: actual, saldoReal: real, responsable, registradoEl: new Date().toISOString(), detalle: `Conteo f�sico de ${formula}: ${real} ${esNucleo ? "porciones" : "kg"}`, por: window.__usuarioEmail || responsable };
       if (!(await escribir(K.planta, [evento, ...movimientos]))) throw new Error("No se pudo registrar el ajuste en el historial");
       setPlantaMovs([evento, ...movimientos]);
       if (esNucleo) {
         const actualizado = { ...inv, [formula]: real };
-        if (!(await escribir(K.nucleo, actualizado))) throw new Error("El ajuste quedó anotado, pero el inventario no se actualizó. Revisa el historial antes de repetirlo.");
+        if (!(await escribir(K.nucleo, actualizado))) throw new Error("El ajuste qued� anotado, pero el inventario no se actualiz�. Revisa el historial antes de repetirlo.");
         setNucleoInv(actualizado);
       }
       setFAjPlanta({ ...fAjPlanta, saldoReal: "" });
-      avisar(`✓ ${formula}: ${real} ${esNucleo ? "porciones" : "kg"} registradas. Ajuste total ${delta > 0 ? "+" : ""}${delta}`);
-    } catch (e) { avisar(`⚠ ${e.message}`); }
+      avisar(`� ${formula}: ${real} ${esNucleo ? "porciones" : "kg"} registradas. Ajuste total ${delta > 0 ? "+" : ""}${delta}`);
+    } catch (e) { avisar(`? ${e.message}`); }
     finally { setGuardando(false); }
   };
 
-  const guardarCfgPlanta = async (cfg) => { if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; } setPlantaCfg(cfg); await escribir(K.plantaCfg, cfg); };
+  const guardarCfgPlanta = async (cfg) => { if (cargandoFondo) { avisar("? Sincronizando - espera unos segundos"); return; } setPlantaCfg(cfg); await escribir(K.plantaCfg, cfg); };
 
   const exportarTodoJSON = async () => {
     setGuardando(true);
-    avisar("⏳ Recopilando todos los datos…");
+    avisar("? Recopilando todos los datos.");
     try {
       const claves = Object.values(K);
       const datos = {};
@@ -1612,39 +1613,39 @@ export default function App() {
       const a = document.createElement("a");
       a.href = url; a.download = `rancho-el-sonado-datos-${hoyISO()}.json`;
       a.click(); URL.revokeObjectURL(url);
-      avisar("✓ Respaldo completo descargado");
-    } catch { avisar("⚠ No se pudo exportar — intenta de nuevo"); }
+      avisar("� Respaldo completo descargado");
+    } catch { avisar("? No se pudo exportar - intenta de nuevo"); }
     setGuardando(false);
   };
 
   const guardarFactura = async () => {
     if (!fFactura.proveedor && !fFactura.producto) return;
     const nuevo = [{ ...fFactura, fecha: (fFactura.fecha || hoyISO()).split("-").reverse().join("/") }, ...facturas];
-    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); setFFactura({ proveedor: "", producto: "", monto: "", fecha: hoyISO() }); avisar("✓ Factura registrada"); }
-    else avisar("⚠ No se pudo guardar");
+    if (await escribir(K.facturas, nuevo)) { setFacturas(nuevo); setFFactura({ proveedor: "", producto: "", monto: "", fecha: hoyISO() }); avisar("� Factura registrada"); }
+    else avisar("? No se pudo guardar");
   };
 
   const guardarPesaje = async () => {
     if (guardando || importandoPesajes) return;
-    if (cargandoFondo) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
+    if (cargandoFondo) { avisar("? Sincronizando datos - intenta en unos segundos"); return; }
     const txt = fPeso.pesos.replace(/(\d),(?=\d{3}(?:\D|$))/g, "$1");
     const nums = txt.split(/[\s;]+/).map(t => Number(t.replace(",", "."))).filter(n => !isNaN(n) && n > 0);
-    if (!nums.length) { avisar("⚠ Digita los pesos en gramos separados por espacio o enter"); return; }
+    if (!nums.length) { avisar("? Digita los pesos en gramos separados por espacio o enter"); return; }
     const prom = nums.reduce((a, b) => a + b, 0) / nums.length;
     const enKg = prom < 10;
     const lista = enKg ? nums.map(n => Math.round(n * 1000)) : nums;
     const validos = lista.filter(n => n >= 200 && n <= 5000);
     const fuera = lista.length - validos.length;
-    if (!validos.length) { avisar("⚠ Revisa lo digitado — acepto gramos (ej. 1850) o kilos (ej. 1.85)"); return; }
+    if (!validos.length) { avisar("? Revisa lo digitado - acepto gramos (ej. 1850) o kilos (ej. 1.85)"); return; }
     const lote = lotes.find(l => l.id === fPeso.lote);
-    if (!lote) { avisar("⚠ Elige el gallinero del pesaje"); return; }
+    if (!lote) { avisar("? Elige el gallinero del pesaje"); return; }
     const fISO = fPeso.fecha || hoyISO();
-    if (fechaPesajeISO(fISO) !== fISO || fISO > hoyISO() || fISO < lote.nac) { avisar("⚠ La fecha debe ser válida, no futura y posterior al nacimiento del lote"); return; }
+    if (fechaPesajeISO(fISO) !== fISO || fISO > hoyISO() || fISO < lote.nac) { avisar("? La fecha debe ser v�lida, no futura y posterior al nacimiento del lote"); return; }
     setGuardando(true);
     const fechaDMY = fISO.split("-").reverse().join("/");
     if (pesajes.some(p => clavePesaje(p.lote, p.fecha) === clavePesaje(fPeso.lote, fISO))) {
       setGuardando(false);
-      avisar("⚠ Ya existe un pesaje de este lote en esta fecha; no se modificó");
+      avisar("? Ya existe un pesaje de este lote en esta fecha; no se modific�");
       return;
     }
     const [ny, nm, nd] = lote.nac.split("-").map(Number);
@@ -1656,9 +1657,9 @@ export default function App() {
       if (actual) setPesajes(ordenarPorFecha(actual));
       if (resultado.agregados) {
         setFPeso({ ...fPeso, pesos: "" });
-        avisar(`✓ Pesaje guardado: ${validos.length} aves${enKg ? " (kg convertidos a gramos)" : ""}${fuera ? ` · ${fuera} dato(s) fuera de rango ignorado(s)` : ""}`);
-      } else avisar("⚠ Ya existe un pesaje de este lote en esta fecha; no se modificó");
-    } catch (e) { console.error(e); avisar(`⚠ No se guardó el pesaje: ${e.message}`); }
+        avisar(`� Pesaje guardado: ${validos.length} aves${enKg ? " (kg convertidos a gramos)" : ""}${fuera ? ` � ${fuera} dato(s) fuera de rango ignorado(s)` : ""}`);
+      } else avisar("? Ya existe un pesaje de este lote en esta fecha; no se modific�");
+    } catch (e) { console.error(e); avisar(`? No se guard� el pesaje: ${e.message}`); }
     finally { setGuardando(false); }
   };
 
@@ -1674,30 +1675,30 @@ export default function App() {
       });
       setExcelPesajes(asignados);
       setExcelAbierto(-1);
-      avisar(asignados.length ? `✓ ${asignados.length} fechas encontradas; revisa y confirma` : "⚠ No encontré columnas de pesaje con fecha y muestra numerada");
-    } catch (e) { console.error(e); avisar("⚠ No se pudo leer el archivo Excel"); }
+      avisar(asignados.length ? `� ${asignados.length} fechas encontradas; revisa y confirma` : "? No encontr� columnas de pesaje con fecha y muestra numerada");
+    } catch (e) { console.error(e); avisar("? No se pudo leer el archivo Excel"); }
   };
 
   const confirmarExcelPesajes = async () => {
     if (importandoPesajes || guardando || cargandoFondo) return;
     const vigentes = await leer(K.pesajes, null);
-    if (vigentes === null) { avisar("⚠ No se pudo consultar los pesajes actuales; no se importó nada"); return; }
+    if (vigentes === null) { avisar("? No se pudo consultar los pesajes actuales; no se import� nada"); return; }
     const existentes = new Map(vigentes.map(p => [clavePesaje(p.lote, p.fecha), p]));
     const clavesArchivo = new Set();
     const seleccion = [];
     const conflictos = [];
     const incluidos = excelPesajes.filter(x => x.incluir);
-    if (!incluidos.length) { avisar("⚠ Selecciona al menos una fecha para importar"); return; }
+    if (!incluidos.length) { avisar("? Selecciona al menos una fecha para importar"); return; }
     for (const p of incluidos) {
-      if (!p.lote) { avisar("⚠ Asigna un lote a cada fecha antes de importar"); return; }
-      if (!p.fecha || fechaPesajeISO(p.fecha) !== p.fecha) { avisar(`⚠ Revisa la fecha en ${p.hoja}, columna ${p.columna}`); return; }
-      if (p.fecha > hoyISO()) { avisar(`⚠ ${p.fecha} es posterior a hoy (${hoyISO()}); corrige o excluye esa fecha`); return; }
+      if (!p.lote) { avisar("? Asigna un lote a cada fecha antes de importar"); return; }
+      if (!p.fecha || fechaPesajeISO(p.fecha) !== p.fecha) { avisar(`? Revisa la fecha en ${p.hoja}, columna ${p.columna}`); return; }
+      if (p.fecha > hoyISO()) { avisar(`? ${p.fecha} es posterior a hoy (${hoyISO()}); corrige o excluye esa fecha`); return; }
       const lote = lotes.find(l => l.id === p.lote);
-      if (!lote) { avisar("⚠ El lote elegido ya no existe; revisa la selección"); return; }
-      if (p.fecha < lote.nac) { avisar(`⚠ El pesaje ${p.fecha} precede al nacimiento del lote (${lote.nac}). Corrige la fecha o elige el lote histórico de ${p.hoja}.`); return; }
+      if (!lote) { avisar("? El lote elegido ya no existe; revisa la selecci�n"); return; }
+      if (p.fecha < lote.nac) { avisar(`? El pesaje ${p.fecha} precede al nacimiento del lote (${lote.nac}). Corrige la fecha o elige el lote hist�rico de ${p.hoja}.`); return; }
       const k = clavePesaje(p.lote, p.fecha);
       if (clavesArchivo.has(k)) continue;
-      if (p.pesos.some(v => pesoEnGramos(v) == null)) { avisar(`⚠ Revisa pesos inválidos en ${p.hoja}, ${p.fecha}`); return; }
+      if (p.pesos.some(v => pesoEnGramos(v) == null)) { avisar(`? Revisa pesos inv�lidos en ${p.hoja}, ${p.fecha}`); return; }
       clavesArchivo.add(k);
       const [ny, nm, nd] = lote.nac.split("-").map(Number);
       const [py, pm, pd] = p.fecha.split("-").map(Number);
@@ -1705,7 +1706,7 @@ export default function App() {
       if (existentes.has(k)) conflictos.push({ clave: k, nuevo, actual: existentes.get(k), galpon: lote.galpon });
       else seleccion.push(nuevo);
     }
-    if (!seleccion.length && !conflictos.length) { avisar("ℹ No hay fechas para importar"); return; }
+    if (!seleccion.length && !conflictos.length) { avisar("? No hay fechas para importar"); return; }
     setImportandoPesajes(true);
     try {
       const resultado = seleccion.length ? await agregarPesajesFaltantes(seleccion) : { agregados: 0, omitidos: 0 };
@@ -1713,12 +1714,12 @@ export default function App() {
       if (actual) setPesajes(ordenarPorFecha(actual));
       if (conflictos.length) setConflictosPesaje({ items: conflictos, elegidos: [] });
       else setExcelPesajes([]);
-      avisar(`✓ ${resultado.agregados} pesajes nuevos agregados${conflictos.length ? ` · ${conflictos.length} fechas existentes para revisar` : ""}`);
+      avisar(`� ${resultado.agregados} pesajes nuevos agregados${conflictos.length ? ` � ${conflictos.length} fechas existentes para revisar` : ""}`);
     } catch (e) {
       console.error(e);
       const actual = await leer(K.pesajes, null);
       if (actual) setPesajes(ordenarPorFecha(actual));
-      avisar("⚠ Importación interrumpida. Revisa la conexión y vuelve a cargar el Excel; lo ya registrado se omitirá.");
+      avisar("? Importaci�n interrumpida. Revisa la conexi�n y vuelve a cargar el Excel; lo ya registrado se omitir�.");
     } finally { setImportandoPesajes(false); }
   };
 
@@ -1732,8 +1733,8 @@ export default function App() {
       const actual = await leer(K.pesajes, null);
       if (actual) setPesajes(ordenarPorFecha(actual));
       setConflictosPesaje(null); setExcelPesajes([]);
-      avisar(`✓ ${r.actualizados} pesajes reemplazados; ${conflictosPesaje.items.length - r.actualizados} conservados`);
-    } catch (e) { console.error(e); avisar(`⚠ No se completó el reemplazo: ${e.message}`); }
+      avisar(`� ${r.actualizados} pesajes reemplazados; ${conflictosPesaje.items.length - r.actualizados} conservados`);
+    } catch (e) { console.error(e); avisar(`? No se complet� el reemplazo: ${e.message}`); }
     finally { setImportandoPesajes(false); }
   };
 
@@ -1742,10 +1743,10 @@ export default function App() {
     if (!editarPesaje || guardando) return;
     const lote = lotes.find(l => l.id === editarPesaje.lote);
     const fecha = editarPesaje.fechaISO;
-    if (!lote || !fecha || fechaPesajeISO(fecha) !== fecha || fecha > hoyISO() || fecha < lote.nac) { avisar("⚠ Revisa el lote y la fecha: no puede ser futura ni anterior al nacimiento"); return; }
+    if (!lote || !fecha || fechaPesajeISO(fecha) !== fecha || fecha > hoyISO() || fecha < lote.nac) { avisar("? Revisa el lote y la fecha: no puede ser futura ni anterior al nacimiento"); return; }
     const valores = editarPesaje.pesosTexto.split(/[\s;]+/).filter(Boolean);
     const pesos = valores.map(pesoEnGramos);
-    if (!pesos.length || pesos.some(v => v == null)) { avisar("⚠ Corrige los pesos inválidos antes de guardar"); return; }
+    if (!pesos.length || pesos.some(v => v == null)) { avisar("? Corrige los pesos inv�lidos antes de guardar"); return; }
     const [y, m, d] = fecha.split("-").map(Number);
     const [ny, nm, nd] = lote.nac.split("-").map(Number);
     const nuevo = { ...editarPesaje, lote: lote.id, fecha: `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`, pesos, semana: Math.floor((new Date(y, m - 1, d) - new Date(ny, nm - 1, nd)) / (7 * 86400000)) };
@@ -1756,8 +1757,8 @@ export default function App() {
       const actual = await leer(K.pesajes, null);
       if (actual) setPesajes(ordenarPorFecha(actual));
       setEditarPesaje(null);
-      avisar("✓ Pesaje corregido");
-    } catch (e) { console.error(e); avisar(`⚠ No se guardó: ${e.message}`); }
+      avisar("� Pesaje corregido");
+    } catch (e) { console.error(e); avisar(`? No se guard�: ${e.message}`); }
     finally { setGuardando(false); }
   };
 
@@ -1769,24 +1770,24 @@ export default function App() {
       await eliminarPesajePorId(id);
       setPesajes(prev => prev.filter(p => String(p.id) !== String(id)));
       setPesajeEliminar(null);
-      avisar("✓ Pesaje eliminado");
-    } catch (e) { console.error(e); avisar(`⚠ No se pudo eliminar: ${e.message}`); }
+      avisar("� Pesaje eliminado");
+    } catch (e) { console.error(e); avisar(`? No se pudo eliminar: ${e.message}`); }
     finally { setGuardando(false); }
   };
 
   const guardarActividad = async () => {
     const nombre = formTarea.nombre.trim();
-    if (!nombre || !fechaPesajeISO(formTarea.inicio)) { avisar("⚠ Indica una actividad y una fecha de inicio válida"); return; }
-    if (formTarea.repeticion === "dias" && (!Number.isInteger(Number(formTarea.cadaDias)) || +formTarea.cadaDias < 1 || +formTarea.cadaDias > 3650)) { avisar("⚠ El intervalo debe ser entre 1 y 3650 días"); return; }
-    if (formTarea.repeticion === "semanal" && !formTarea.diasSemana.length) { avisar("⚠ Elige al menos un día de la semana"); return; }
+    if (!nombre || !fechaPesajeISO(formTarea.inicio)) { avisar("? Indica una actividad y una fecha de inicio v�lida"); return; }
+    if (formTarea.repeticion === "dias" && (!Number.isInteger(Number(formTarea.cadaDias)) || +formTarea.cadaDias < 1 || +formTarea.cadaDias > 3650)) { avisar("? El intervalo debe ser entre 1 y 3650 d�as"); return; }
+    if (formTarea.repeticion === "semanal" && !formTarea.diasSemana.length) { avisar("? Elige al menos un d�a de la semana"); return; }
     setGuardandoTarea(true);
     try {
       const tarea = { ...formTarea, nombre, id: formTarea.id || crypto.randomUUID(), cadaDias: Number(formTarea.cadaDias), ultima: formTarea.ultima || "" };
       await guardarTareaProgramada(tarea);
       setTareasProgramadas(await leerTareasProgramadas());
       setFormTarea({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] });
-      avisar("✓ Actividad programada");
-    } catch (e) { console.error(e); avisar("⚠ No se pudo guardar la actividad"); }
+      avisar("� Actividad programada");
+    } catch (e) { console.error(e); avisar("? No se pudo guardar la actividad"); }
     finally { setGuardandoTarea(false); }
   };
 
@@ -1798,23 +1799,23 @@ export default function App() {
       setTareasProgramadas(await leerTareasProgramadas());
       setDeshacerTarea({ anterior: tarea, actualizado, hasta: Date.now() + 30000 });
       setTimeout(() => setDeshacerTarea(v => v?.actualizado.id === actualizado.id && v.hasta <= Date.now() ? null : v), 30050);
-      avisar("✓ Actividad realizada; se calculó el próximo aviso");
-    } catch (e) { console.error(e); avisar("⚠ No se pudo marcar como realizada"); }
+      avisar("� Actividad realizada; se calcul� el pr�ximo aviso");
+    } catch (e) { console.error(e); avisar("? No se pudo marcar como realizada"); }
     finally { setGuardandoTarea(false); }
   };
   const revertirActividadReciente = async () => {
     if (!deshacerTarea || Date.now() > deshacerTarea.hasta) { setDeshacerTarea(null); return; }
     const actual = (await leerTareasProgramadas()).find(t => t.id === deshacerTarea.anterior.id);
-    if (JSON.stringify(actual) !== JSON.stringify(deshacerTarea.actualizado)) { avisar("⚠ La actividad cambió en otro dispositivo; no se deshizo"); setDeshacerTarea(null); return; }
-    await guardarTareaProgramada({ ...deshacerTarea.anterior, historialRealizaciones: [...(actual.historialRealizaciones || []), { fecha: hoyISO(), por: window.__usuarioEmail || completadoPor, accion: "reversión", registradoEl: new Date().toISOString() }] });
-    setTareasProgramadas(await leerTareasProgramadas()); setDeshacerTarea(null); avisar("✓ Se deshizo la realización de la actividad");
+    if (JSON.stringify(actual) !== JSON.stringify(deshacerTarea.actualizado)) { avisar("? La actividad cambi� en otro dispositivo; no se deshizo"); setDeshacerTarea(null); return; }
+    await guardarTareaProgramada({ ...deshacerTarea.anterior, historialRealizaciones: [...(actual.historialRealizaciones || []), { fecha: hoyISO(), por: window.__usuarioEmail || completadoPor, accion: "reversi�n", registradoEl: new Date().toISOString() }] });
+    setTareasProgramadas(await leerTareasProgramadas()); setDeshacerTarea(null); avisar("� Se deshizo la realizaci�n de la actividad");
   };
 
   const borrarActividad = async (tarea) => {
-    if (!pideConfirm(`borrarTarea-${tarea.id}`, `⚠ Toca eliminar otra vez para borrar “${tarea.nombre}”`)) return;
+    if (!pideConfirm(`borrarTarea-${tarea.id}`, `? Toca eliminar otra vez para borrar "${tarea.nombre}"`)) return;
     setGuardandoTarea(true);
-    try { await eliminarTareaProgramada(tarea.id); setTareasProgramadas(await leerTareasProgramadas()); avisar("✓ Actividad eliminada"); }
-    catch (e) { console.error(e); avisar("⚠ No se pudo eliminar la actividad"); }
+    try { await eliminarTareaProgramada(tarea.id); setTareasProgramadas(await leerTareasProgramadas()); avisar("� Actividad eliminada"); }
+    catch (e) { console.error(e); avisar("? No se pudo eliminar la actividad"); }
     finally { setGuardandoTarea(false); }
   };
 
@@ -1825,14 +1826,14 @@ export default function App() {
       const elegidos = conflictosRespaldo.items.filter(x => conflictosRespaldo.elegidos.includes(x.token));
       const cantidad = await reemplazarFechasRespaldo(elegidos);
       setConflictosRespaldo(null);
-      avisar(`✓ ${cantidad} fechas reemplazadas; las demás se conservaron. Recargando…`);
+      avisar(`� ${cantidad} fechas reemplazadas; las dem�s se conservaron. Recargando.`);
       setTimeout(() => location.reload(), 1600);
-    } catch (e) { console.error(e); avisar(`⚠ ${e.message}`); }
+    } catch (e) { console.error(e); avisar(`? ${e.message}`); }
     finally { setGuardando(false); }
   };
 
   const guardarCostos = async (nuevos) => { setCostos(nuevos); await escribir(K.costos, nuevos); };
-  // ── Editor de fórmulas ──
+  // �� Editor de f�rmulas ��
   const persistirRecetas = async (nuevo) => { setRecetas(nuevo); await escribir(K.recetas, nuevo); };
   const setKgIngrediente = (formula, mpc, kg) => {
     const f = recetas.formulas[formula];
@@ -1846,26 +1847,26 @@ export default function App() {
   const agregarIngrediente = () => {
     if (!fIng.kg) return;
     const f = recetas.formulas[recActiva];
-    if (f.items[fIng.mp] !== undefined) { avisar("⚠ Esa materia prima ya está en la fórmula — edita su cantidad"); return; }
+    if (f.items[fIng.mp] !== undefined) { avisar("? Esa materia prima ya est� en la f�rmula - edita su cantidad"); return; }
     persistirRecetas({ ...recetas, formulas: { ...recetas.formulas, [recActiva]: { ...f, items: { ...f.items, [fIng.mp]: Number(fIng.kg) } } } });
     setFIng({ ...fIng, kg: "" });
   };
   const crearFormula = () => {
     const nombre = fNuevaRec.nombre.trim();
     if (!nombre) return;
-    if (recetas.formulas[nombre]) { avisar("⚠ Ya existe una fórmula con ese nombre"); return; }
+    if (recetas.formulas[nombre]) { avisar("? Ya existe una f�rmula con ese nombre"); return; }
     persistirRecetas({ ...recetas, formulas: { ...recetas.formulas, [nombre]: { uso: fNuevaRec.uso, items: {} } } });
     setRecActiva(nombre); setFNuevaRec({ nombre: "", uso: fNuevaRec.uso });
-    avisar(`✓ Fórmula "${nombre}" creada — agrega sus ingredientes`);
+    avisar(`� F�rmula "${nombre}" creada - agrega sus ingredientes`);
   };
   const eliminarFormula = (nombre) => {
-    if (!pideConfirm(`elimF-${nombre}`, `⚠ Toca otra vez para eliminar la fórmula "${nombre}" definitivamente`)) return;
+    if (!pideConfirm(`elimF-${nombre}`, `? Toca otra vez para eliminar la f�rmula "${nombre}" definitivamente`)) return;
     const fs = { ...recetas.formulas }; delete fs[nombre];
     persistirRecetas({ ...recetas, formulas: fs });
     if (recActiva === nombre) setRecActiva(Object.keys(fs)[0] || "");
   };
 
-  // ── Insumos y medicinas ──
+  // �� Insumos y medicinas ��
   const buscarInsumo = (lista, texto) => {
     const t = (texto || "").toLowerCase().trim();
     if (!t) return null;
@@ -1876,7 +1877,7 @@ export default function App() {
   };
   const registrarMovInsumo = async (tipo, itemId, cantidad, detalle, fechaISO) => {
     const cant = Number(cantidad);
-    if (!itemId || !cant) { avisar("⚠ Elige el insumo y la cantidad"); return; }
+    if (!itemId || !cant) { avisar("? Elige el insumo y la cantidad"); return; }
     const nuevoIns = insumos.map(it => it.id === Number(itemId)
       ? { ...it, saldo: tipo === "ajuste" ? cant : +(it.saldo + (tipo === "entrada" ? cant : -cant)).toFixed(2) }
       : it);
@@ -1884,18 +1885,18 @@ export default function App() {
     const nuevosMovs = [mov, ...insumosMovs];
     const ok1 = await escribir(K.insumos, nuevoIns);
     const ok2 = await escribir(K.insumosMovs, nuevosMovs);
-    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setFMovIns({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: hoyISO() }); avisar("✓ Movimiento registrado"); }
-    else avisar("⚠ No se pudo guardar");
+    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setFMovIns({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: hoyISO() }); avisar("� Movimiento registrado"); }
+    else avisar("? No se pudo guardar");
   };
   const agregarInsumo = async () => {
     if (!fNuevoIns.nombre.trim()) return;
     const id = Math.max(0, ...insumos.map(i2 => i2.id)) + 1;
     const nuevo = [...insumos, { id, nombre: fNuevoIns.nombre.trim(), categoria: fNuevoIns.categoria, unidad: fNuevoIns.unidad, saldo: Number(fNuevoIns.saldo || 0), presentacion: fNuevoIns.presentacion.trim(), dosis: fNuevoIns.dosis.trim(), proveedor: fNuevoIns.proveedor.trim() }];
-    if (await escribir(K.insumos, nuevo)) { setInsumos(nuevo); setFNuevoIns({ nombre: "", categoria: fNuevoIns.categoria, unidad: "ml", saldo: "", presentacion: "", dosis: "", proveedor: "" }); avisar("✓ Insumo agregado"); }
+    if (await escribir(K.insumos, nuevo)) { setInsumos(nuevo); setFNuevoIns({ nombre: "", categoria: fNuevoIns.categoria, unidad: "ml", saldo: "", presentacion: "", dosis: "", proveedor: "" }); avisar("� Insumo agregado"); }
   };
   const guardarAperturaInsumos = async () => {
     const cambios = Object.entries(aperturaIns).filter(([, v]) => v !== "" && v != null);
-    if (!cambios.length) { avisar("⚠ Digita al menos un saldo"); return; }
+    if (!cambios.length) { avisar("? Digita al menos un saldo"); return; }
     setGuardando(true);
     const nuevoIns = insumos.map(it => {
       const v = aperturaIns[it.id];
@@ -1905,8 +1906,8 @@ export default function App() {
     const nuevosMovs = [...movs, ...insumosMovs];
     const ok1 = await escribir(K.insumos, nuevoIns);
     const ok2 = await escribir(K.insumosMovs, nuevosMovs);
-    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setAperturaIns({}); avisar(`✓ ${cambios.length} saldo(s) inicial(es) cargado(s)`); }
-    else avisar("⚠ No se pudo guardar la apertura");
+    if (ok1 && ok2) { setInsumos(nuevoIns); setInsumosMovs(nuevosMovs); setAperturaIns({}); avisar(`� ${cambios.length} saldo(s) inicial(es) cargado(s)`); }
+    else avisar("? No se pudo guardar la apertura");
     setGuardando(false);
   };
 
@@ -1917,28 +1918,28 @@ export default function App() {
   const proveedoresIns = [...new Set(insumos.map(i2 => i2.proveedor).filter(Boolean))];
 
   const eliminarInsumo = async (it) => {
-    if (!pideConfirm(`elimIns-${it.id}`, `⚠ Toca otra vez para eliminar ${it.nombre} del catálogo`)) return;
+    if (!pideConfirm(`elimIns-${it.id}`, `? Toca otra vez para eliminar ${it.nombre} del cat�logo`)) return;
     const nuevo = insumos.filter(x => x.id !== it.id);
     if (await escribir(K.insumos, nuevo)) setInsumos(nuevo);
   };
 
-  // ── Catálogo maestro de materias primas ──
+  // �� Cat�logo maestro de materias primas ��
   const persistirCat = async (nuevo) => { setMpCat(nuevo); await escribir(K.mpCat, nuevo); };
   const actualizarMP = (c, campo, valor) => {
     persistirCat(mpCat.map(m => m.c === c ? { ...m, [campo]: campo === "pres" ? (valor === "" ? "" : Number(valor)) : valor } : m));
   };
   const agregarMP = () => {
-    if (!fNuevaMP.n.trim() || !fNuevaMP.pres) { avisar("⚠ Nombre y presentación son obligatorios"); return; }
+    if (!fNuevaMP.n.trim() || !fNuevaMP.pres) { avisar("? Nombre y presentaci�n son obligatorios"); return; }
     const nums = mpCat.map(m => Number(m.c.replace("MP", ""))).filter(n2 => !isNaN(n2));
     const c = `MP${String(Math.max(0, ...nums) + 1).padStart(3, "0")}`;
-    persistirCat([...mpCat, { c, n: fNuevaMP.n.trim().toUpperCase(), prov: fNuevaMP.prov.trim() || "—", pres: Number(fNuevaMP.pres) }]);
+    persistirCat([...mpCat, { c, n: fNuevaMP.n.trim().toUpperCase(), prov: fNuevaMP.prov.trim() || "-", pres: Number(fNuevaMP.pres) }]);
     setFNuevaMP({ n: "", prov: "", pres: "" });
-    avisar(`✓ ${fNuevaMP.n.trim().toUpperCase()} agregada al catálogo (${c})`);
+    avisar(`� ${fNuevaMP.n.trim().toUpperCase()} agregada al cat�logo (${c})`);
   };
   const eliminarMP = (mp) => {
     const enFormulas = Object.entries(recetas.formulas).filter(([, f]) => f.items[mp.c] !== undefined).map(([n2]) => n2);
-    if (enFormulas.length) { avisar(`⚠ No se puede eliminar: ${mp.n} está en uso en ${enFormulas.join(", ")}`); return; }
-    if (!pideConfirm(`elimMP-${mp.c}`, `⚠ Toca otra vez para eliminar ${mp.n} del catálogo`)) return;
+    if (enFormulas.length) { avisar(`? No se puede eliminar: ${mp.n} est� en uso en ${enFormulas.join(", ")}`); return; }
+    if (!pideConfirm(`elimMP-${mp.c}`, `? Toca otra vez para eliminar ${mp.n} del cat�logo`)) return;
     persistirCat(mpCat.filter(m => m.c !== mp.c));
   };
   const proveedoresCat = [...new Set(mpCat.map(m => m.prov).filter(Boolean))];
@@ -1946,7 +1947,7 @@ export default function App() {
 // formulasAves y saldos definidos arriba
   const sumaBache = (f) => Object.values(f.items).reduce((a, b) => a + Number(b || 0), 0);
 
-  // ── Pedido de Materia Prima ──
+  // �� Pedido de Materia Prima ��
   const consumoAvesFormulas = {};
   const formulaDelLote = (l) => (recetas.formulas[l.formula] ? l.formula : null) || mpConfig.formulaLote[l.id] || "Impulsor";
   activos.forEach(l => {
@@ -1964,20 +1965,20 @@ export default function App() {
 
   const recibirPedidoMP = async (p) => {
     const clave = `recped:${p.id || p.fecha}`;
-    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca ✓ otra vez para marcar RECIBIDO — las materias primas entran al kardex"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 7000); return; }
+    if (confirmar !== clave) { setConfirmar(clave); avisar("? Toca � otra vez para marcar RECIBIDO - las materias primas entran al kardex"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 7000); return; }
     setConfirmar(null);
     const entradas = (p.lineas || []).filter(l2 => (l2.kg || 0) > 0 && l2.c)
-      .map(l2 => ({ id: Date.now() + Math.random(), fecha: hoyStr(), mp: l2.c, tipo: "entrada", kg: +Number(l2.kg).toFixed(1), ref: `Pedido ${p.fecha}${p.proveedor ? ` · ${p.proveedor}` : ""}` }));
+      .map(l2 => ({ id: Date.now() + Math.random(), fecha: hoyStr(), mp: l2.c, tipo: "entrada", kg: +Number(l2.kg).toFixed(1), ref: `Pedido ${p.fecha}${p.proveedor ? ` � ${p.proveedor}` : ""}` }));
     await registrarKardex(entradas);
     const nuevos = mpPedidos.map(x => x === p || (p.id && x.id === p.id) ? { ...x, estado: "recibido", recibido: hoyStr() } : x);
-    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar(`✓ Pedido recibido — ${entradas.length} entrada(s) al kardex`); }
+    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar(`� Pedido recibido - ${entradas.length} entrada(s) al kardex`); }
   };
   const eliminarPedidoMP = async (p) => {
     const clave = `delped:${p.id || p.fecha}`;
-    if (confirmar !== clave) { setConfirmar(clave); avisar("⚠ Toca × otra vez para eliminar este pedido"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
+    if (confirmar !== clave) { setConfirmar(clave); avisar("? Toca x otra vez para eliminar este pedido"); setTimeout(() => setConfirmar(c2 => c2 === clave ? null : c2), 6000); return; }
     setConfirmar(null);
     const nuevos = mpPedidos.filter(x => x !== p && (!p.id || x.id !== p.id));
-    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar("✓ Pedido eliminado"); }
+    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar("� Pedido eliminado"); }
   };
   const lineasPedido = mpCat.map(mp => {
     let kgDia = 0;
@@ -2003,7 +2004,7 @@ export default function App() {
 
   const guardarInventarioMP = async () => {
     const items = Object.fromEntries(Object.entries(mpInv).filter(([, v]) => (v?.sacos ?? "") !== "" || (v?.kg ?? "") !== ""));
-    if (!Object.keys(items).length) { avisar("⚠ Digita al menos un dato del conteo"); return; }
+    if (!Object.keys(items).length) { avisar("? Digita al menos un dato del conteo"); return; }
     setGuardando(true);
     const fecha = (mpFechaInput || hoyISO()).split("-").reverse().join("/");
     const doc = { fecha, responsable: mpResponsable, items };
@@ -2014,26 +2015,26 @@ export default function App() {
     if (ok1 && ok2) {
       setMpFechaConteo(fecha); setMpInvHist(ordenarPorFecha(nuevoHist)); setMpInvUltimo(items);
       setMpInv({});
-      avisar(`✓ Conteo del ${fecha.slice(0, 5)} guardado en el historial — listo para generar el pedido`);
-    } else avisar("⚠ No se pudo guardar el inventario");
+      avisar(`� Conteo del ${fecha.slice(0, 5)} guardado en el historial - listo para generar el pedido`);
+    } else avisar("? No se pudo guardar el inventario");
     setGuardando(false);
   };
 
   const guardarConfigMP = async (cfg) => { setMpConfig(cfg); await escribir(K.mpConfig, cfg); };
   const guardarRacionesGanado = async () => {
     const ganado = (mpConfig.ganado || []).map((g, i) => ({ ...g, kgAnimal: racionesGanado[i] ?? g.kgAnimal }));
-    if (ganado.some(g => !Number.isFinite(Number(g.kgAnimal)) || Number(g.kgAnimal) <= 0)) { avisar("⚠ Cada porción debe ser mayor que cero"); return; }
-    if (await escribir(K.mpConfig, { ...mpConfig, ganado })) { setMpConfig({ ...mpConfig, ganado }); setRacionesGanado({}); avisar("✓ Porciones guardadas para próximos servidos"); }
-    else avisar("⚠ No se pudieron guardar las porciones");
+    if (ganado.some(g => !Number.isFinite(Number(g.kgAnimal)) || Number(g.kgAnimal) <= 0)) { avisar("? Cada porci�n debe ser mayor que cero"); return; }
+    if (await escribir(K.mpConfig, { ...mpConfig, ganado })) { setMpConfig({ ...mpConfig, ganado }); setRacionesGanado({}); avisar("� Porciones guardadas para pr�ximos servidos"); }
+    else avisar("? No se pudieron guardar las porciones");
   };
 
   const textoPedidoProveedor = (prov, items) => {
     const totU = items.reduce((s2, x) => s2 + x.pedido, 0);
     const totKg = items.reduce((s2, x) => s2 + x.pedidoKg, 0);
-    return `*PEDIDO — ${RAZON_SOCIAL.toUpperCase()}*\n` +
+    return `*PEDIDO - ${RAZON_SOCIAL.toUpperCase()}*\n` +
       `Proveedor: *${prov}*\nFecha del pedido: ${hoyStr()}\nEntrega: lunes\n\n` +
-      items.map(x => `• ${x.n}: *${x.pedido} ${x.pres === 1 ? "kg" : "sacos"}*${x.pres !== 1 ? ` (${x.pres} kg c/u = ${x.pedidoKg.toFixed(0)} kg)` : ""}`).join("\n") +
-      `\n\nTotal: ${totU} unidades · ${totKg.toFixed(0)} kg\nGracias.`;
+      items.map(x => ` ${x.n}: *${x.pedido} ${x.pres === 1 ? "kg" : "sacos"}*${x.pres !== 1 ? ` (${x.pres} kg c/u = ${x.pedidoKg.toFixed(0)} kg)` : ""}`).join("\n") +
+      `\n\nTotal: ${totU} unidades � ${totKg.toFixed(0)} kg\nGracias.`;
   };
 
   const enviarWhatsApp = (prov, items) => {
@@ -2041,22 +2042,22 @@ export default function App() {
   };
 
   const copiarPedido = async (prov, items) => {
-    try { await navigator.clipboard.writeText(textoPedidoProveedor(prov, items).replace(/\*/g, "")); avisar("✓ Pedido copiado"); }
-    catch { avisar("⚠ No se pudo copiar"); }
+    try { await navigator.clipboard.writeText(textoPedidoProveedor(prov, items).replace(/\*/g, "")); avisar("� Pedido copiado"); }
+    catch { avisar("? No se pudo copiar"); }
   };
 
   const registrarPedido = async () => {
     setGuardando(true);
     const doc = { id: Date.now(), fecha: hoyStr(), cobertura: mpConfig.cobertura, estado: "pendiente", lineas: lineasPedido.filter(x => x.pedido > 0).map(x => ({ c: x.c, n: x.n, prov: x.prov, pedido: x.pedido, kg: x.pedidoKg })) };
     const nuevos = [doc, ...mpPedidos.filter(m => m.fecha !== hoyStr())];
-    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar("✓ Pedido registrado en el historial"); }
-    else avisar("⚠ No se pudo registrar");
+    if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); avisar("� Pedido registrado en el historial"); }
+    else avisar("? No se pudo registrar");
     setGuardando(false);
   };
-  // ── KPIs (solo lotes activos) ──
+  // �� KPIs (solo lotes activos) ��
   const totalAves = activos.reduce((s, l) => s + l.aves, 0);
   const fechas = [...new Set(registros.map(r => r.fecha))];
-  const ultDia = fechas[0] || "—";
+  const ultDia = fechas[0] || "-";
   const regsUlt = registros.filter(r => r.fecha === ultDia);
   const huevosDia = regsUlt.reduce((s, r) => s + r.cartones * HXC, 0);
   const posturaDia = totalAves ? (huevosDia / totalAves) * 100 : 0;
@@ -2090,32 +2091,32 @@ export default function App() {
   const aplicarVacuna = async (l, p2, fechaISO) => {
     const dmy = fechaISO ? fechaISO.split("-").reverse().join("/") : hoyStr();
     const nuevo = [{ lote: l.id, planId: p2.id, vacuna: p2.vacuna, cepa: p2.cepa, via: p2.via, proveedor: p2.proveedor, fecha: dmy, por: completadoPor }, ...vacunas];
-    if (await escribir(K.vacunas, nuevo)) { setVacunas(nuevo); avisar(`✓ ${p2.vacuna} marcada como aplicada`); }
-    else avisar("⚠ No se pudo guardar");
+    if (await escribir(K.vacunas, nuevo)) { setVacunas(nuevo); avisar(`� ${p2.vacuna} marcada como aplicada`); }
+    else avisar("? No se pudo guardar");
   };
 
   const desaplicarVacuna = async (loteId, planId) => {
     const nuevo = vacunas.filter(v => !(v.lote === loteId && v.planId === planId));
-    if (await escribir(K.vacunas, nuevo)) { setVacunas(nuevo); avisar("✓ Aplicación deshecha"); }
+    if (await escribir(K.vacunas, nuevo)) { setVacunas(nuevo); avisar("� Aplicaci�n deshecha"); }
   };
 
   const guardarVacuna = async () => {
     if (!fVac.vacuna) return;
     const nuevo = [{ ...fVac, fecha: hoyStr(), por: completadoPor }, ...vacunas];
-    if (await escribir(K.vacunas, nuevo)) { setVacunas(nuevo); setFVac({ ...fVac, vacuna: "", cepa: "", via: "", proveedor: "" }); avisar("✓ Vacuna registrada"); }
-    else avisar("⚠ No se pudo guardar");
+    if (await escribir(K.vacunas, nuevo)) { setVacunas(nuevo); setFVac({ ...fVac, vacuna: "", cepa: "", via: "", proveedor: "" }); avisar("� Vacuna registrada"); }
+    else avisar("? No se pudo guardar");
   };
 
   const guardarEnfermedad = async () => {
     if (!fEnf.enfermedad) return;
     const nuevo = [{ ...fEnf, fecha: hoyStr(), id: Date.now() }, ...enfermedades];
-    if (await escribir(K.enfermedades, nuevo)) { setEnfermedades(nuevo); setFEnf({ ...fEnf, enfermedad: "", tratamiento: "" }); avisar("✓ Diagnóstico registrado"); }
-    else avisar("⚠ No se pudo guardar");
+    if (await escribir(K.enfermedades, nuevo)) { setEnfermedades(nuevo); setFEnf({ ...fEnf, enfermedad: "", tratamiento: "" }); avisar("� Diagn�stico registrado"); }
+    else avisar("? No se pudo guardar");
   };
 
   const marcarRecuperado = async (id) => {
     const nuevo = enfermedades.map(e => e.id === id ? { ...e, estado: "Recuperado", fechaAlta: hoyStr() } : e);
-    if (await escribir(K.enfermedades, nuevo)) { setEnfermedades(nuevo); avisar("✓ Marcado como recuperado"); }
+    if (await escribir(K.enfermedades, nuevo)) { setEnfermedades(nuevo); avisar("� Marcado como recuperado"); }
   };
 
   const guardarNecropsia = async () => {
@@ -2126,8 +2127,8 @@ export default function App() {
     const nuevo = [{ ...fNec, fecha: hoyStr(), id, numFotos: fNecFotos.length }, ...necropsias];
     if (await escribir(K.necropsias, nuevo)) {
       setNecropsias(nuevo); setFNec({ ...fNec, laboratorio: "", hallazgos: "" }); setFNecFotos([]);
-      avisar("✓ Resultado registrado" + (fNecFotos.length ? ` con ${fNecFotos.length} foto(s)` : ""));
-    } else avisar("⚠ No se pudo guardar");
+      avisar("� Resultado registrado" + (fNecFotos.length ? ` con ${fNecFotos.length} foto(s)` : ""));
+    } else avisar("? No se pudo guardar");
     setGuardando(false);
   };
 
@@ -2137,7 +2138,7 @@ export default function App() {
         const data = await comprimirImagen(f);
         setFNecFotos(prev => prev.length < 3 ? [...prev, data] : prev);
       }
-    } catch { avisar("⚠ No se pudo procesar la imagen"); }
+    } catch { avisar("? No se pudo procesar la imagen"); }
   };
 
   const verFotosNec = async (nec) => {
@@ -2150,8 +2151,8 @@ export default function App() {
   const guardarPlanVac = async () => {
     if (!fPlan.vacuna || fPlan.dia === "") return;
     const nuevo = [...planVac, { vacuna: fPlan.vacuna, cepa: fPlan.cepa || "", via: fPlan.via || "", proveedor: fPlan.proveedor || "", dia: Number(fPlan.dia), id: Date.now() }].sort((a, b) => a.dia - b.dia);
-    if (await escribir(K.planVac, nuevo)) { setPlanVac(nuevo); setFPlan({ ...fPlan, vacuna: "", cepa: "", via: "", proveedor: "", dia: "" }); avisar("✓ Vacuna agregada al programa"); }
-    else avisar("⚠ No se pudo guardar");
+    if (await escribir(K.planVac, nuevo)) { setPlanVac(nuevo); setFPlan({ ...fPlan, vacuna: "", cepa: "", via: "", proveedor: "", dia: "" }); avisar("� Vacuna agregada al programa"); }
+    else avisar("? No se pudo guardar");
   };
 
   const estadoVacunaLote = (l, pv) => {
@@ -2162,19 +2163,19 @@ export default function App() {
     if (aplicada) return { estado: "aplicada", fecha: str, dias, fechaAplicada: reg.fecha };
     if (dias < -14) return { estado: "cubierta", fecha: str, dias };
     if (dias < 0) return { estado: "atrasada", fecha: str, dias };
-    if (dias <= 7) return { estado: "próxima", fecha: str, dias };
+    if (dias <= 7) return { estado: "pr�xima", fecha: str, dias };
     return { estado: "pendiente", fecha: str, dias };
   };
 
   const quitarPlanVac = async (id) => {
     const nuevo = planVac.filter(p2 => p2.id !== id);
-    if (await escribir(K.planVac, nuevo)) { setPlanVac(nuevo); avisar("✓ Quitada del plan"); }
+    if (await escribir(K.planVac, nuevo)) { setPlanVac(nuevo); avisar("� Quitada del plan"); }
   };
 
   const hoyD = aDate(hoyStr());
   const retirosActivos = medicaciones.filter(m => m.retiroHasta && aDate(m.retiroHasta) >= hoyD);
 
-  // ── Reporte dinámico ──
+  // �� Reporte din�mico ��
   const resumenDia = (f) => {
     const rs = registros.filter(r => r.fecha === f);
     if (!rs.length) return null;
@@ -2235,13 +2236,13 @@ export default function App() {
     if (meta > 0) {
       const brechaG = prom - meta;
       const brechaP = (brechaG / meta) * 100;
-      if (brechaP <= -10) decisiones.push({ nivel: "rojo", texto: `PESO CRÍTICO Gallinero ${l.galpon}: ${prom.toFixed(0)} g vs ${meta} g de tabla (${brechaG.toFixed(0)} g, ${brechaP.toFixed(1)}%). Ave bajo peso no sostiene el pico — revisar ración, densidad del alimento y sanidad con el veterinario.` });
+      if (brechaP <= -10) decisiones.push({ nivel: "rojo", texto: `PESO CRITICO Gallinero ${l.galpon}: ${prom.toFixed(0)} g vs ${meta} g de tabla (${brechaG.toFixed(0)} g, ${brechaP.toFixed(1)}%). Ave bajo peso no sostiene el pico - revisar raci�n, densidad del alimento y sanidad con el veterinario.` });
       else if (brechaP <= -4) decisiones.push({ nivel: "amarillo", texto: `Peso bajo tabla en Gallinero ${l.galpon}: ${prom.toFixed(0)} g vs ${meta} g (${brechaG.toFixed(0)} g, ${brechaP.toFixed(1)}%). Vigilar consumo y repetir pesaje en 2 semanas.` });
-      else if (brechaP >= 8) decisiones.push({ nivel: "amarillo", texto: `Sobrepeso en Gallinero ${l.galpon}: ${prom.toFixed(0)} g vs ${meta} g (+${brechaG.toFixed(0)} g). Exceso de grasa también baja postura — revisar ración con el nutricionista.` });
+      else if (brechaP >= 8) decisiones.push({ nivel: "amarillo", texto: `Sobrepeso en Gallinero ${l.galpon}: ${prom.toFixed(0)} g vs ${meta} g (+${brechaG.toFixed(0)} g). Exceso de grasa tambi�n baja postura - revisar raci�n con el nutricionista.` });
     }
     const [pd2, pm2, py2] = pes.fecha.split("/").map(Number);
     const diasPesaje = Math.round((new Date() - new Date(py2, pm2 - 1, pd2)) / 86400000);
-    if (diasPesaje > 21) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: el último pesaje tiene ${diasPesaje} días. Peso corporal es tu medida crítica — programar pesaje esta semana.` });
+    if (diasPesaje > 21) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: el �ltimo pesaje tiene ${diasPesaje} d�as. Peso corporal es tu medida cr�tica - programar pesaje esta semana.` });
   });
   if (dHoy) {
     activos.forEach(l => {
@@ -2250,26 +2251,26 @@ export default function App() {
         const p = (r.cartones * HXC / l.aves) * 100;
         const metaPost = metaPosturaLote(l, r.fecha);
         const brecha = metaPost == null ? 0 : metaPost - p;
-        if (brecha > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon} (${l.raza}): postura ${p.toFixed(1)}% — ${brecha.toFixed(0)} pts bajo la tabla. Revisar consumo, agua, sanidad y peso corporal.` });
-        else if (brecha > 8) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: brecha de ${brecha.toFixed(0)} pts vs genética (${p.toFixed(1)}% vs ${metaPost.toFixed(1)}%).` });
+        if (brecha > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon} (${l.raza}): postura ${p.toFixed(1)}% - ${brecha.toFixed(0)} pts bajo la tabla. Revisar consumo, agua, sanidad y peso corporal.` });
+        else if (brecha > 8) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: brecha de ${brecha.toFixed(0)} pts vs gen�tica (${p.toFixed(1)}% vs ${metaPost.toFixed(1)}%).` });
         const gAve = l.aves ? (Number(r.alimentoKg || 0) * 1000) / l.aves : 0;
         const espKg = Number(r.alimentoEsperadoKg || 0) || (l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0);
         if (espKg > 0 && r.alimentoKg > 0) {
           const desvR = ((r.alimentoKg - espKg) / espKg) * 100;
-          if (Math.abs(desvR) > 5) decisiones.push({ nivel: desvR > 0 ? "amarillo" : "rojo", texto: `Gallinero ${l.galpon}: se sirvieron ${r.alimentoKg} kg vs ${espKg.toFixed(1)} kg de ración definida (${desvR > 0 ? "+" : ""}${desvR.toFixed(1)}%). ${desvR > 0 ? "Posible desperdicio o sobrealimentación." : "Las aves comieron menos de lo definido — revisar salud, agua o calidad del alimento."}` });
-        } else if (gAve > 125) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: consumo de ${gAve.toFixed(0)} g/ave/día — posible desperdicio o sobreconsumo.` });
+          if (Math.abs(desvR) > 5) decisiones.push({ nivel: desvR > 0 ? "amarillo" : "rojo", texto: `Gallinero ${l.galpon}: se sirvieron ${r.alimentoKg} kg vs ${espKg.toFixed(1)} kg de raci�n definida (${desvR > 0 ? "+" : ""}${desvR.toFixed(1)}%). ${desvR > 0 ? "Posible desperdicio o sobrealimentaci�n." : "Las aves comieron menos de lo definido - revisar salud, agua o calidad del alimento."}` });
+        } else if (gAve > 125) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: consumo de ${gAve.toFixed(0)} g/ave/d�a - posible desperdicio o sobreconsumo.` });
       }
     });
-    if (dAyer && dHoy.muertas > Math.max(3, dAyer.muertas * 2)) decisiones.push({ nivel: "rojo", texto: `Mortalidad de ${dHoy.muertas} aves, más del doble de ayer (${dAyer.muertas}). Revisar diagnósticos y considerar necropsia.` });
-    if (dHoy.pctQueb > 3) decisiones.push({ nivel: "amarillo", texto: `Huevo quebrado en ${dHoy.pctQueb.toFixed(1)}% — sobre el 3%. Revisar calcio, recolección y manejo de cartones.` });
-    if (dHoy.conv > 2.3) decisiones.push({ nivel: "amarillo", texto: `Conversión del día en ${dHoy.conv.toFixed(2)} kg/kg — el alimento está rindiendo poco.` });
-    if (dAyer && dHoy.postura - dAyer.postura < -3) decisiones.push({ nivel: "rojo", texto: `La postura cayó ${(dAyer.postura - dHoy.postura).toFixed(1)} pts en un día. Verificar registro, agua, alimento y estrés.` });
+    if (dAyer && dHoy.muertas > Math.max(3, dAyer.muertas * 2)) decisiones.push({ nivel: "rojo", texto: `Mortalidad de ${dHoy.muertas} aves, m�s del doble de ayer (${dAyer.muertas}). Revisar diagn�sticos y considerar necropsia.` });
+    if (dHoy.pctQueb > 3) decisiones.push({ nivel: "amarillo", texto: `Huevo quebrado en ${dHoy.pctQueb.toFixed(1)}% - sobre el 3%. Revisar calcio, recolecci�n y manejo de cartones.` });
+    if (dHoy.conv > 2.3) decisiones.push({ nivel: "amarillo", texto: `Conversi�n del d�a en ${dHoy.conv.toFixed(2)} kg/kg - el alimento est� rindiendo poco.` });
+    if (dAyer && dHoy.postura - dAyer.postura < -3) decisiones.push({ nivel: "rojo", texto: `La postura cay� ${(dAyer.postura - dHoy.postura).toFixed(1)} pts en un d�a. Verificar registro, agua, alimento y estr�s.` });
     activos.forEach(l => {
       const rH = registros.find(x => x.fecha === fHoy && x.lote === l.id);
       const rA = fAyer ? registros.find(x => x.fecha === fAyer && x.lote === l.id) : null;
       if (rH?.aguaL > 0 && rA?.aguaL > 0) {
         const caida = ((rA.aguaL - rH.aguaL) / rA.aguaL) * 100;
-        if (caida > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon}: el consumo de agua cayó ${caida.toFixed(0)}% (${rH.aguaL} L vs ${rA.aguaL} L ayer). Las aves dejan de beber antes de dejar de comer — revisar salud y sistema de agua HOY.` });
+        if (caida > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon}: el consumo de agua cay� ${caida.toFixed(0)}% (${rH.aguaL} L vs ${rA.aguaL} L ayer). Las aves dejan de beber antes de dejar de comer - revisar salud y sistema de agua HOY.` });
       }
     });
     activos.forEach(l => {
@@ -2277,35 +2278,35 @@ export default function App() {
       const ch = rH?.chequeo;
       if (!ch) return;
       const hallazgos = []; let nivel = "amarillo";
-      if (ch.cresta === "Pálida") hallazgos.push("cresta pálida (posible anemia/parásitos)");
+      if (ch.cresta === "P�lida") hallazgos.push("cresta p�lida (posible anemia/par�sitos)");
       if (ch.cresta === "Morada/oscura") { hallazgos.push("cresta morada (URGENTE: posible problema circulatorio/respiratorio)"); nivel = "rojo"; }
-      if (ch.respiratorio === "Sí") { hallazgos.push("sonidos respiratorios"); nivel = "rojo"; }
-      if (ch.secrecion === "Sí") { hallazgos.push("secreción nasal"); nivel = "rojo"; }
+      if (ch.respiratorio === "S�") { hallazgos.push("sonidos respiratorios"); nivel = "rojo"; }
+      if (ch.secrecion === "S�") { hallazgos.push("secreci�n nasal"); nivel = "rojo"; }
       if (ch.heces === "Con sangre") { hallazgos.push("heces con sangre (posible coccidiosis)"); nivel = "rojo"; }
       if (ch.heces === "Diarrea") hallazgos.push("diarrea");
-      if (ch.cascara === "Mala (frágil)") hallazgos.push("cáscara frágil (revisar calcio/fósforo)");
-      if (ch.comederos === "Mala") hallazgos.push("mala distribución en comederos");
+      if (ch.cascara === "Mala (fr�gil)") hallazgos.push("c�scara fr�gil (revisar calcio/f�sforo)");
+      if (ch.comederos === "Mala") hallazgos.push("mala distribuci�n en comederos");
       if (ch.consumoObs && ch.consumoObs !== "Normal") hallazgos.push(`consumo de alimento: ${ch.consumoObs.toLowerCase()}`);
       if (ch.aguaObs === "Bajo") hallazgos.push("consumo de agua bajo");
       const t = Number(ch.temp);
-      if (t > 29) { hallazgos.push(`temperatura ${t}°C (estrés calórico, meta 27–29)`); if (t >= 32) nivel = "rojo"; }
-      else if (t > 0 && t < 27) hallazgos.push(`temperatura ${t}°C (bajo la meta 27–29)`);
+      if (t > 29) { hallazgos.push(`temperatura ${t}�C (estr�s cal�rico, meta 27-29)`); if (t >= 32) nivel = "rojo"; }
+      else if (t > 0 && t < 27) hallazgos.push(`temperatura ${t}�C (bajo la meta 27-29)`);
       const ph = Number(ch.ph);
       if (ph > 0 && (ph < 5.5 || ph > 7.8)) hallazgos.push(`pH del agua ${ph} (fuera de rango)`);
-      if (hallazgos.length) decisiones.push({ nivel, texto: `Chequeo Gallinero ${l.galpon}: ${hallazgos.join(" · ")}.` });
+      if (hallazgos.length) decisiones.push({ nivel, texto: `Chequeo Gallinero ${l.galpon}: ${hallazgos.join(" � ")}.` });
     });
     retirosActivos.forEach(m => {
-      decisiones.push({ nivel: "rojo", texto: `Retiro activo en Gallinero ${m.galpon}: ${m.producto} — NO comercializar huevo de este gallinero hasta el ${m.retiroHasta}.` });
+      decisiones.push({ nivel: "rojo", texto: `Retiro activo en Gallinero ${m.galpon}: ${m.producto} - NO comercializar huevo de este gallinero hasta el ${m.retiroHasta}.` });
     });
     activos.forEach(l => {
       planVac.forEach(p2 => {
         const ev = estadoVacunaLote(l, p2);
-        if (ev.estado === "atrasada") decisiones.push({ nivel: "rojo", texto: `Vacuna ATRASADA en Gallinero ${l.galpon}: ${p2.vacuna}${p2.cepa ? ` (${p2.cepa})` : ""} estaba programada para el ${ev.fecha} (día ${p2.dia} de edad). Aplicar y registrar en Bienestar.` });
-        else if (ev.estado === "próxima") decisiones.push({ nivel: "amarillo", texto: `Vacuna próxima en Gallinero ${l.galpon}: ${p2.vacuna}${p2.cepa ? ` (${p2.cepa})` : ""} — ${ev.dias === 0 ? "HOY" : `en ${ev.dias} día(s)`} (${ev.fecha}). Vía: ${p2.via || "—"} · Proveedor: ${p2.proveedor || "—"}.` });
+        if (ev.estado === "atrasada") decisiones.push({ nivel: "rojo", texto: `Vacuna ATRASADA en Gallinero ${l.galpon}: ${p2.vacuna}${p2.cepa ? ` (${p2.cepa})` : ""} estaba programada para el ${ev.fecha} (d�a ${p2.dia} de edad). Aplicar y registrar en Bienestar.` });
+        else if (ev.estado === "pr�xima") decisiones.push({ nivel: "amarillo", texto: `Vacuna pr�xima en Gallinero ${l.galpon}: ${p2.vacuna}${p2.cepa ? ` (${p2.cepa})` : ""} - ${ev.dias === 0 ? "HOY" : `en ${ev.dias} d�a(s)`} (${ev.fecha}). V�a: ${p2.via || "-"} � Proveedor: ${p2.proveedor || "-"}.` });
       });
     });
-    if (saldoAves < entregadoHoyKg * 2 && entregadoHoyKg > 0) decisiones.push({ nivel: "amarillo", texto: `Concentrado de aves en planta: ${saldoAves.toFixed(0)} kg — menos de 2 días de consumo. Programar producción de baches.` });
-    if (saldoGanado < 0) decisiones.push({ nivel: "amarillo", texto: `El inventario de concentrado de ganado quedó en ${saldoGanado.toFixed(0)} kg (negativo) — revisar registros de baches o servido, o hacer ajuste por conteo.` });
+    if (saldoAves < entregadoHoyKg * 2 && entregadoHoyKg > 0) decisiones.push({ nivel: "amarillo", texto: `Concentrado de aves en planta: ${saldoAves.toFixed(0)} kg - menos de 2 d�as de consumo. Programar producci�n de baches.` });
+    if (saldoGanado < 0) decisiones.push({ nivel: "amarillo", texto: `El inventario de concentrado de ganado qued� en ${saldoGanado.toFixed(0)} kg (negativo) - revisar registros de baches o servido, o hacer ajuste por conteo.` });
   }
 
   const selectStyle = { ...inputStyle, marginBottom: 12 };
@@ -2313,24 +2314,27 @@ export default function App() {
 
   const tabs = [
     { id: "inicio", nombre: "Inicio" }, { id: "reporte", nombre: "Reporte" }, { id: "captura", nombre: "Control diario" },
-    { id: "revision", nombre: "Revisión" },
+    { id: "revision", nombre: "Revisi�n" },
     { id: "bodega", nombre: "Bodega" }, { id: "planta", nombre: "Planta" },
     { id: "pesaje", nombre: "Bienestar" }, { id: "insumos", nombre: "Insumos" },
     { id: "lotes", nombre: "Lotes" }, { id: "pedidomp", nombre: "Pedido MP" },
-    { id: "formulas", nombre: "Fórmulas" },
+    { id: "formulas", nombre: "F�rmulas" },
     { id: "cxp", nombre: "Por Pagar" }, { id: "historial", nombre: "Historial" },
-    { id: "administracion", nombre: "Administración" }, { id: "preferencias", nombre: "Preferencias" },
+    { id: "administracion", nombre: "Administraci�n" }, { id: "preferencias", nombre: "Preferencias" },
   ];
   const gruposMenu = [
-    { nombre: "Operación", ids: ["inicio", "captura", "revision", "reporte", "historial"] },
+    { nombre: "Operaci�n", ids: ["inicio", "captura", "revision", "reporte", "historial"] },
     { nombre: "Inventarios", ids: ["bodega", "planta", "insumos", "pedidomp", "formulas"] },
     { nombre: "Salud y lotes", ids: ["pesaje", "lotes"] },
-    { nombre: "Administración", ids: ["administracion", "cxp", "preferencias"] },
+    { nombre: "Administraci�n", ids: ["administracion", "cxp", "preferencias"] },
   ];
   const idsVistas = tabs.map(t => t.id);
   const idsPermitidos = vistasPermitidas(miRol, idsVistas);
   const tabsVisibles = ordenarPorPreferencia(tabs.filter(t => idsPermitidos.includes(t.id)), preferencias.ordenNavegacion);
-  useEffect(() => { if (!tabsVisibles.some(t => t.id === vista)) setVista("inicio"); }, [vista, esAdmin, miRol]);
+  useEffect(() => {
+    const segura = resolverVistaSegura(miRol, vista, idsVistas);
+    if (segura !== vista) setVista(segura);
+  }, [vista, miRol]);
   useEffect(() => {
     if (!preferenciasCargadas || vistaInicialAplicadaRef.current || miRol === "cargando") return;
     vistaInicialAplicadaRef.current = true;
@@ -2434,28 +2438,28 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, [vista, miRol, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, histFecha]);
   const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
-    ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
-    ...(idsPermitidos.includes("historial") ? registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })) : []),
-    ...bodegaMovs.map(m => ({ texto: `Bodega ${m.fecha} · ${m.responsable || m.por || ""}`, vista: "bodega", fecha: fechaHistorialISO(m.fecha) })),
-    ...pesajes.map(p => ({ texto: `Pesaje ${p.fecha} · ${lotes.find(l => l.id === p.lote)?.galpon ? `G${lotes.find(l => l.id === p.lote).galpon}` : p.lote}`, vista: "pesaje", fecha: fechaHistorialISO(p.fecha) })),
-    ...tareasProgramadas.map(t => ({ texto: `Actividad ${t.nombre} · ${t.responsable || ""}`, vista: "pesaje" })),
-    ...Object.keys(recetas.formulas || {}).map(f => ({ texto: `Fórmula ${f}`, vista: "formulas", formula: f })),
-    ...insumos.map(it => ({ texto: `Insumo ${it.nombre || ""} · ${it.categoria || ""}`, vista: "insumos" })),
-    ...mpCat.map(m => ({ texto: `Materia prima ${m.n || ""} · ${m.c || ""}`, vista: "pedidomp" })),
-    ...(esAdmin ? (cxp.facturas || []).map(f => ({ texto: `Factura ${f.proveedor || ""} · ${f.numero || ""}`, vista: "cxp" })) : []),
+    ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} � ${l.raza || ""} � ${l.lote || ""}`, vista: "captura", lote: l.id })),
+    ...(idsPermitidos.includes("historial") ? registros.map(r => ({ texto: `Control ${r.fecha} � ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} � ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })) : []),
+    ...bodegaMovs.map(m => ({ texto: `Bodega ${m.fecha} � ${m.responsable || m.por || ""}`, vista: "bodega", fecha: fechaHistorialISO(m.fecha) })),
+    ...pesajes.map(p => ({ texto: `Pesaje ${p.fecha} � ${lotes.find(l => l.id === p.lote)?.galpon ? `G${lotes.find(l => l.id === p.lote).galpon}` : p.lote}`, vista: "pesaje", fecha: fechaHistorialISO(p.fecha) })),
+    ...tareasProgramadas.map(t => ({ texto: `Actividad ${t.nombre} � ${t.responsable || ""}`, vista: "pesaje" })),
+    ...Object.keys(recetas.formulas || {}).map(f => ({ texto: `F�rmula ${f}`, vista: "formulas", formula: f })),
+    ...insumos.map(it => ({ texto: `Insumo ${it.nombre || ""} � ${it.categoria || ""}`, vista: "insumos" })),
+    ...mpCat.map(m => ({ texto: `Materia prima ${m.n || ""} � ${m.c || ""}`, vista: "pedidomp" })),
+    ...(esAdmin ? (cxp.facturas || []).map(f => ({ texto: `Factura ${f.proveedor || ""} � ${f.numero || ""}`, vista: "cxp" })) : []),
   ].filter(x => x.texto.toLocaleLowerCase("es").includes(busquedaGlobal.trim().toLocaleLowerCase("es"))).slice(0, 30);
   const abrirResultado = r => { if (r.vista === "historial" && r.fecha) setHistFecha(r.fecha); if (r.vista === "bodega" && r.fecha) cambiarFechaBodega(r.fecha); if (r.lote) setGalponActivo(r.lote); if (r.formula) setRecActiva(r.formula); irA(r.vista); };
   const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta, filtroPlanta);
   const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
     const filas = [
-      ...correccionesProduccion.map(c => ({ fecha: c.instante, area: "Producción", accion: c.accion, responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.cartones} cart`, despues: c.nuevo ? `${c.nuevo.cartones} cart` : "Retirado" })),
-      ...bodegaMovs.flatMap(m => (m.historialEdiciones || []).map(c => ({ fecha: c.fechaHora, area: "Bodega", accion: "Edición", responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.saldoFinal} cart`, despues: `${c.nuevo?.saldoFinal} cart` }))),
+      ...correccionesProduccion.map(c => ({ fecha: c.instante, area: "Producci�n", accion: c.accion, responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.cartones} cart`, despues: c.nuevo ? `${c.nuevo.cartones} cart` : "Retirado" })),
+      ...bodegaMovs.flatMap(m => (m.historialEdiciones || []).map(c => ({ fecha: c.fechaHora, area: "Bodega", accion: "Edici�n", responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.saldoFinal} cart`, despues: `${c.nuevo?.saldoFinal} cart` }))),
       ...bodegaMovs.filter(m => m.cierreVerificado).map(m => ({ fecha: m.cierreVerificado.fechaHora, area: "Bodega", accion: "Cierre verificado", responsable: m.cierreVerificado.responsable, motivo: "Salidas, devoluciones y conteo", antes: "", despues: `${m.saldoFinal} cart` })),
-      ...plantaMovs.filter(m => m.tipo === "ajuste").map(m => ({ fecha: m.registradoEl || m.fecha, area: "Planta", accion: "Conteo físico", responsable: m.responsable || m.por, motivo: m.detalle, antes: m.saldoAnterior, despues: m.saldoReal })),
-      ...plantaMovs.flatMap(m => (m.historialEdiciones || []).map(ed => ({ fecha: ed.fechaHora, area: "Planta", accion: "Corrección de detalle", responsable: ed.responsable || ed.por, motivo: ed.motivo, antes: [ed.anterior?.detalle, ed.anterior?.numBache, ed.anterior?.numNucleo].filter(Boolean).join(" · "), despues: [ed.nuevo?.detalle, ed.nuevo?.numBache, ed.nuevo?.numNucleo].filter(Boolean).join(" · ") }))),
-      ...advAjustes.map(a => ({ fecha: a.fecha, area: "Auditoría", accion: a.accion, responsable: a.responsable, motivo: a.razon, antes: a.textoOriginal, despues: a.nuevoTexto })),
-      ...tareasProgramadas.flatMap(t => (t.historialRealizaciones || []).map(h => ({ fecha: h.registradoEl || h.fecha, area: "Actividades", accion: h.accion === "reversión" ? "Realización deshecha" : "Realización", responsable: h.por, motivo: t.nombre, antes: "", despues: h.responsable || "" }))),
+      ...plantaMovs.filter(m => m.tipo === "ajuste").map(m => ({ fecha: m.registradoEl || m.fecha, area: "Planta", accion: "Conteo f�sico", responsable: m.responsable || m.por, motivo: m.detalle, antes: m.saldoAnterior, despues: m.saldoReal })),
+      ...plantaMovs.flatMap(m => (m.historialEdiciones || []).map(ed => ({ fecha: ed.fechaHora, area: "Planta", accion: "Correcci�n de detalle", responsable: ed.responsable || ed.por, motivo: ed.motivo, antes: [ed.anterior?.detalle, ed.anterior?.numBache, ed.anterior?.numNucleo].filter(Boolean).join(" � "), despues: [ed.nuevo?.detalle, ed.nuevo?.numBache, ed.nuevo?.numNucleo].filter(Boolean).join(" � ") }))),
+      ...advAjustes.map(a => ({ fecha: a.fecha, area: "Auditor�a", accion: a.accion, responsable: a.responsable, motivo: a.razon, antes: a.textoOriginal, despues: a.nuevoTexto })),
+      ...tareasProgramadas.flatMap(t => (t.historialRealizaciones || []).map(h => ({ fecha: h.registradoEl || h.fecha, area: "Actividades", accion: h.accion === "reversi�n" ? "Realizaci�n deshecha" : "Realizaci�n", responsable: h.por, motivo: t.nombre, antes: "", despues: h.responsable || "" }))),
     ].filter(f => historialVisible([{ fecha: f.fecha }], "auditoria").length);
     const url = URL.createObjectURL(new Blob(["\ufeff", csvAuditoria(filas)], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `auditoria-rancho-${hoyISO()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -2467,15 +2471,15 @@ export default function App() {
     try {
       const nuevo = await corregirDetallePlanta({ id: original.id, visto: original, campos: editarDetallePlanta.campos, motivo: motivoDetallePlanta, responsable: editarDetallePlanta.campos.responsable || completadoPor });
       setPlantaMovs(v => v.map(m => String(m.id) === String(original.id) ? nuevo : m));
-      setEditarDetallePlanta(null); setMotivoDetallePlanta(""); avisar("✓ Detalle corregido y auditado. Los saldos no cambiaron.");
-    } catch (e) { avisar(`⚠ ${e.message}`); }
+      setEditarDetallePlanta(null); setMotivoDetallePlanta(""); avisar("� Detalle corregido y auditado. Los saldos no cambiaron.");
+    } catch (e) { avisar(`? ${e.message}`); }
     finally { setGuardando(false); }
   };
   if (cargando) return (
     <div style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: C.textoSuave }}>
       <style>{fuentes}</style>
       <MarcaRancho />
-      <div>Cargando datos de la granja…</div>
+      <div>Cargando datos de la granja.</div>
     </div>
   );
 
@@ -2483,12 +2487,12 @@ export default function App() {
     <div style={{ fontFamily: "'Inter', sans-serif", background: C.fondo, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, padding: 20, textAlign: "center" }}>
       <style>{fuentes}</style>
       <div style={{ fontSize: 15, color: C.alerta, fontWeight: 600 }}>No se pudieron cargar los datos</div>
-      <div style={{ fontSize: 13, color: C.textoSuave, maxWidth: 320, lineHeight: 1.5 }}>La conexión con el almacenamiento no respondió. Revisa tu señal de internet y vuelve a intentar — tus datos están a salvo.</div>
+      <div style={{ fontSize: 13, color: C.textoSuave, maxWidth: 320, lineHeight: 1.5 }}>La conexi�n con el almacenamiento no respondi�. Revisa tu se�al de internet y vuelve a intentar - tus datos est�n a salvo.</div>
       <button onClick={() => cargarTodo(true)} style={{ padding: "12px 24px", background: C.verde, color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Reintentar</button>
     </div>
   );
 
-  // ── Cuentas por pagar ──
+  // �� Cuentas por pagar ��
   const pagadoDe = (fid) => cxp.pagos.filter(pg => pg.facturaId === fid).reduce((a, pg) => a + Number(pg.monto || 0), 0);
   const notasDe = (fid) => (cxp.notas || []).filter(n2 => n2.facturaId === fid);
   const netoNotas = (fid) => notasDe(fid).reduce((a, n2) => a + (n2.tipo === "ND" ? 1 : -1) * Number(n2.monto || 0), 0);
@@ -2499,7 +2503,7 @@ export default function App() {
   const cxpVencido = facturasAbiertas.filter(f => diasVence(f) < 0).reduce((a, f) => a + saldoDe(f), 0);
   const cxpProx7 = facturasAbiertas.filter(f => diasVence(f) >= 0 && diasVence(f) <= 7).reduce((a, f) => a + saldoDe(f), 0);
   const agingBucket = (f) => { const d = -diasVence(f); return d <= 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : 3; };
-  const colones = (n) => "₡" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const colones = (n) => "?" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const registrarKardex = async (movs) => {
     if (!movs.length) return true;
@@ -2511,7 +2515,7 @@ export default function App() {
   const BotonGuardaMini = () => (
     <button onClick={() => setRevisionGuardado(loteActivo?.id || "todos")} disabled={guardando} title={`Revisar este punto (Gallinero ${loteActivo?.galpon || ""})`}
       style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-      💾 Revisar
+      ?? Revisar
     </button>
   );
   const dosisSugerida = (nombre, tipoFav) => {
@@ -2522,33 +2526,33 @@ export default function App() {
   const esConocido = (nombre, tipoFav) => !nombre || insumos.some(x => x.nombre === nombre) || favoritos.some(f2 => f2.tipo === tipoFav && f2.nombre === nombre);
   const guardarFavorito = async (tipoFav, nombre, dosis, retiro) => {
     const nuevo = [...favoritos.filter(f2 => !(f2.tipo === tipoFav && f2.nombre === nombre.trim())), { id: Date.now(), tipo: tipoFav, nombre: nombre.trim(), dosis: (dosis || "").trim(), retiro: (retiro || "").trim() }];
-    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar(`⭐ "${nombre.trim()}" agregado al menú`); return true; }
-    avisar("⚠ No se pudo guardar"); return false;
+    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar(`? "${nombre.trim()}" agregado al men�`); return true; }
+    avisar("? No se pudo guardar"); return false;
   };
   const borrarFavorito = async (id) => {
     const nuevo = favoritos.filter(f2 => f2.id !== id);
-    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar("✓ Quitado del menú"); }
-    else avisar("⚠ No se pudo guardar");
+    if (await escribir(K.favoritos, nuevo)) { setFavoritos(nuevo); avisar("� Quitado del men�"); }
+    else avisar("? No se pudo guardar");
   };
   const retiroSugerido = (nombre) => favoritos.find(f2 => f2.tipo === "med" && f2.nombre === nombre)?.retiro || "";
   const kardexSaldo = (codigo) => kardex.reduce((a, m) => a + (m.mp === codigo ? (m.tipo === "salida" ? -1 : 1) * Number(m.kg || 0) : 0), 0);
 
   const guardarCxp = async (delta) => {
-    if (cargandoFondo) { avisar("⏳ Sincronizando datos — espera unos segundos e intenta de nuevo"); return false; }
+    if (cargandoFondo) { avisar("? Sincronizando datos - espera unos segundos e intenta de nuevo"); return false; }
     const actual = { facturas: [], pagos: [], notas: [], ...(await leer(K.cxp, {})) };
     await escribir("granja2:cxpBak", actual);
     const nuevo = delta(actual);
     if (await escribir(K.cxp, nuevo)) { setCxp(nuevo); return true; }
-    avisar("⚠ No se pudo guardar"); return false;
+    avisar("? No se pudo guardar"); return false;
   };
 
-  // ── Auditoría de gestión: lo que NO está pasando ──
+  // �� Auditor�a de gesti�n: lo que NO est� pasando ��
   const auditoria = [];
   tareasProgramadas.forEach(t => {
     const proxima = proximaTarea(t);
     if (!proxima) return;
     const dias = diasHastaTarea(proxima, hoyISO());
-    if (dias <= 0) auditoria.push({ nivel: dias < 0 ? "rojo" : "amarillo", texto: `Actividad ${dias < 0 ? "atrasada" : "para hoy"}: ${t.nombre}${t.lote ? ` (G${lotes.find(l => l.id === t.lote)?.galpon || "?"})` : " (toda la granja)"} · programada ${proxima}. Marca Realizada en Trabajos diarios.` });
+    if (dias <= 0) auditoria.push({ nivel: dias < 0 ? "rojo" : "amarillo", texto: `Actividad ${dias < 0 ? "atrasada" : "para hoy"}: ${t.nombre}${t.lote ? ` (G${lotes.find(l => l.id === t.lote)?.galpon || "?"})` : " (toda la granja)"} � programada ${proxima}. Marca Realizada en Trabajos diarios.` });
   });
   const diasDesde = (dmy) => Math.round((hoyD - aDate(dmy)) / 86400000);
   TRABAJOS.forEach((t, i) => {
@@ -2564,16 +2568,16 @@ export default function App() {
     if (peor && peor.dias >= 10) {
       auditoria.push({
         nivel: peor.dias >= 15 ? "rojo" : "amarillo",
-        texto: `Tarea "${t}": ${peor.nunca ? `sin registro de realizarse desde que hay datos (${peor.dias} días)` : `${peor.dias} días sin realizarse`} en Gallinero ${peor.l.galpon}.`,
+        texto: `Tarea "${t}": ${peor.nunca ? `sin registro de realizarse desde que hay datos (${peor.dias} d�as)` : `${peor.dias} d�as sin realizarse`} en Gallinero ${peor.l.galpon}.`,
       });
     }
   });
   activos.forEach(l => {
     const ult = fumigaciones.find(m => m.galpon === l.galpon);
-    if (!ult) { auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: sin fumigaciones registradas aún.` }); return; }
+    if (!ult) { auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: sin fumigaciones registradas a�n.` }); return; }
     const dias = diasDesde(ult.fecha);
-    if (dias >= 15) auditoria.push({ nivel: "rojo", texto: `Protección biológica: Gallinero ${l.galpon} lleva ${dias} días sin fumigación registrada (última: ${ult.fecha.slice(0, 5)}, ${ult.producto}).` });
-    else if (dias >= 8) auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: ${dias} días desde la última fumigación (${ult.producto}).` });
+    if (dias >= 15) auditoria.push({ nivel: "rojo", texto: `Protecci�n biol�gica: Gallinero ${l.galpon} lleva ${dias} d�as sin fumigaci�n registrada (�ltima: ${ult.fecha.slice(0, 5)}, ${ult.producto}).` });
+    else if (dias >= 8) auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: ${dias} d�as desde la �ltima fumigaci�n (${ult.producto}).` });
   });
   {
     const mov = bodegaMovs[0];
@@ -2582,8 +2586,8 @@ export default function App() {
         const sal = Number(r.salida || 0);
         if (sal <= 0) return;
         const devM = Number(r.devMalo || 0), devT = devM + Number(r.devBueno || 0);
-        if ((devM / sal) * 100 > 5) auditoria.push({ nivel: "rojo", texto: `Ruta de ${r.nombre} (${mov.fecha.slice(0, 5)}): regresó ${devM} cartón(es) de huevo MALO — ${((devM / sal) * 100).toFixed(0)}% de la salida. Revisar empaque, manejo del camión o calidad de cáscara.` });
-        else if ((devT / sal) * 100 > 12) auditoria.push({ nivel: "amarillo", texto: `Ruta de ${r.nombre}: devolución total de ${((devT / sal) * 100).toFixed(0)}% (${devT} de ${sal} cartones). Revisar demanda de la ruta.` });
+        if ((devM / sal) * 100 > 5) auditoria.push({ nivel: "rojo", texto: `Ruta de ${r.nombre} (${mov.fecha.slice(0, 5)}): regres� ${devM} cart�n(es) de huevo MALO - ${((devM / sal) * 100).toFixed(0)}% de la salida. Revisar empaque, manejo del cami�n o calidad de c�scara.` });
+        else if ((devT / sal) * 100 > 12) auditoria.push({ nivel: "amarillo", texto: `Ruta de ${r.nombre}: devoluci�n total de ${((devT / sal) * 100).toFixed(0)}% (${devT} de ${sal} cartones). Revisar demanda de la ruta.` });
       });
     }
   }
@@ -2591,33 +2595,33 @@ export default function App() {
     const ult = registros.find(r => r.lote === l.id);
     if (!ult) return;
     const dias = diasDesde(ult.fecha);
-    if (dias >= 4) auditoria.push({ nivel: "rojo", texto: `Gallinero ${l.galpon}: ${dias} días SIN control diario registrado (último: ${ult.fecha.slice(0, 5)}). Sin datos no hay gestión.` });
-    else if (dias >= 2) auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: ${dias} días sin control diario (último: ${ult.fecha.slice(0, 5)}).` });
+    if (dias >= 4) auditoria.push({ nivel: "rojo", texto: `Gallinero ${l.galpon}: ${dias} d�as SIN control diario registrado (�ltimo: ${ult.fecha.slice(0, 5)}). Sin datos no hay gesti�n.` });
+    else if (dias >= 2) auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: ${dias} d�as sin control diario (�ltimo: ${ult.fecha.slice(0, 5)}).` });
   });
   {
     const ultConteo = bodegaMovs.find(m => m.ajusteConteo != null);
     if (bodegaMovs.length > 5 && (!ultConteo || diasDesde(ultConteo.fecha) > 14)) {
-      auditoria.push({ nivel: "amarillo", texto: `Bodega: ${ultConteo ? `${diasDesde(ultConteo.fecha)} días` : "nunca"} sin conteo físico de cartones. Programa un conteo para validar el saldo.` });
+      auditoria.push({ nivel: "amarillo", texto: `Bodega: ${ultConteo ? `${diasDesde(ultConteo.fecha)} d�as` : "nunca"} sin conteo f�sico de cartones. Programa un conteo para validar el saldo.` });
     }
     if (mpFechaConteo && diasDesde(mpFechaConteo) > 8) {
-      auditoria.push({ nivel: "amarillo", texto: `Materias primas: el inventario tiene ${diasDesde(mpFechaConteo)} días (conteo del ${mpFechaConteo.slice(0, 5)}). El pedido del jueves necesita conteo fresco.` });
+      auditoria.push({ nivel: "amarillo", texto: `Materias primas: el inventario tiene ${diasDesde(mpFechaConteo)} d�as (conteo del ${mpFechaConteo.slice(0, 5)}). El pedido del jueves necesita conteo fresco.` });
     }
   }
   facturasAbiertas.forEach(f => {
     const d = diasVence(f);
-    if (d < 0) auditoria.push({ nivel: "rojo", texto: `Factura VENCIDA hace ${-d} día(s): ${f.proveedor} #${f.numero || "s/n"} — saldo ${colones(saldoDe(f))} (vencía ${f.vence.slice(0, 5)}).` });
-    else if (d <= 3) auditoria.push({ nivel: "amarillo", texto: `Factura por vencer en ${d === 0 ? "HOY" : d + " día(s)"}: ${f.proveedor} #${f.numero || "s/n"} — saldo ${colones(saldoDe(f))}.` });
+    if (d < 0) auditoria.push({ nivel: "rojo", texto: `Factura VENCIDA hace ${-d} d�a(s): ${f.proveedor} #${f.numero || "s/n"} - saldo ${colones(saldoDe(f))} (venc�a ${f.vence.slice(0, 5)}).` });
+    else if (d <= 3) auditoria.push({ nivel: "amarillo", texto: `Factura por vencer en ${d === 0 ? "HOY" : d + " d�a(s)"}: ${f.proveedor} #${f.numero || "s/n"} - saldo ${colones(saldoDe(f))}.` });
   });
   {
     const rs7 = registros.slice(0, activos.length * 7);
     const h7 = rs7.reduce((a, r) => a + r.cartones * HXC, 0);
     const q7 = rs7.reduce((a, r) => a + Number(r.quebrados || 0), 0);
     if (h7 > 0 && (q7 / (h7 + q7)) * 100 > 3) {
-      auditoria.push({ nivel: "rojo", texto: `Huevo quebrado promedio de la semana: ${((q7 / (h7 + q7)) * 100).toFixed(1)}% — arriba del 3% de forma sostenida. Ya no es un mal día: revisar calcio (cáscara), frecuencia de recolección y manejo en nidos.` });
+      auditoria.push({ nivel: "rojo", texto: `Huevo quebrado promedio de la semana: ${((q7 / (h7 + q7)) * 100).toFixed(1)}% - arriba del 3% de forma sostenida. Ya no es un mal d�a: revisar calcio (c�scara), frecuencia de recolecci�n y manejo en nidos.` });
     }
   }
 
-  // ── Gestión de advertencias (eliminar / modificar con trazabilidad) ──
+  // �� Gesti�n de advertencias (eliminar / modificar con trazabilidad) ��
   const abrirModalAjusteAdv = (item, seccion, accion) => {
     const advId = `${seccion}:${(item.texto || "").slice(0, 70)}`;
     const ajExistente = advAjustes.find(a => a.advId === advId);
@@ -2635,7 +2639,7 @@ export default function App() {
 
   const guardarAjusteAdvertencia = async () => {
     if (!modalAdv.razon.trim()) {
-      avisar("⚠ La razón o justificación es obligatoria");
+      avisar("? La raz�n o justificaci�n es obligatoria");
       return;
     }
     const dmy = modalAdv.fecha.split("-").reverse().join("/");
@@ -2655,9 +2659,9 @@ export default function App() {
     if (await escribir(K.advAjustes, nuevos)) {
       setAdvAjustes(nuevos);
       setModalAdv(null);
-      avisar(modalAdv.accion === "eliminar" ? "✓ Advertencia descartada con registro de auditoría" : "✓ Advertencia modificada");
+      avisar(modalAdv.accion === "eliminar" ? "� Advertencia descartada con registro de auditor�a" : "� Advertencia modificada");
     } else {
-      avisar("⚠ No se pudo guardar el ajuste");
+      avisar("? No se pudo guardar el ajuste");
     }
   };
 
@@ -2665,22 +2669,22 @@ export default function App() {
     const nuevos = advAjustes.filter(a => a.id !== ajusteId);
     if (await escribir(K.advAjustes, nuevos)) {
       setAdvAjustes(nuevos);
-      avisar("✓ Advertencia reactivada");
+      avisar("� Advertencia reactivada");
     } else {
-      avisar("⚠ No se pudo reactivar");
+      avisar("? No se pudo reactivar");
     }
   };
 
   const borrarAdvertenciaDescartada = async (ajuste) => {
     if (ajuste.accion !== "eliminar") return;
-    if (!window.confirm("¿Borrar definitivamente esta entrada del historial? La advertencia seguirá descartada y no se podrá reactivar desde aquí.")) return;
+    if (!window.confirm("�Borrar definitivamente esta entrada del historial? La advertencia seguir� descartada y no se podr� reactivar desde aqu�.")) return;
     const nuevos = advAjustes.filter(a => a.id !== ajuste.id);
     nuevos.push({ advId: ajuste.advId, seccion: ajuste.seccion, accion: "eliminar_definitivo" });
     if (await escribir(K.advAjustes, nuevos)) {
       setAdvAjustes(nuevos);
-      avisar("✓ Entrada borrada del historial; la advertencia permanece descartada");
+      avisar("� Entrada borrada del historial; la advertencia permanece descartada");
     } else {
-      avisar("⚠ No se pudo borrar la entrada");
+      avisar("? No se pudo borrar la entrada");
     }
   };
 
@@ -2705,16 +2709,16 @@ export default function App() {
   const guardarNombreVisible = async (correo, nombre) => {
     const email = correo.trim().toLowerCase();
     const visible = nombre.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !visible) { avisar("⚠ Escribe un correo válido y un nombre visible"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !visible) { avisar("? Escribe un correo v�lido y un nombre visible"); return; }
     const nuevos = { ...nombresUsuarios, [email]: visible };
     if (await escribir(K.nombresUsuarios, nuevos)) {
-      setNombresUsuarios(nuevos); setCorreoNombre(""); setNombreNuevo(""); avisar("✓ Nombre visible guardado");
-    } else avisar("⚠ No se pudo guardar el nombre");
+      setNombresUsuarios(nuevos); setCorreoNombre(""); setNombreNuevo(""); avisar("� Nombre visible guardado");
+    } else avisar("? No se pudo guardar el nombre");
   };
   const borrarNombreVisible = async (correo) => {
     const nuevos = { ...nombresUsuarios }; delete nuevos[correo];
-    if (await escribir(K.nombresUsuarios, nuevos)) { setNombresUsuarios(nuevos); avisar("✓ Nombre visible quitado"); }
-    else avisar("⚠ No se pudo quitar el nombre");
+    if (await escribir(K.nombresUsuarios, nuevos)) { setNombresUsuarios(nuevos); avisar("� Nombre visible quitado"); }
+    else avisar("? No se pudo quitar el nombre");
   };
   const pendientesReporte = (id, fecha) => pendientesDeAuditoria({
     lote: id ? lotes.find(x => x.id === id) : null,
@@ -2722,12 +2726,12 @@ export default function App() {
   }, fecha);
   const historialVisible = (items, clave) => filtrarHistorial(items, periodosHistorial[clave] || "30");
   const guardarCorreccionProduccion = async (eliminar = false) => {
-    if (!editarProduccion || !motivoProduccion.trim()) { avisar("⚠ Escribe el motivo de la corrección."); return; }
-    if (!eliminar && preferencias.confirmaciones.correcciones && !pideConfirm(`corregir-produccion-${editarProduccion.id}`, "⚠ Toca guardar corrección otra vez para confirmar")) return;
+    if (!editarProduccion || !motivoProduccion.trim()) { avisar("? Escribe el motivo de la correcci�n."); return; }
+    if (!eliminar && preferencias.confirmaciones.correcciones && !pideConfirm(`corregir-produccion-${editarProduccion.id}`, "? Toca guardar correcci�n otra vez para confirmar")) return;
     const original = registros.find(r => String(r.id) === String(editarProduccion.id));
-    if (!original) { avisar("⚠ Actualiza los datos antes de corregir."); return; }
+    if (!original) { avisar("? Actualiza los datos antes de corregir."); return; }
     const tiquetes = editarProduccion.tiquetes.map(t => ({ num: String(t.num || "").trim(), cartones: String(t.cartones || ""), peso: String(t.peso || "") })).filter(t => t.num || t.cartones || t.peso);
-    if (!eliminar && (!tiquetes.length || tiquetes.some(t => !t.num || !(Number(t.cartones) > 0) || !(Number(t.peso) > 0)))) { avisar("⚠ Revisa los números, cartones y pesos de cada tiquete."); return; }
+    if (!eliminar && (!tiquetes.length || tiquetes.some(t => !t.num || !(Number(t.cartones) > 0) || !(Number(t.peso) > 0)))) { avisar("? Revisa los n�meros, cartones y pesos de cada tiquete."); return; }
     const nuevo = { ...original, ...editarProduccion, tiquetes,
       cartones: tiquetes.reduce((s, t) => s + Number(t.cartones), 0),
       pesoKg: +tiquetes.reduce((s, t) => s + Number(t.peso), 0).toFixed(1),
@@ -2735,19 +2739,19 @@ export default function App() {
       alimentoKg: Number(editarProduccion.alimento6am) + Number(editarProduccion.alimento1pm),
       alimento6am: Number(editarProduccion.alimento6am), alimento1pm: Number(editarProduccion.alimento1pm),
     };
-    if (!eliminar && [nuevo.muertas, nuevo.quebrados, nuevo.alimentoKg].some(n => !Number.isFinite(n) || n < 0)) { avisar("⚠ Los valores deben ser números positivos o cero."); return; }
+    if (!eliminar && [nuevo.muertas, nuevo.quebrados, nuevo.alimentoKg].some(n => !Number.isFinite(n) || n < 0)) { avisar("? Los valores deben ser n�meros positivos o cero."); return; }
     setGuardando(true);
     try {
       await corregirProduccion({ id: original.id, nuevo, motivo: motivoProduccion.trim(), eliminar });
       setEditarProduccion(null); setMotivoProduccion("");
       await cargarTodo(false);
-      avisar(eliminar ? "✓ Registro retirado; corrección anotada en el historial" : "✓ Registro corregido; cambio anotado en el historial");
-    } catch (e) { avisar(`⚠ ${e.message || "No se pudo corregir"}`); await cargarTodo(false); }
+      avisar(eliminar ? "� Registro retirado; correcci�n anotada en el historial" : "� Registro corregido; cambio anotado en el historial");
+    } catch (e) { avisar(`? ${e.message || "No se pudo corregir"}`); await cargarTodo(false); }
     finally { setGuardando(false); }
   };
   const selectorHistorial = (clave) => <label style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", fontSize: 12.5, marginBottom: 10, color: C.textoSuave }}>
     Mostrar
-    <select aria-label="Período del historial" value={periodosHistorial[clave] || "30"} onChange={e => setPeriodosHistorial(prev => ({ ...prev, [clave]: e.target.value }))} style={{ ...inputStyle, width: "auto", minWidth: 170, margin: 0, padding: "7px 10px" }}>
+    <select aria-label="Per�odo del historial" value={periodosHistorial[clave] || "30"} onChange={e => setPeriodosHistorial(prev => ({ ...prev, [clave]: e.target.value }))} style={{ ...inputStyle, width: "auto", minWidth: 170, margin: 0, padding: "7px 10px" }}>
       {PERIODOS_HISTORIAL.map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}
     </select>
   </label>;
@@ -2760,22 +2764,22 @@ export default function App() {
   const vacsAtrasadas = activos.reduce((acc, l) => acc + planVac.filter(p => estadoVacunaLote(l, p).estado === "atrasada").length, 0);
 
   const badgePorTab = {
-    captura: preferencias.notificaciones.faltantesDiarios ? (faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" }) : null,
-    revision: preferencias.notificaciones.faltantesDiarios && numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditoría` } : null,
-    bodega: preferencias.notificaciones.inventarioBajo ? (!bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "●", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "✓", tipo: "ok", titulo: "Cierre de bodega verificado" }) : null,
+    captura: preferencias.notificaciones.faltantesDiarios ? (faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "�", tipo: "ok", titulo: "Control de hoy completo" }) : null,
+    revision: preferencias.notificaciones.faltantesDiarios && numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditor�a` } : null,
+    bodega: preferencias.notificaciones.inventarioBajo ? (!bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "?", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "�", tipo: "ok", titulo: "Cierre de bodega verificado" }) : null,
     cxp: preferencias.notificaciones.cuentasPorPagar && facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
     pesaje: preferencias.notificaciones.bienestar && vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
   };
   const verReporte = (...secciones) => subReporte === "todo" || secciones.includes(subReporte);
   const nombreSeccionReporte = {
     todo: "Reporte gerencial completo",
-    resumen: "Resumen del día",
-    comparativo: "Comparativo y genética",
+    resumen: "Resumen del d�a",
+    comparativo: "Comparativo y gen�tica",
     decisiones: "Decisiones",
-    bitacora: "Bitácora",
-    auditoria: "Auditoría de gestión",
-    kpis: "KPIs técnicos",
-    economia: "Economía",
+    bitacora: "Bit�cora",
+    auditoria: "Auditor�a de gesti�n",
+    kpis: "KPIs t�cnicos",
+    economia: "Econom�a",
   }[subReporte] || "Reporte gerencial";
 
   if (printDoc) {
@@ -2787,7 +2791,7 @@ export default function App() {
       <div style={{ fontFamily: "'Inter', sans-serif", background: "#fff", minHeight: "100vh", color: "#111", padding: "24px 20px", maxWidth: 800, margin: "0 auto" }}>
         <style>{fuentes + " @media print { .no-print { display: none !important } }"}</style>
         <div className="no-print" style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-          <button onClick={abrirParaImprimir} style={{ flex: 1, padding: "12px", fontSize: 15, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>🖨 Imprimir / Guardar PDF</button>
+          <button onClick={abrirParaImprimir} style={{ flex: 1, padding: "12px", fontSize: 15, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>?? Imprimir / Guardar PDF</button>
           <button onClick={() => setPrintDoc(null)} style={{ flex: 0.5, padding: "12px", fontSize: 15, fontWeight: 600, background: "#fff", color: "#555", border: "1.5px solid #ccc", borderRadius: 10, cursor: "pointer" }}>Cerrar</button>
         </div>
         <div id="print-area">
@@ -2796,24 +2800,24 @@ export default function App() {
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, marginTop: 2 }}>{RAZON_SOCIAL}</div>
         </div>
         <div style={{ textAlign: "center", fontSize: 13, color: "#555", marginBottom: 16 }}>
-          {printDoc.tipo === "vacunas" && `Reporte de vacunación — Gallinero ${l?.galpon} · ${l?.raza} · Lote ${l?.lote || ""}`}
-          {printDoc.tipo === "medidas" && `Medidas de Producción — Gallinero ${l?.galpon} · ${l?.raza}`}
-          {printDoc.tipo === "pesajes" && "Reporte de pesaje corporal — todos los gallineros"}
-          {printDoc.tipo === "lotes" && "Estado de lotes — inventario y desempeño de parvadas"}
+          {printDoc.tipo === "vacunas" && `Reporte de vacunaci�n - Gallinero ${l?.galpon} � ${l?.raza} � Lote ${l?.lote || ""}`}
+          {printDoc.tipo === "medidas" && `Medidas de Producci�n - Gallinero ${l?.galpon} � ${l?.raza}`}
+          {printDoc.tipo === "pesajes" && "Reporte de pesaje corporal - todos los gallineros"}
+          {printDoc.tipo === "lotes" && "Estado de lotes - inventario y desempe�o de parvadas"}
           {printDoc.tipo === "bodega" && (printDoc.movimientoId ? "Historial de bodega de huevo" : "Movimiento de bodega de huevo")}
-          {printDoc.tipo === "reporte" && `${({ todo: "Reporte gerencial completo", resumen: "Resumen del día", comparativo: "Comparativo y genética", decisiones: "Decisiones", bitacora: "Bitácora", auditoria: "Auditoría de gestión", kpis: "KPIs técnicos", economia: "Economía" })[printDoc.seccion || "todo"] || "Reporte gerencial"} — ${hoyStr()}`}
-          {printDoc.tipo === "bache" && `Checklist de producción de concentrado — ${printDoc.formula}`}
-          {printDoc.tipo === "controldiario" && `Reporte diario de operación — ${printDoc.fecha}`}
-          {printDoc.tipo === "cxp" && `Estado de Cuentas por Pagar — al ${hoyStr()}`}
-          {printDoc.tipo === "nucleo" && `Checklist de producción de NÚCLEO — ${printDoc.formula}`}
+          {printDoc.tipo === "reporte" && `${({ todo: "Reporte gerencial completo", resumen: "Resumen del d�a", comparativo: "Comparativo y gen�tica", decisiones: "Decisiones", bitacora: "Bit�cora", auditoria: "Auditor�a de gesti�n", kpis: "KPIs t�cnicos", economia: "Econom�a" })[printDoc.seccion || "todo"] || "Reporte gerencial"} - ${hoyStr()}`}
+          {printDoc.tipo === "bache" && `Checklist de producci�n de concentrado - ${printDoc.formula}`}
+          {printDoc.tipo === "controldiario" && `Reporte diario de operaci�n - ${printDoc.fecha}`}
+          {printDoc.tipo === "cxp" && `Estado de Cuentas por Pagar - al ${hoyStr()}`}
+          {printDoc.tipo === "nucleo" && `Checklist de producci�n de NUCLEO - ${printDoc.formula}`}
           {printDoc.tipo === "enfermedades" && "Expediente de enfermedades y tratamientos"}
           {printDoc.tipo === "necropsias" && "Registro de necropsias y resultados de laboratorio"}
-          {printDoc.tipo === "actividades" && `Tareas por hacer — ${l ? `Galera ${l.galpon} · ${l.raza}` : "Generales de la granja"}`}
+          {printDoc.tipo === "actividades" && `Tareas por hacer - ${l ? `Galera ${l.galpon} � ${l.raza}` : "Generales de la granja"}`}
           {printDoc.tipo === "planta_historial" && "Historial de movimientos de planta"}
-          {" · Emitido: "}{hoyStr()}
+          {" � Emitido: "}{hoyStr()}
         </div>
 
-        {printDoc.tipo === "planta_historial" && <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Fecha", "Tipo", "Categoría", "Fórmula / detalle", "Cantidad", "Responsable"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{printDoc.items.map((m, i) => <tr key={m.id || i}><td style={celda}>{m.fecha}</td><td style={celda}>{m.tipo}</td><td style={celda}>{m.categoria}</td><td style={celda}>{m.formula} {m.detalle || m.numBache || m.numNucleo || ""}</td><td style={celda}>{m.categoria === "Núcleo" ? `${m.porciones || 0} porciones` : `${m.kg || 0} kg`}</td><td style={celda}>{mostrarNombre(m.responsable || m.por || "—")}</td></tr>)}</tbody></table>}
+        {printDoc.tipo === "planta_historial" && <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Fecha", "Tipo", "Categor�a", "F�rmula / detalle", "Cantidad", "Responsable"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{printDoc.items.map((m, i) => <tr key={m.id || i}><td style={celda}>{m.fecha}</td><td style={celda}>{m.tipo}</td><td style={celda}>{m.categoria}</td><td style={celda}>{m.formula} {m.detalle || m.numBache || m.numNucleo || ""}</td><td style={celda}>{m.categoria === "N�cleo" ? `${m.porciones || 0} porciones` : `${m.kg || 0} kg`}</td><td style={celda}>{mostrarNombre(m.responsable || m.por || "-")}</td></tr>)}</tbody></table>}
 
         {printDoc.tipo === "actividades" && (() => {
           const programadas = actividadesDelDia(tareasProgramadas, printDoc.fecha, printDoc.lote || "");
@@ -2822,30 +2826,30 @@ export default function App() {
           const manuales = printDoc.manuales || [];
           return <div style={{ fontSize: 14, lineHeight: 1.5 }}>
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, padding: "12px 0", borderTop: "2px solid #222", borderBottom: "1px solid #aaa" }}>
-              <b>Fecha de trabajo: {fecha}</b><b>{l ? `GALERA ${l.galpon} · LOTE ${l.lote || ""}` : "ACTIVIDADES GENERALES"}</b>
+              <b>Fecha de trabajo: {fecha}</b><b>{l ? `GALERA ${l.galpon} � LOTE ${l.lote || ""}` : "ACTIVIDADES GENERALES"}</b>
             </div>
             <div style={{ marginTop: 16, fontWeight: 700, fontSize: 17 }}>Obligatorias por fecha ({programadas.length})</div>
-            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Programadas para hoy o atrasadas. Marca cada casilla al terminar y registra su realización en la app.</p>
+            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Programadas para hoy o atrasadas. Marca cada casilla al terminar y registra su realizaci�n en la app.</p>
             {programadas.map((t, i) => <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 13, padding: "11px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}>
-              <span style={{ fontSize: 22, lineHeight: 1 }}>☐</span><div><b>{i + 1}. {t.nombre}</b><div style={{ color: t.programada < printDoc.fecha ? "#9a3d20" : "#555", fontSize: 12 }}>{t.programada < printDoc.fecha ? `Atrasada · programada ${t.programada.split("-").reverse().join("/")}` : "Para hoy"}</div></div>
+              <span style={{ fontSize: 22, lineHeight: 1 }}>?</span><div><b>{i + 1}. {t.nombre}</b><div style={{ color: t.programada < printDoc.fecha ? "#9a3d20" : "#555", fontSize: 12 }}>{t.programada < printDoc.fecha ? `Atrasada � programada ${t.programada.split("-").reverse().join("/")}` : "Para hoy"}</div></div>
             </div>)}
-            {!programadas.length && <p>No hay actividades programadas pendientes para este ámbito.</p>}
-            <div style={{ marginTop: 20, fontWeight: 700, fontSize: 17 }}>Pendientes detectados por auditoría ({hallazgos.length})</div>
-            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Labores que requieren atención según los controles registrados; confirma en campo antes de ejecutarlas.</p>
-            {hallazgos.map((t, i) => <div key={t.id} style={{ display: "flex", gap: 13, padding: "10px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}><span style={{ fontSize: 22, lineHeight: 1 }}>☐</span><div><b>{i + 1}. {t.nombre}</b><div style={{ color: "#555", fontSize: 12 }}>{t.detalle}</div></div></div>)}
-            {!hallazgos.length && <p>Sin pendientes detectados por las reglas de auditoría para este ámbito.</p>}
+            {!programadas.length && <p>No hay actividades programadas pendientes para este �mbito.</p>}
+            <div style={{ marginTop: 20, fontWeight: 700, fontSize: 17 }}>Pendientes detectados por auditor�a ({hallazgos.length})</div>
+            <p style={{ fontSize: 12, color: "#444", marginTop: 4 }}>Labores que requieren atenci�n seg�n los controles registrados; confirma en campo antes de ejecutarlas.</p>
+            {hallazgos.map((t, i) => <div key={t.id} style={{ display: "flex", gap: 13, padding: "10px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}><span style={{ fontSize: 22, lineHeight: 1 }}>?</span><div><b>{i + 1}. {t.nombre}</b><div style={{ color: "#555", fontSize: 12 }}>{t.detalle}</div></div></div>)}
+            {!hallazgos.length && <p>Sin pendientes detectados por las reglas de auditor�a para este �mbito.</p>}
             {manuales.length > 0 && <><div style={{ marginTop: 20, fontWeight: 700, fontSize: 17 }}>Tareas agregadas para este reporte ({manuales.length})</div>
-              {manuales.map((t, i) => <div key={i} style={{ display: "flex", gap: 13, padding: "10px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}><span style={{ fontSize: 22, lineHeight: 1 }}>☐</span><b>{i + 1}. {t}</b></div>)}</>}
-            <div style={{ display: "flex", gap: 30, marginTop: 50, fontSize: 12 }}><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Nombre y firma de quien realizó</span><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Revisado por</span></div>
+              {manuales.map((t, i) => <div key={i} style={{ display: "flex", gap: 13, padding: "10px 4px", borderBottom: "1px solid #ccc", breakInside: "avoid" }}><span style={{ fontSize: 22, lineHeight: 1 }}>?</span><b>{i + 1}. {t}</b></div>)}</>}
+            <div style={{ display: "flex", gap: 30, marginTop: 50, fontSize: 12 }}><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Nombre y firma de quien realiz�</span><span style={{ flex: 1, borderTop: "1px solid #333", paddingTop: 5 }}>Revisado por</span></div>
             <div style={{ marginTop: 30, fontSize: 12 }}>Observaciones: ________________________________________________________________</div>
           </div>;
         })()}
 
         {printDoc.tipo === "vacunas" && l && (
           <>
-            <div style={{ fontSize: 12.5, marginBottom: 10 }}>Nacimiento: {l.nac.split("-").reverse().join("/")} · Edad actual: {semanasDe(l.nac).toFixed(1)} semanas ({Math.floor(semanasDe(l.nac) * 7)} días) · Aves: {l.aves.toLocaleString()}</div>
+            <div style={{ fontSize: 12.5, marginBottom: 10 }}>Nacimiento: {l.nac.split("-").reverse().join("/")} � Edad actual: {semanasDe(l.nac).toFixed(1)} semanas ({Math.floor(semanasDe(l.nac) * 7)} d�as) � Aves: {l.aves.toLocaleString()}</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={th}>Día</th><th style={th}>Vacuna</th><th style={th}>Cepa</th><th style={th}>Vía</th><th style={th}>Proveedor</th><th style={th}>Programada</th><th style={th}>Aplicada</th></tr></thead>
+              <thead><tr><th style={th}>D�a</th><th style={th}>Vacuna</th><th style={th}>Cepa</th><th style={th}>V�a</th><th style={th}>Proveedor</th><th style={th}>Programada</th><th style={th}>Aplicada</th></tr></thead>
               <tbody>
                 {planVac.map(p2 => {
                   const ev = estadoVacunaLote(l, p2);
@@ -2853,7 +2857,7 @@ export default function App() {
                     <tr key={p2.id}>
                       <td style={celda}>{p2.dia}</td><td style={celda}>{p2.vacuna}</td><td style={celda}>{p2.cepa}</td>
                       <td style={celda}>{p2.via}</td><td style={celda}>{p2.proveedor}</td><td style={celda}>{ev.fecha}</td>
-                      <td style={{ ...celda, fontWeight: 600 }}>{ev.estado === "aplicada" ? `✓ ${ev.fechaAplicada || ""}` : ev.estado === "cubierta" ? "Levante (proveedor)" : ev.estado.toUpperCase()}</td>
+                      <td style={{ ...celda, fontWeight: 600 }}>{ev.estado === "aplicada" ? `� ${ev.fechaAplicada || ""}` : ev.estado === "cubierta" ? "Levante (proveedor)" : ev.estado.toUpperCase()}</td>
                     </tr>
                   );
                 })}
@@ -2861,7 +2865,7 @@ export default function App() {
             </table>
             <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
               <span>_______________________________<br />Responsable de granja</span>
-              <span>_______________________________<br />Dr. Heiner Hernández Ávila · C.M.V #666</span>
+              <span>_______________________________<br />Dr. Heiner Hern�ndez Avila � C.M.V #666</span>
             </div>
           </>
         )}
@@ -2870,20 +2874,20 @@ export default function App() {
           const abiertas = cxp.facturas.filter(f => (Number(f.monto || 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0)) > 0.005)
             .sort((a, b) => aDate(a.vence) - aDate(b.vence));
           const saldoF = (f) => Number(f.monto || 0) + (cxp.notas || []).filter(n2 => n2.facturaId === f.id).reduce((a, n2) => a + (n2.tipo === "ND" ? 1 : -1) * Number(n2.monto || 0), 0) - cxp.pagos.filter(pg => pg.facturaId === f.id).reduce((a, pg) => a + Number(pg.monto || 0), 0);
-          const col = (n) => "₡" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const col = (n) => "?" + Number(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
           const buck = (f) => { const d = Math.round((hoyD - aDate(f.vence)) / 86400000); return d <= 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : 3; };
           const porProv2 = {};
           abiertas.forEach(f => { if (!porProv2[f.proveedor]) porProv2[f.proveedor] = [0, 0, 0, 0]; porProv2[f.proveedor][buck(f)] += saldoF(f); });
           return (
             <>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Antigüedad de saldos (aging)</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Antig�edad de saldos (aging)</div>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-                <thead><tr><th style={th}>Proveedor</th><th style={th}>Corriente</th><th style={th}>1–30 d</th><th style={th}>31–60 d</th><th style={th}>+60 d</th><th style={th}>Total</th></tr></thead>
+                <thead><tr><th style={th}>Proveedor</th><th style={th}>Corriente</th><th style={th}>1-30 d</th><th style={th}>31-60 d</th><th style={th}>+60 d</th><th style={th}>Total</th></tr></thead>
                 <tbody>
                   {Object.entries(porProv2).map(([pv, b]) => (
                     <tr key={pv}>
                       <td style={{ ...celda, fontWeight: 600 }}>{pv}</td>
-                      {[0, 1, 2, 3].map(i2 => <td key={i2} style={{ ...celda, textAlign: "right" }}>{b[i2] ? col(b[i2]) : "—"}</td>)}
+                      {[0, 1, 2, 3].map(i2 => <td key={i2} style={{ ...celda, textAlign: "right" }}>{b[i2] ? col(b[i2]) : "-"}</td>)}
                       <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{col(b[0] + b[1] + b[2] + b[3])}</td>
                     </tr>
                   ))}
@@ -2896,14 +2900,14 @@ export default function App() {
               </table>
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Detalle de facturas pendientes</div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr><th style={th}>Proveedor</th><th style={th}>No.</th><th style={th}>Emisión</th><th style={th}>Vence</th><th style={th}>Categoría</th><th style={th}>Original</th><th style={th}>Saldo</th></tr></thead>
+                <thead><tr><th style={th}>Proveedor</th><th style={th}>No.</th><th style={th}>Emisi�n</th><th style={th}>Vence</th><th style={th}>Categor�a</th><th style={th}>Original</th><th style={th}>Saldo</th></tr></thead>
                 <tbody>
                   {abiertas.map(f => (
                     <tr key={f.id}>
                       <td style={{ ...celda, fontWeight: 600 }}>{f.proveedor}</td>
                       <td style={celda}>{f.numero || "s/n"}</td>
                       <td style={celda}>{f.emision.slice(0, 5)}</td>
-                      <td style={{ ...celda, fontWeight: aDate(f.vence) < hoyD ? 700 : 400 }}>{f.vence.slice(0, 5)}{aDate(f.vence) < hoyD ? " ⚠" : ""}</td>
+                      <td style={{ ...celda, fontWeight: aDate(f.vence) < hoyD ? 700 : 400 }}>{f.vence.slice(0, 5)}{aDate(f.vence) < hoyD ? " ?" : ""}</td>
                       <td style={celda}>{f.categoria}</td>
                       <td style={{ ...celda, textAlign: "right" }}>{col(f.monto)}</td>
                       <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{col(saldoF(f))}</td>
@@ -2940,55 +2944,55 @@ export default function App() {
                 return (
                   <div key={ri} style={{ marginBottom: 22, pageBreakInside: "avoid" }}>
                     <div style={{ fontSize: 14, fontWeight: 700, background: "#eee", padding: "6px 10px", borderRadius: 6, marginBottom: 8 }}>
-                      GALLINERO {l2.galpon} · {l2.raza} · {semanasDe(l2.nac).toFixed(1)} sem · {l2.aves.toLocaleString()} aves {r.por ? ` · Capturó: ${mostrarNombre(r.por)}` : ""}
+                      GALLINERO {l2.galpon} � {l2.raza} � {semanasDe(l2.nac).toFixed(1)} sem � {l2.aves.toLocaleString()} aves {r.por ? ` � Captur�: ${mostrarNombre(r.por)}` : ""}
                     </div>
                     <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 8 }}>
                       <tbody>
                         <tr>
-                          <td style={celda}><b>1. Producción:</b> {r.cartones} cartones = {huevos.toFixed(0)} huevos · {r.pesoKg} kg · Postura {l2.aves ? ((huevos / l2.aves) * 100).toFixed(1) : "—"}%</td>
+                          <td style={celda}><b>1. Producci�n:</b> {r.cartones} cartones = {huevos.toFixed(0)} huevos � {r.pesoKg} kg � Postura {l2.aves ? ((huevos / l2.aves) * 100).toFixed(1) : "-"}%</td>
                           <td style={celda}><b>2. Quebrado:</b> {r.quebrados}</td>
                         </tr>
                         <tr>
-                          <td style={celda}><b>3. Mortalidad:</b> {r.muertas} ave(s){r.dx ? ` · Dx: ${r.dx}` : ""}</td>
+                          <td style={celda}><b>3. Mortalidad:</b> {r.muertas} ave(s){r.dx ? ` � Dx: ${r.dx}` : ""}</td>
                           <td style={celda}><b>Saldo aves:</b> {l2.aves.toLocaleString()}</td>
                         </tr>
                         <tr>
-                          <td style={celda}><b>7. Alimento:</b> 6am {r.alimento6am || "—"} kg · 1pm {r.alimento1pm || "—"} kg · Total {f2Dec(r.alimentoKg)} kg (esperado {f2Dec(r.alimentoEsperadoKg)} kg)</td>
-                          <td style={celda}><b>Agua:</b> {r.aguaL ? `${r.aguaL} L` : "—"}</td>
+                          <td style={celda}><b>7. Alimento:</b> 6am {r.alimento6am || "-"} kg � 1pm {r.alimento1pm || "-"} kg � Total {f2Dec(r.alimentoKg)} kg (esperado {f2Dec(r.alimentoEsperadoKg)} kg)</td>
+                          <td style={celda}><b>Agua:</b> {r.aguaL ? `${r.aguaL} L` : "-"}</td>
                         </tr>
                       </tbody>
                     </table>
                     {(fumsG.length > 0 || medsG.length > 0 || vitsG.length > 0) && (
                       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 8 }}>
                         <tbody>
-                          {fumsG.map((m, i) => <tr key={"f" + i}><td style={celda}><b>4. Fumigación:</b> {m.producto} · {m.dosis}{m.hora ? ` · ${m.hora}` : ""}</td></tr>)}
-                          {medsG.map((m, i) => <tr key={"m" + i}><td style={celda}><b>5. Medicamento:</b> {m.producto} · {m.dosis}{m.enfermedad ? ` · Dx: ${m.enfermedad}` : ""}{m.retiroDias > 0 ? ` · RETIRO ${m.retiroDias} días (hasta ${m.retiroHasta})` : ""}</td></tr>)}
-                          {vitsG.map((m, i) => <tr key={"v" + i}><td style={celda}><b>6. Vitamina:</b> {m.producto} · {m.dosis}</td></tr>)}
+                          {fumsG.map((m, i) => <tr key={"f" + i}><td style={celda}><b>4. Fumigaci�n:</b> {m.producto} � {m.dosis}{m.hora ? ` � ${m.hora}` : ""}</td></tr>)}
+                          {medsG.map((m, i) => <tr key={"m" + i}><td style={celda}><b>5. Medicamento:</b> {m.producto} � {m.dosis}{m.enfermedad ? ` � Dx: ${m.enfermedad}` : ""}{m.retiroDias > 0 ? ` � RETIRO ${m.retiroDias} d�as (hasta ${m.retiroHasta})` : ""}</td></tr>)}
+                          {vitsG.map((m, i) => <tr key={"v" + i}><td style={celda}><b>6. Vitamina:</b> {m.producto} � {m.dosis}</td></tr>)}
                         </tbody>
                       </table>
                     )}
                     {trabajosHechos.length > 0 && (
-                      <div style={{ fontSize: 11.5, marginBottom: 8 }}><b>8. Trabajos realizados:</b> {trabajosHechos.map(t => `☑ ${t}`).join(" · ")}</div>
+                      <div style={{ fontSize: 11.5, marginBottom: 8 }}><b>8. Trabajos realizados:</b> {trabajosHechos.map(t => `? ${t}`).join(" � ")}</div>
                     )}
                     {r.chequeo && (
                       <div style={{ fontSize: 11.5, marginBottom: 4 }}>
                         <b>9. Chequeo sanitario:</b> {[
-                          ch.cascara && `Cáscara: ${ch.cascara}`, ch.cresta && `Cresta: ${ch.cresta}`,
+                          ch.cascara && `C�scara: ${ch.cascara}`, ch.cresta && `Cresta: ${ch.cresta}`,
                           ch.consumoObs && `Consumo obs.: ${ch.consumoObs}`, ch.aguaObs && `Agua obs.: ${ch.aguaObs}`,
                           ch.heces && `Heces: ${ch.heces}`, ch.respiratorio && `Respiratorio: ${ch.respiratorio}`,
-                          ch.secrecion && `Secreción: ${ch.secrecion}`, ch.comederos && `Comederos: ${ch.comederos}`,
-                          ch.ph && `pH: ${ch.ph}`, ch.cloro && `Cloro: ${ch.cloro} ppm`, ch.temp && `Temp: ${ch.temp}°C`,
+                          ch.secrecion && `Secreci�n: ${ch.secrecion}`, ch.comederos && `Comederos: ${ch.comederos}`,
+                          ch.ph && `pH: ${ch.ph}`, ch.cloro && `Cloro: ${ch.cloro} ppm`, ch.temp && `Temp: ${ch.temp}�C`,
                           ch.humedad && `Humedad: ${ch.humedad}%`, ch.luz && `Luz: ${ch.luz} h`, ch.obs && `Obs: ${ch.obs}`,
-                        ].filter(Boolean).join(" · ")}
+                        ].filter(Boolean).join(" � ")}
                       </div>
                     )}
                   </div>
                 );
               })}
-              {notaDia2 && <div style={{ fontSize: 12, marginBottom: 14 }}><b>Bitácora:</b> {notaDia2.texto} {notaDia2.por ? `(${mostrarNombre(notaDia2.por)})` : ""}</div>}
+              {notaDia2 && <div style={{ fontSize: 12, marginBottom: 14 }}><b>Bit�cora:</b> {notaDia2.texto} {notaDia2.por ? `(${mostrarNombre(notaDia2.por)})` : ""}</div>}
               <div style={{ marginTop: 36, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span>_______________________________<br />Encargado de granja</span>
-                <span>_______________________________<br />Supervisión / Gerencia</span>
+                <span>_______________________________<br />Supervisi�n / Gerencia</span>
               </div>
             </>
           );
@@ -2996,7 +3000,7 @@ export default function App() {
 
         {(printDoc.tipo === "bache" || printDoc.tipo === "nucleo") && (() => {
           const f = recetas.formulas[printDoc.formula];
-          if (!f) return <div>Fórmula no encontrada.</div>;
+          if (!f) return <div>F�rmula no encontrada.</div>;
           const esc = (printDoc.tipo === "bache" ? Number(printDoc.kg || recetas.bacheKg) / recetas.bacheKg : Number(printDoc.baches || 1));
           const items = Object.entries(f.items).map(([c, kg]) => {
             const mp = mpCat.find(m => m.c === c) || { n: c, pres: 1 };
@@ -3007,33 +3011,34 @@ export default function App() {
             const rem = conQ && x.mp.pres > 1 ? x.kg - sacos * x.mp.pres : x.kg;
             return (
               <tr key={x.c}>
-                <td style={{ ...celda, width: 26, fontSize: 15 }}>☐</td>
+                <td style={{ ...celda, width: 26, fontSize: 15 }}>?</td>
                 <td style={celda}>{x.mp.n}</td>
                 <td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{x.kg.toFixed(2)}</td>
-                {conQ && <td style={{ ...celda, textAlign: "right" }}>{x.mp.pres > 1 ? sacos : "—"}</td>}
+                {conQ && <td style={{ ...celda, textAlign: "right" }}>{x.mp.pres > 1 ? sacos : "-"}</td>}
                 {conQ && <td style={{ ...celda, textAlign: "right" }}>{x.mp.pres > 1 ? rem.toFixed(2) : "granel"}</td>}
               </tr>
             );
           };
           const cab = (conQ) => (
-            <tr><th style={th}>✓</th><th style={th}>Materia prima</th><th style={{ ...th, textAlign: "right" }}>Peso (kg)</th>
+            <tr><th style={th}>�</th><th style={th}>Materia prima</th><th style={{ ...th, textAlign: "right" }}>Peso (kg)</th>
               {conQ && <th style={{ ...th, textAlign: "right" }}>Sacos</th>}{conQ && <th style={{ ...th, textAlign: "right" }}>Kg remanentes</th>}</tr>
           );
           const kgNuc = items.filter(x => x.bascula === 4).reduce((a, x) => a + x.kg, 0);
+          const usaNucleoEnBache = f.uso === "Aves" && kgNuc > 0;
           const total = items.reduce((a, x) => a + x.kg, 0);
           return (
             <>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 12.5 }}>
                 <tbody>
-                  <tr><td style={celda}><b>Fórmula:</b> {printDoc.formula}</td><td style={celda}><b>No. de lote:</b> ______________</td></tr>
+                  <tr><td style={celda}><b>F�rmula:</b> {printDoc.formula}</td><td style={celda}><b>No. de lote:</b> ______________</td></tr>
                   <tr><td style={celda}><b>Fecha:</b> ______________</td><td style={celda}><b>Operador:</b> ______________</td></tr>
                   <tr><td style={celda}><b>Hora inicio:</b> ______________</td><td style={celda}><b>Hora fin:</b> ______________</td></tr>
-                  <tr><td style={celda}><b>{printDoc.tipo === "bache" ? "Kg a producir" : "Para baches de concentrado"}:</b> {printDoc.tipo === "bache" ? `${(recetas.bacheKg * esc).toFixed(0)} kg` : `${esc} bache(s) → ${kgNuc.toFixed(2)} kg de núcleo`}</td><td style={celda}></td></tr>
+                  <tr><td style={celda}><b>{printDoc.tipo === "bache" ? "Kg a producir" : "Para baches de concentrado"}:</b> {printDoc.tipo === "bache" ? `${(recetas.bacheKg * esc).toFixed(0)} kg` : `${esc} bache(s)  ${kgNuc.toFixed(2)} kg de n�cleo`}</td><td style={celda}></td></tr>
                 </tbody>
               </table>
               {printDoc.tipo === "bache" ? (
                 <>
-                  {[1, 2, 3].map(b => {
+                  {[1, 2, 3, ...(!usaNucleoEnBache ? [4] : [])].map(b => {
                     const its = items.filter(x => x.bascula === b);
                     if (!its.length) return null;
                     return (
@@ -3043,19 +3048,19 @@ export default function App() {
                       </div>
                     );
                   })}
-                  {kgNuc > 0 && (
+                  {usaNucleoEnBache && (
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{NOMBRE_BASCULA[4]}</div>
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>{cab(false)}</thead>
                         <tbody>
-                          <tr><td style={{ ...celda, width: 26, fontSize: 15 }}>☐</td><td style={celda}><b>NÚCLEO {printDoc.formula.toUpperCase()}</b> (premezcla — ver hoja de núcleo)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{kgNuc.toFixed(2)}</td></tr>
+                          <tr><td style={{ ...celda, width: 26, fontSize: 15 }}>?</td><td style={celda}><b>NUCLEO {printDoc.formula.toUpperCase()}</b> (premezcla - ver hoja de n�cleo)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{kgNuc.toFixed(2)}</td></tr>
                         </tbody>
                       </table>
                     </div>
                   )}
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, fontWeight: 700, padding: "8px 4px", borderTop: "2px solid #333" }}>
-                    <span>PESO TOTAL DE LA FÓRMULA</span><span>{total.toFixed(2)} kg</span>
+                    <span>PESO TOTAL DE LA FORMULA</span><span>{total.toFixed(2)} kg</span>
                   </div>
                 </>
               ) : (
@@ -3065,7 +3070,7 @@ export default function App() {
                     <tbody>{items.filter(x => x.bascula === 4).map(x => filaMP(x, false))}</tbody>
                   </table>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, fontWeight: 700, padding: "8px 4px", borderTop: "2px solid #333" }}>
-                    <span>TOTAL NÚCLEO ({esc} bache(s))</span><span>{kgNuc.toFixed(2)} kg</span>
+                    <span>TOTAL NUCLEO ({esc} bache(s))</span><span>{kgNuc.toFixed(2)} kg</span>
                   </div>
                 </>
               )}
@@ -3084,44 +3089,44 @@ export default function App() {
           const incluye = (...ids) => seccion === "todo" || ids.includes(seccion);
           const notasHoy = bitacora.filter(b => b.fecha === fHoy);
           const filasComparativo = dHoy ? [
-            ["Producción", dHoy.cartones, dAyer?.cartones, dFechaCercana?.cartones, " cart"],
+            ["Producci�n", dHoy.cartones, dAyer?.cartones, dFechaCercana?.cartones, " cart"],
             ["% Postura", dHoy.postura, dAyer?.postura, dFechaCercana?.postura, "%"],
             ["Consumo", dHoy.consumo, dAyer?.consumo, dFechaCercana?.consumo, " g/ave"],
-            ["Conversión", dHoy.conv, dAyer?.conv, dFechaCercana?.conv, ""],
+            ["Conversi�n", dHoy.conv, dAyer?.conv, dFechaCercana?.conv, ""],
             ["Mortalidad", dHoy.muertas, dAyer?.muertas, dFechaCercana?.muertas, " aves"],
             ["% Quebrado", dHoy.pctQueb, dAyer?.pctQueb, dFechaCercana?.pctQueb, "%"],
             ["Peso huevo", dHoy.pesoH, dAyer?.pesoH, dFechaCercana?.pesoH, " g"],
           ] : [];
           return (
             <>
-              {!dHoy && <div style={{ fontSize: 13.5, marginBottom: 14 }}>Sin registro de producción para hoy — el reporte muestra el último estado disponible.</div>}
+              {!dHoy && <div style={{ fontSize: 13.5, marginBottom: 14 }}>Sin registro de producci�n para hoy - el reporte muestra el �ltimo estado disponible.</div>}
               {incluye("resumen") && dHoy && (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Resumen del día ({fHoy}) — {avesTot.toLocaleString()} aves en {activos.length} gallineros</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Resumen del d�a ({fHoy}) - {avesTot.toLocaleString()} aves en {activos.length} gallineros</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                     <tbody>
                       <tr><td style={celda}>% de postura granja</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.postura.toFixed(1)}%</td>
                           <td style={celda}>Cartones producidos</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.cartones.toFixed(1)}</td></tr>
                       <tr><td style={celda}>Consumo (g/ave)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.consumo.toFixed(0)}</td>
-                          <td style={celda}>Peso prom. huevo</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pesoH ? dHoy.pesoH.toFixed(1) + " g" : "—"}</td></tr>
+                          <td style={celda}>Peso prom. huevo</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pesoH ? dHoy.pesoH.toFixed(1) + " g" : "-"}</td></tr>
                       <tr><td style={celda}>% quebrado</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pctQueb.toFixed(1)}%</td>
-                          <td style={celda}>Mortalidad del día</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.muertas}</td></tr>
+                          <td style={celda}>Mortalidad del d�a</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.muertas}</td></tr>
                     </tbody>
                   </table>
                 </>
               )}
               {incluye("comparativo") && dHoy && <>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Comparativo del día</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Comparativo del d�a</div>
                 <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-                  <thead><tr><th style={th}>Indicador</th><th style={th}>{fHoy}</th><th style={th}>{fAyer || "Anterior"}</th><th style={th}>{fechaComparacion || "Comparación"}</th></tr></thead>
-                  <tbody>{filasComparativo.map(([nombre, actual, anterior, otra, unidad]) => <tr key={nombre}><td style={{ ...celda, fontWeight: 600 }}>{nombre}</td><td style={celda}>{f2Dec(actual)}{unidad}</td><td style={celda}>{anterior == null ? "—" : `${f2Dec(anterior)}${unidad}`}</td><td style={celda}>{otra == null ? "—" : `${f2Dec(otra)}${unidad}`}</td></tr>)}</tbody>
+                  <thead><tr><th style={th}>Indicador</th><th style={th}>{fHoy}</th><th style={th}>{fAyer || "Anterior"}</th><th style={th}>{fechaComparacion || "Comparaci�n"}</th></tr></thead>
+                  <tbody>{filasComparativo.map(([nombre, actual, anterior, otra, unidad]) => <tr key={nombre}><td style={{ ...celda, fontWeight: 600 }}>{nombre}</td><td style={celda}>{f2Dec(actual)}{unidad}</td><td style={celda}>{anterior == null ? "-" : `${f2Dec(anterior)}${unidad}`}</td><td style={celda}>{otra == null ? "-" : `${f2Dec(otra)}${unidad}`}</td></tr>)}</tbody>
                 </table>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Postura vs genética por gallinero</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}><thead><tr><th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta genética</th><th style={th}>Brecha</th></tr></thead><tbody>{activos.map(l2 => { const r = registros.find(x => x.fecha === fHoy && x.lote === l2.id); const postura = r && l2.aves ? (r.cartones * HXC / l2.aves) * 100 : null; const meta = metaPosturaLote(l2, fHoy); return <tr key={l2.id}><td style={celda}>G{l2.galpon} · {l2.raza}</td><td style={celda}>{postura == null ? "—" : `${f2Dec(postura)}%`}</td><td style={celda}>{meta == null ? "—" : `${f2Dec(meta)}%`}</td><td style={celda}>{postura == null || meta == null ? "—" : `${postura - meta > 0 ? "+" : ""}${f2Dec(postura - meta)} pts`}</td></tr>; })}</tbody></table>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Postura vs gen�tica por gallinero</div>
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}><thead><tr><th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta gen�tica</th><th style={th}>Brecha</th></tr></thead><tbody>{activos.map(l2 => { const r = registros.find(x => x.fecha === fHoy && x.lote === l2.id); const postura = r && l2.aves ? (r.cartones * HXC / l2.aves) * 100 : null; const meta = metaPosturaLote(l2, fHoy); return <tr key={l2.id}><td style={celda}>G{l2.galpon} � {l2.raza}</td><td style={celda}>{postura == null ? "-" : `${f2Dec(postura)}%`}</td><td style={celda}>{meta == null ? "-" : `${f2Dec(meta)}%`}</td><td style={celda}>{postura == null || meta == null ? "-" : `${postura - meta > 0 ? "+" : ""}${f2Dec(postura - meta)} pts`}</td></tr>; })}</tbody></table>
               </>}
-              {incluye("kpis") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>KPIs técnicos y semáforo por gallinero</div>
+              {incluye("kpis") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>KPIs t�cnicos y sem�foro por gallinero</div>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-                <thead><tr><th style={th}>Gall.</th><th style={th}>Postura (vs tabla)</th><th style={th}>Consumo vs ración</th><th style={th}>Agua:alim</th><th style={th}>Mort. 7d</th><th style={th}>Peso vs tabla</th><th style={th}>Uniformidad</th></tr></thead>
+                <thead><tr><th style={th}>Gall.</th><th style={th}>Postura (vs tabla)</th><th style={th}>Consumo vs raci�n</th><th style={th}>Agua:alim</th><th style={th}>Mort. 7d</th><th style={th}>Peso vs tabla</th><th style={th}>Uniformidad</th></tr></thead>
                 <tbody>
                   {activos.map(l2 => {
                     const regsL = registros.filter(r => r.lote === l2.id).slice(0, 7);
@@ -3141,35 +3146,35 @@ export default function App() {
                     return (
                       <tr key={l2.id}>
                         <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
-                        <td style={celda}>{dPost != null ? `${post.toFixed(1)}% (${dPost > 0 ? "+" : ""}${dPost.toFixed(1)})` : "—"}</td>
-                        <td style={celda}>{dCons != null ? `${dCons > 0 ? "+" : ""}${dCons.toFixed(0)}%` : "—"}</td>
-                        <td style={celda}>{ratio != null ? ratio.toFixed(1) : "—"}</td>
-                        <td style={celda}>{pM7 != null ? `${pM7.toFixed(2)}%` : "—"}</td>
-                        <td style={celda}>{dPeso != null ? `${dPeso > 0 ? "+" : ""}${dPeso.toFixed(1)}%` : "—"}</td>
-                        <td style={celda}>{stP ? `${stP.unif.toFixed(0)}%` : "—"}</td>
+                        <td style={celda}>{dPost != null ? `${post.toFixed(1)}% (${dPost > 0 ? "+" : ""}${dPost.toFixed(1)})` : "-"}</td>
+                        <td style={celda}>{dCons != null ? `${dCons > 0 ? "+" : ""}${dCons.toFixed(0)}%` : "-"}</td>
+                        <td style={celda}>{ratio != null ? ratio.toFixed(1) : "-"}</td>
+                        <td style={celda}>{pM7 != null ? `${pM7.toFixed(2)}%` : "-"}</td>
+                        <td style={celda}>{dPeso != null ? `${dPeso > 0 ? "+" : ""}${dPeso.toFixed(1)}%` : "-"}</td>
+                        <td style={celda}>{stP ? `${stP.unif.toFixed(0)}%` : "-"}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
               </>}
-              {incluye("auditoria") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Auditoría de gestión ({auditoriaVisibles.length} hallazgo{auditoriaVisibles.length === 1 ? "" : "s"})</div>
-              {auditoriaVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 12 }}>✓ Sin hallazgos — tareas y controles al día.</div>}
+              {incluye("auditoria") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Auditor�a de gesti�n ({auditoriaVisibles.length} hallazgo{auditoriaVisibles.length === 1 ? "" : "s"})</div>
+              {auditoriaVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 12 }}>� Sin hallazgos - tareas y controles al d�a.</div>}
               {auditoriaVisibles.map((a, i) => (
                 <div key={"au" + i} style={{ fontSize: 12, padding: "5px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
-                  <b style={{ color: colorNivel[a.nivel] || "#333" }}>{a.nivel === "rojo" ? "🔴" : "🟡"}</b> {a.textoAjustado || a.texto}
+                  <b style={{ color: colorNivel[a.nivel] || "#333" }}>{a.nivel === "rojo" ? "??" : "??"}</b> {a.textoAjustado || a.texto}
                   {a.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(a.ajuste.responsable)}: {a.ajuste.razon}]</span>}
                 </div>
               ))}</>}
               {incluye("decisiones") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Para decidir hoy ({decisionesVisibles.length} punto{decisionesVisibles.length === 1 ? "" : "s"})</div>
-              {decisionesVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 14 }}>✓ Sin alertas — operación dentro de parámetros.</div>}
+              {decisionesVisibles.length === 0 && <div style={{ fontSize: 12.5, marginBottom: 14 }}>� Sin alertas - operaci�n dentro de par�metros.</div>}
               {decisionesVisibles.map((d, i) => (
                 <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: "1px solid #ddd", lineHeight: 1.45 }}>
-                  <b style={{ color: colorNivel[d.nivel] || "#333" }}>{d.nivel === "rojo" ? "🔴" : "🟡"}</b> {d.textoAjustado || d.texto}
+                  <b style={{ color: colorNivel[d.nivel] || "#333" }}>{d.nivel === "rojo" ? "??" : "??"}</b> {d.textoAjustado || d.texto}
                   {d.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(d.ajuste.responsable)}: {d.ajuste.razon}]</span>}
                 </div>
               ))}</>}
-              {incluye("bitacora") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Bitácora del día</div>{notasHoy.length ? notasHoy.map((n, i) => <div key={i} style={{ fontSize: 12.5, padding: "7px 0", borderBottom: "1px solid #ddd" }}>{n.texto}{n.por ? ` — ${mostrarNombre(n.por)}` : ""}</div>) : <div style={{ fontSize: 12.5 }}>Sin novedades registradas.</div>}</>}
+              {incluye("bitacora") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Bit�cora del d�a</div>{notasHoy.length ? notasHoy.map((n, i) => <div key={i} style={{ fontSize: 12.5, padding: "7px 0", borderBottom: "1px solid #ddd" }}>{n.texto}{n.por ? ` - ${mostrarNombre(n.por)}` : ""}</div>) : <div style={{ fontSize: 12.5 }}>Sin novedades registradas.</div>}</>}
               {incluye("economia") && (() => {
                 const precioCarton = Number(costos._precioVenta || 0);
                 const registrosDia = ultDia ? registros.filter(r => r.fecha === ultDia) : [];
@@ -3177,7 +3182,7 @@ export default function App() {
                 const costoAlimento = registrosDia.reduce((a, r) => { const lote = lotes.find(x => x.id === r.lote); return a + Number(r.alimentoKg || 0) * Number(costos[lote?.formula] || 0); }, 0);
                 const ingreso = precioCarton * cartones;
                 const margen = precioCarton > 0 && costoAlimento > 0 ? ingreso - costoAlimento : null;
-                return <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Economía — margen sobre alimento</div><table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr><td style={celda}>Cartones del día</td><td style={celda}>{f2Dec(cartones, "0")}</td></tr><tr><td style={celda}>Ingreso estimado</td><td style={celda}>{precioCarton > 0 ? colones(ingreso) : "Falta precio de venta"}</td></tr><tr><td style={celda}>Costo de alimento</td><td style={celda}>{costoAlimento > 0 ? colones(costoAlimento) : "Faltan costos por fórmula"}</td></tr><tr><td style={{ ...celda, fontWeight: 700 }}>Margen sobre alimento</td><td style={{ ...celda, fontWeight: 700 }}>{margen == null ? "—" : colones(margen)}</td></tr></tbody></table></>;
+                return <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Econom�a - margen sobre alimento</div><table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr><td style={celda}>Cartones del d�a</td><td style={celda}>{f2Dec(cartones, "0")}</td></tr><tr><td style={celda}>Ingreso estimado</td><td style={celda}>{precioCarton > 0 ? colones(ingreso) : "Falta precio de venta"}</td></tr><tr><td style={celda}>Costo de alimento</td><td style={celda}>{costoAlimento > 0 ? colones(costoAlimento) : "Faltan costos por f�rmula"}</td></tr><tr><td style={{ ...celda, fontWeight: 700 }}>Margen sobre alimento</td><td style={{ ...celda, fontWeight: 700 }}>{margen == null ? "-" : colones(margen)}</td></tr></tbody></table></>;
               })()}
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span>_______________________________<br />Encargado de granja</span>
@@ -3195,20 +3200,20 @@ export default function App() {
           ) : null;
           return (
             <>
-              {!mov && <div style={{ fontSize: 13.5 }}>Aún no hay movimientos de bodega guardados.</div>}
+              {!mov && <div style={{ fontSize: 13.5 }}>A�n no hay movimientos de bodega guardados.</div>}
               {mov && (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Movimiento del {mov.fecha} (en cartones)</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                     <tbody>
-                      {fila("Saldo inicial del día", saldoPrevio, "=")}
+                      {fila("Saldo inicial del d�a", saldoPrevio, "=")}
                       {fila("Huevo producido", mov.producido, "+")}
                       {fila("Huevo comprado", mov.comprado, "+")}
-                      {fila("Salida neta a ruta", mov.rutaNeta, "−")}
-                      {fila("Vendido en granja", mov.vendGranja, "−")}
-                      {fila("Destruido / quebrado", mov.destruido, "−")}
-                      {fila("Regalado", mov.regalado, "−")}
-                      {mov.ajusteConteo != null && <tr><td style={celda}>Ajuste por conteo físico</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{mov.ajusteConteo} ({mov.difAjuste > 0 ? "+" : ""}{mov.difAjuste})</td></tr>}
+                      {fila("Salida neta a ruta", mov.rutaNeta, "-")}
+                      {fila("Vendido en granja", mov.vendGranja, "-")}
+                      {fila("Destruido / quebrado", mov.destruido, "-")}
+                      {fila("Regalado", mov.regalado, "-")}
+                      {mov.ajusteConteo != null && <tr><td style={celda}>Ajuste por conteo f�sico</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{mov.ajusteConteo} ({mov.difAjuste > 0 ? "+" : ""}{mov.difAjuste})</td></tr>}
                       <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{f2Dec(mov.saldoFinal)}</td></tr>
                     </tbody>
                   </table>
@@ -3239,14 +3244,14 @@ export default function App() {
                       {bodegaMovs.filter(m2 => fechaHistorialISO(m2.fecha) <= fechaHistorialISO(mov.fecha)).slice(0, 7).map((m2, i) => (
                         <tr key={i}>
                           <td style={celda}>{m2.fecha}</td>
-                          <td style={celda}>{m2.producido ?? "—"}</td>
-                          <td style={celda}>{m2.rutaNeta ?? "—"}</td>
+                          <td style={celda}>{m2.producido ?? "-"}</td>
+                          <td style={celda}>{m2.rutaNeta ?? "-"}</td>
                           <td style={{ ...celda, fontWeight: 600 }}>{f2Dec(m2.saldoFinal)}{m2.ajusteConteo != null ? " *" : ""}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <div style={{ fontSize: 10.5, color: "#555", marginTop: 4 }}>* día con ajuste por conteo físico</div>
+                  <div style={{ fontSize: 10.5, color: "#555", marginTop: 4 }}>* d�a con ajuste por conteo f�sico</div>
                 </>
               )}
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
@@ -3263,29 +3268,29 @@ export default function App() {
             <>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 18 }}>
                 <thead><tr>
-                  <th style={th}>Gallinero</th><th style={th}>Lote</th><th style={th}>Genética</th><th style={th}>Nacimiento</th>
+                  <th style={th}>Gallinero</th><th style={th}>Lote</th><th style={th}>Gen�tica</th><th style={th}>Nacimiento</th>
                   <th style={th}>Edad</th><th style={th}>Aves vivas</th><th style={th}>Proveedor pollonas</th>
                 </tr></thead>
                 <tbody>
                   {activos.map(l2 => (
                     <tr key={l2.id}>
                       <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
-                      <td style={celda}>{l2.lote || "—"}</td>
+                      <td style={celda}>{l2.lote || "-"}</td>
                       <td style={celda}>{l2.raza}</td>
                       <td style={celda}>{l2.nac.split("-").reverse().join("/")}</td>
                       <td style={celda}>{semanasDe(l2.nac).toFixed(1)} sem</td>
                       <td style={{ ...celda, fontWeight: 700 }}>{l2.aves.toLocaleString()}</td>
-                      <td style={celda}>{l2.proveedor || "—"}</td>
+                      <td style={celda}>{l2.proveedor || "-"}</td>
                     </tr>
                   ))}
                   <tr><td style={{ ...celda, fontWeight: 700 }} colSpan={5}>TOTAL</td><td style={{ ...celda, fontWeight: 700 }}>{activos.reduce((a, x) => a + x.aves, 0).toLocaleString()}</td><td style={celda}></td></tr>
                 </tbody>
               </table>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Desempeño</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Desempe�o</div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead><tr>
-                  <th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta tabla</th><th style={th}>Fórmula</th>
-                  <th style={th}>Ración</th><th style={th}>Consumo real</th><th style={th}>Mort. día</th><th style={th}>Mort. 7d</th><th style={th}>Mort. acum.</th>
+                  <th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta tabla</th><th style={th}>F�rmula</th>
+                  <th style={th}>Raci�n</th><th style={th}>Consumo real</th><th style={th}>Mort. d�a</th><th style={th}>Mort. 7d</th><th style={th}>Mort. acum.</th>
                 </tr></thead>
                 <tbody>
                   {activos.map(l2 => {
@@ -3299,13 +3304,13 @@ export default function App() {
                     return (
                       <tr key={l2.id}>
                         <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
-                        <td style={{ ...celda, fontWeight: 600 }}>{post != null ? `${post.toFixed(1)}%` : "—"}</td>
-                        <td style={celda}>{metaPosturaLote(l2, ult?.fecha) != null ? `${metaPosturaLote(l2, ult?.fecha).toFixed(1)}%` : "—"}</td>
-                        <td style={celda}>{l2.formula || "—"}</td>
-                        <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "—"}</td>
-                        <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "—"}</td>
-                        <td style={celda}>{mDia != null && l2.aves ? `${mDia} (${((mDia / l2.aves) * 100).toFixed(2)}%)` : "—"}</td>
-                        <td style={celda}>{l2.aves ? `${mSem} (${((mSem / l2.aves) * 100).toFixed(2)}%)` : "—"}</td>
+                        <td style={{ ...celda, fontWeight: 600 }}>{post != null ? `${post.toFixed(1)}%` : "-"}</td>
+                        <td style={celda}>{metaPosturaLote(l2, ult?.fecha) != null ? `${metaPosturaLote(l2, ult?.fecha).toFixed(1)}%` : "-"}</td>
+                        <td style={celda}>{l2.formula || "-"}</td>
+                        <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "-"}</td>
+                        <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "-"}</td>
+                        <td style={celda}>{mDia != null && l2.aves ? `${mDia} (${((mDia / l2.aves) * 100).toFixed(2)}%)` : "-"}</td>
+                        <td style={celda}>{l2.aves ? `${mSem} (${((mSem / l2.aves) * 100).toFixed(2)}%)` : "-"}</td>
                         <td style={celda}>{l2.mortAcum} ({mortPct2}%)</td>
                       </tr>
                     );
@@ -3314,7 +3319,7 @@ export default function App() {
               </table>
               {cerrados.length > 0 && (
                 <div style={{ fontSize: 11.5, color: "#555", marginTop: 12 }}>
-                  Lotes cerrados: {cerrados.map(c2 => `G${c2.galpon} ${c2.lote || ""} (${c2.raza}, cerrado ${c2.cerradoFecha || "—"})`).join(" · ")}
+                  Lotes cerrados: {cerrados.map(c2 => `G${c2.galpon} ${c2.lote || ""} (${c2.raza}, cerrado ${c2.cerradoFecha || "-"})`).join(" � ")}
                 </div>
               )}
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
@@ -3341,7 +3346,7 @@ export default function App() {
             <>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 18 }}>
                 <thead><tr>
-                  <th style={th}>Gallinero</th><th style={th}>Genética / Edad</th><th style={th}>Fecha (n aves)</th>
+                  <th style={th}>Gallinero</th><th style={th}>Gen�tica / Edad</th><th style={th}>Fecha (n aves)</th>
                   <th style={th}>Promedio</th><th style={th}>Meta tabla</th><th style={th}>Brecha</th>
                   <th style={th}>Uniformidad</th><th style={th}>CV</th><th style={th}>Vs pesaje anterior</th>
                 </tr></thead>
@@ -3349,36 +3354,36 @@ export default function App() {
                   {filasP.map(({ l2, ult, ant, st, stAnt, meta }) => (
                     <tr key={l2.id}>
                       <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
-                      <td style={celda}>{l2.raza} · {semanasDe(l2.nac).toFixed(1)} sem</td>
+                      <td style={celda}>{l2.raza} � {semanasDe(l2.nac).toFixed(1)} sem</td>
                       <td style={celda}>{ult.fecha} ({ult.pesos.length})</td>
                       <td style={{ ...celda, fontWeight: 700 }}>{st.prom.toFixed(0)} g</td>
-                      <td style={celda}>{meta ? `${meta} g` : "—"}</td>
-                      <td style={{ ...celda, fontWeight: 600 }}>{meta ? `${(st.prom - meta) >= 0 ? "+" : ""}${(st.prom - meta).toFixed(0)} g (${(((st.prom - meta) / meta) * 100).toFixed(1)}%)` : "—"}</td>
+                      <td style={celda}>{meta ? `${meta} g` : "-"}</td>
+                      <td style={{ ...celda, fontWeight: 600 }}>{meta ? `${(st.prom - meta) >= 0 ? "+" : ""}${(st.prom - meta).toFixed(0)} g (${(((st.prom - meta) / meta) * 100).toFixed(1)}%)` : "-"}</td>
                       <td style={celda}>{st.unif.toFixed(1)}% <span style={{ fontSize: 10.5 }}>(meta &gt;85%)</span></td>
                       <td style={celda}>{st.cv.toFixed(1)}%</td>
-                      <td style={celda}>{ant ? `${stAnt.prom.toFixed(0)} g (${ant.fecha.slice(0, 5)}) → ${(st.prom - stAnt.prom) >= 0 ? "+" : ""}${(st.prom - stAnt.prom).toFixed(0)} g` : "primer pesaje"}</td>
+                      <td style={celda}>{ant ? `${stAnt.prom.toFixed(0)} g (${ant.fecha.slice(0, 5)})  ${(st.prom - stAnt.prom) >= 0 ? "+" : ""}${(st.prom - stAnt.prom).toFixed(0)} g` : "primer pesaje"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Contexto de alimentación</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Contexto de alimentaci�n</div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr><th style={th}>Gallinero</th><th style={th}>Aves vivas</th><th style={th}>Fórmula</th><th style={th}>Ración definida</th><th style={th}>Consumo real último día</th></tr></thead>
+                <thead><tr><th style={th}>Gallinero</th><th style={th}>Aves vivas</th><th style={th}>F�rmula</th><th style={th}>Raci�n definida</th><th style={th}>Consumo real �ltimo d�a</th></tr></thead>
                 <tbody>
                   {filasP.map(({ l2, gAveReal }) => (
                     <tr key={l2.id}>
                       <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
                       <td style={celda}>{l2.aves.toLocaleString()}</td>
-                      <td style={celda}>{l2.formula || "—"}</td>
-                      <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "—"}</td>
-                      <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "—"}</td>
+                      <td style={celda}>{l2.formula || "-"}</td>
+                      <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "-"}</td>
+                      <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12, gap: 8, flexWrap: "wrap" }}>
                 <span>____________________________<br />Encargado de granja</span>
-                <span>____________________________<br />Dr. Heiner Hernández Ávila<br />C.M.V #666</span>
+                <span>____________________________<br />Dr. Heiner Hern�ndez Avila<br />C.M.V #666</span>
                 <span>____________________________<br />Nutricionista</span>
               </div>
             </>
@@ -3397,35 +3402,35 @@ export default function App() {
           const unif = pesUlt && promP ? (pesUlt.pesos.filter(x => Math.abs(x - promP) <= 0.1 * promP).length / pesUlt.pesos.length) * 100 : null;
           const filas = [
             ["Edad del lote (semanas)", semanasDe(l.nac).toFixed(1), ""],
-            ["Genética", l.raza, ""],
+            ["Gen�tica", l.raza, ""],
             ["Aves vivas", l.aves.toLocaleString(), ""],
-            ["Mortalidad del día", reg.muertas ?? "—", "0–2 aves/1000"],
-            ["% de postura", huevos > 0 ? `${((huevos / l.aves) * 100).toFixed(1)}%` : "—", metaPosturaLote(l, reg.fecha) != null ? `${metaPosturaLote(l, reg.fecha).toFixed(1)}% (tabla)` : "—"],
-            ["Huevos buenos", huevos > 0 ? (huevos - (reg.quebrados || 0)).toFixed(0) : "—", ""],
-            ["Huevos quebrados", reg.quebrados ?? "—", "<3%"],
-            ["Peso promedio del huevo (g)", pesoHuevo ? pesoHuevo.toFixed(1) : "—", "Según edad"],
-            ["Consumo alimento (g/ave/día)", gAve ? gAve.toFixed(0) : "—", l.racionGAve ? `${l.racionGAve} g (ración)` : "Según tabla"],
-            ["Consumo total alimento (kg)", reg.alimentoKg ?? "—", ""],
-            ["Consumo de agua (ml/ave/día)", mlAve ? mlAve.toFixed(0) : "—", gAve ? `${(gAve * 1.8).toFixed(0)}–${(gAve * 2.2).toFixed(0)} (1.8–2.2× alimento)` : "1.8–2.2× alimento"],
-            ["Peso corporal promedio (g)", promP ? promP.toFixed(0) : "—", pesUlt && metaPesoLote(l, pesUlt.fecha, pesUlt) ? `${metaPesoLote(l, pesUlt.fecha, pesUlt).toFixed(0)} g` : "—"],
-            ["Uniformidad del lote (%)", unif ? unif.toFixed(1) : "—", ">85%"],
-            ["Calidad de cáscara", ch.cascara || "—", "Buena"],
-            ["Color de cresta", ch.cresta || "—", "Roja intensa"],
-            ["Consumo alimento observado", ch.consumoObs || "—", "Normal"],
-            ["Consumo agua observado", ch.aguaObs || "—", "Normal"],
-            ["Consistencia de heces", ch.heces || "—", "Normal"],
-            ["Sonidos respiratorios", ch.respiratorio || "—", "No"],
-            ["Secreción nasal", ch.secrecion || "—", "No"],
-            ["Uniformidad de comederos", ch.comederos || "—", "Buena"],
-            ["pH del agua", ch.ph || "—", "6.0–7.5"],
-            ["Cloro (ppm)", ch.cloro || "—", ""],
-            ["Temperatura del galpón (°C)", ch.temp || "—", "27–29"],
-            ["Humedad relativa (%)", ch.humedad || "—", "50–70"],
-            ["Horas de luz", ch.luz || "—", "16 h"],
+            ["Mortalidad del d�a", reg.muertas ?? "-", "0-2 aves/1000"],
+            ["% de postura", huevos > 0 ? `${((huevos / l.aves) * 100).toFixed(1)}%` : "-", metaPosturaLote(l, reg.fecha) != null ? `${metaPosturaLote(l, reg.fecha).toFixed(1)}% (tabla)` : "-"],
+            ["Huevos buenos", huevos > 0 ? (huevos - (reg.quebrados || 0)).toFixed(0) : "-", ""],
+            ["Huevos quebrados", reg.quebrados ?? "-", "<3%"],
+            ["Peso promedio del huevo (g)", pesoHuevo ? pesoHuevo.toFixed(1) : "-", "Seg�n edad"],
+            ["Consumo alimento (g/ave/d�a)", gAve ? gAve.toFixed(0) : "-", l.racionGAve ? `${l.racionGAve} g (raci�n)` : "Seg�n tabla"],
+            ["Consumo total alimento (kg)", reg.alimentoKg ?? "-", ""],
+            ["Consumo de agua (ml/ave/d�a)", mlAve ? mlAve.toFixed(0) : "-", gAve ? `${(gAve * 1.8).toFixed(0)}-${(gAve * 2.2).toFixed(0)} (1.8-2.2x alimento)` : "1.8-2.2x alimento"],
+            ["Peso corporal promedio (g)", promP ? promP.toFixed(0) : "-", pesUlt && metaPesoLote(l, pesUlt.fecha, pesUlt) ? `${metaPesoLote(l, pesUlt.fecha, pesUlt).toFixed(0)} g` : "-"],
+            ["Uniformidad del lote (%)", unif ? unif.toFixed(1) : "-", ">85%"],
+            ["Calidad de c�scara", ch.cascara || "-", "Buena"],
+            ["Color de cresta", ch.cresta || "-", "Rojo normal o rojo intenso"],
+            ["Consumo alimento observado", ch.consumoObs || "-", "Normal"],
+            ["Consumo agua observado", ch.aguaObs || "-", "Normal"],
+            ["Consistencia de heces", ch.heces || "-", "Normal"],
+            ["Sonidos respiratorios", ch.respiratorio || "-", "No"],
+            ["Secreci�n nasal", ch.secrecion || "-", "No"],
+            ["Uniformidad de comederos", ch.comederos || "-", "Buena"],
+            ["pH del agua", ch.ph || "-", "6.0-7.5"],
+            ["Cloro (ppm)", ch.cloro || "-", ""],
+            ["Temperatura del galp�n (�C)", ch.temp || "-", "27-29"],
+            ["Humedad relativa (%)", ch.humedad || "-", "50-70"],
+            ["Horas de luz", ch.luz || "-", "16 h"],
           ];
           return (
             <>
-              <div style={{ fontSize: 12.5, marginBottom: 10 }}>Fecha del registro: {reg.fecha || hoyStr()} · Aves: {l.aves.toLocaleString()} · Nacimiento: {l.nac.split("-").reverse().join("/")}</div>
+              <div style={{ fontSize: 12.5, marginBottom: 10 }}>Fecha del registro: {reg.fecha || hoyStr()} � Aves: {l.aves.toLocaleString()} � Nacimiento: {l.nac.split("-").reverse().join("/")}</div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead><tr><th style={th}>KPI</th><th style={th}>Valor</th><th style={th}>Meta</th></tr></thead>
                 <tbody>
@@ -3437,7 +3442,7 @@ export default function App() {
               </table>
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span>_______________________________<br />Encargado de granja</span>
-                <span>_______________________________<br />Dr. Heiner Hernández Ávila · C.M.V #666</span>
+                <span>_______________________________<br />Dr. Heiner Hern�ndez Avila � C.M.V #666</span>
               </div>
             </>
           );
@@ -3502,7 +3507,7 @@ export default function App() {
     while (tsFinales.length < 3) tsFinales.push({ num: "", cartones: "", peso: "" });
     setCap({ tiquetes: tsFinales });
     setModalPegarTiquetes(false);
-    avisar(`✓ ${nuevosTiq.length} tiquete(s) insertado(s) desde Excel`);
+    avisar(`� ${nuevosTiq.length} tiquete(s) insertado(s) desde Excel`);
   };
 
   const tabsMovil = [...tabsVisibles].sort((a, b) => {
@@ -3519,8 +3524,8 @@ export default function App() {
       <style>{fuentes}</style>
             <ModalDialog
         abierto={!!editarAjustePlanta}
-        titulo="Modificar ajuste por conteo físico"
-        subtitulo={`Ajuste de ${editarAjustePlanta?.categoria} (${editarAjustePlanta?.formula || "sin fórmula"})`}
+        titulo="Modificar ajuste por conteo f�sico"
+        subtitulo={`Ajuste de ${editarAjustePlanta?.categoria} (${editarAjustePlanta?.formula || "sin f�rmula"})`}
         onClose={() => setEditarAjustePlanta(null)}
         ancho={500}
         pie={
@@ -3539,14 +3544,14 @@ export default function App() {
             <label style={{ fontSize: 12.5, fontWeight: 600 }}>Fecha del ajuste
               <input type="date" value={editarAjustePlanta.fechaISO || (editarAjustePlanta.fecha ? editarAjustePlanta.fecha.split("/").reverse().join("-") : hoyISO())} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, fechaISO: e.target.value, fecha: e.target.value.split("-").reverse().join("/") })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
             </label>
-            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Saldo real contado ({editarAjustePlanta.categoria === "Núcleo" ? "porciones" : "kg"})
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Saldo real contado ({editarAjustePlanta.categoria === "N�cleo" ? "porciones" : "kg"})
               <input type="text" inputMode="decimal" value={editarAjustePlanta.nuevoSaldoReal ?? ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, nuevoSaldoReal: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
             </label>
             <label style={{ fontSize: 12.5, fontWeight: 600 }}>Responsable del conteo
               <input type="text" value={editarAjustePlanta.responsable || ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, responsable: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
             </label>
-            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Motivo de la modificación
-              <input type="text" placeholder="ej. Error en lectura de báscula / conteo físico corregido" value={editarAjustePlanta.motivoCambio || ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, motivoCambio: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Motivo de la modificaci�n
+              <input type="text" placeholder="ej. Error en lectura de b�scula / conteo f�sico corregido" value={editarAjustePlanta.motivoCambio || ""} onChange={e => setEditarAjustePlanta({ ...editarAjustePlanta, motivoCambio: e.target.value })} style={{ ...inputStyle, width: "100%", marginTop: 4 }} />
             </label>
           </div>
         )}
@@ -3554,7 +3559,7 @@ export default function App() {
       <ModalDialog
         abierto={!!editarDetallePlanta}
         titulo="Corregir detalle de planta"
-        subtitulo={`Movimiento del ${editarDetallePlanta?.original?.fecha || ""} · ${editarDetallePlanta?.original?.formula || ""}. Para cambiar kilos o porciones usa el ajuste por conteo físico; esta corrección conserva los saldos.`}
+        subtitulo={`Movimiento del ${editarDetallePlanta?.original?.fecha || ""} � ${editarDetallePlanta?.original?.formula || ""}. Para cambiar kilos o porciones usa el ajuste por conteo f�sico; esta correcci�n conserva los saldos.`}
         onClose={() => setEditarDetallePlanta(null)}
         ancho={540}
         pie={
@@ -3563,7 +3568,7 @@ export default function App() {
               Cancelar
             </button>
             <button type="button" disabled={guardando} onClick={guardarDetallePlanta} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
-              Guardar corrección
+              Guardar correcci�n
             </button>
           </>
         }
@@ -3572,35 +3577,35 @@ export default function App() {
           <>
             {[...new Set(["detalle", editarDetallePlanta.original.tipo === "bache" ? "numBache" : "numNucleo", "responsable"])].map(k => (
               <label key={k} style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>
-                {({ detalle: "Detalle", numBache: "Número de bache", numNucleo: "Número de núcleo", responsable: "Responsable" })[k]}
+                {({ detalle: "Detalle", numBache: "N�mero de bache", numNucleo: "N�mero de n�cleo", responsable: "Responsable" })[k]}
                 <input style={{ ...inputStyle, width: "100%", marginTop: 4 }} value={editarDetallePlanta.campos[k] || ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, [k]: e.target.value } }))} />
               </label>
             ))}
             <label style={{ display: "block", fontSize: 12.5, fontWeight: 600 }}>
-              Motivo de la corrección
-              <textarea style={{ ...inputStyle, width: "100%", marginTop: 4 }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} placeholder="Indica el motivo de la corrección" />
+              Motivo de la correcci�n
+              <textarea style={{ ...inputStyle, width: "100%", marginTop: 4 }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} placeholder="Indica el motivo de la correcci�n" />
             </label>
           </>
         )}
       </ModalDialog>
-      <nav className="v10-desktop-nav" aria-label="Navegación principal">
-        <div className="v10-menu-brand">{configOrganizacion.nombre || "Rancho El Soñado"} <small>Operación de la granja</small></div>
+      <nav className="v10-desktop-nav" aria-label="Navegaci�n principal">
+        <div className="v10-menu-brand">{configOrganizacion.nombre || "Rancho El So�ado"} <small>Operaci�n de la granja</small></div>
         {gruposMenu.map(g => <div key={g.nombre}><div className="v10-menu-label">{g.nombre}</div>{tabsVisibles.filter(t => g.ids.includes(t.id)).map(t => (
           <button key={t.id} className={vista === t.id ? "v10-active" : ""} aria-current={vista === t.id ? "page" : undefined} onClick={() => irA(t.id)} title={badgePorTab[t.id]?.titulo || t.nombre} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>{t.nombre}</span>
             {badgePorTab[t.id] && <span className={`v10-badge v10-badge-${badgePorTab[t.id].tipo}`}>{badgePorTab[t.id].texto}</span>}
           </button>
         ))}</div>)}
-        <button className="v10-menu-search" onClick={() => setBuscadorAbierto(true)}>⌕ Buscar · Ctrl K</button>
+        <button className="v10-menu-search" onClick={() => setBuscadorAbierto(true)}>? Buscar � Ctrl K</button>
       </nav>
       {buscadorAbierto && <div className="v10-overlay" role="presentation" onClick={() => setBuscadorAbierto(false)}><div className="v10-search" role="dialog" aria-modal="true" aria-label="Buscar en la granja" onClick={e => e.stopPropagation()}>
-        <div className="v10-search-head"><input autoFocus aria-label="Buscar fecha, galpón, tiquete o actividad" placeholder="Fecha, galpón, tiquete, actividad…" value={busquedaGlobal} onChange={e => setBusquedaGlobal(e.target.value)} /><button onClick={() => setBuscadorAbierto(false)} aria-label="Cerrar búsqueda">✕</button></div>
-        {busquedaGlobal.trim().length < 2 ? <p>Escribe al menos dos caracteres.</p> : resultadosBusqueda.length ? resultadosBusqueda.map((r, i) => <button key={i} className="v10-result" onClick={() => abrirResultado(r)}>{r.texto}</button>) : <p>No hay resultados para esta búsqueda.</p>}
+        <div className="v10-search-head"><input autoFocus aria-label="Buscar fecha, galp�n, tiquete o actividad" placeholder="Fecha, galp�n, tiquete, actividad." value={busquedaGlobal} onChange={e => setBusquedaGlobal(e.target.value)} /><button onClick={() => setBuscadorAbierto(false)} aria-label="Cerrar b�squeda">?</button></div>
+        {busquedaGlobal.trim().length < 2 ? <p>Escribe al menos dos caracteres.</p> : resultadosBusqueda.length ? resultadosBusqueda.map((r, i) => <button key={i} className="v10-result" onClick={() => abrirResultado(r)}>{r.texto}</button>) : <p>No hay resultados para esta b�squeda.</p>}
       </div></div>}
       <ModalDialog
         abierto={!!salidaPendiente}
         titulo="Hay cambios sin enviar"
-        subtitulo="El control diario seguirá guardado como borrador en este dispositivo y podrás recuperarlo al volver a esta fecha."
+        subtitulo="El control diario seguir� guardado como borrador en este dispositivo y podr�s recuperarlo al volver a esta fecha."
         onClose={() => setSalidaPendiente(null)}
         ancho={480}
         tono="alerta"
@@ -3615,12 +3620,12 @@ export default function App() {
           </>
         }
       >
-        <p style={{ margin: 0, color: C.textoSuave }}>Si cambias de pantalla sin enviar, tus datos no se perderán pero no estarán reflejados en los reportes hasta que confirmes el envío.</p>
+        <p style={{ margin: 0, color: C.textoSuave }}>Si cambias de pantalla sin enviar, tus datos no se perder�n pero no estar�n reflejados en los reportes hasta que confirmes el env�o.</p>
       </ModalDialog>
       <ModalDialog
         abierto={!!accesoDenegado}
         titulo="Acceso restringido"
-        subtitulo={`Tu rol actual no tiene permiso para entrar a ${accesoDenegado || "este módulo"}.`}
+        subtitulo={`Tu rol actual no tiene permiso para entrar a ${accesoDenegado || "este m�dulo"}.`}
         onClose={() => setAccesoDenegado(null)}
         ancho={460}
         tono="alerta"
@@ -3631,12 +3636,12 @@ export default function App() {
         }
       >
         <p style={{ margin: 0, color: C.textoSuave, lineHeight: 1.55 }}>
-          Solicita al administrador que revise o cambie tus permisos si necesitas trabajar en esta sección.
+          Solicita al administrador que revise o cambie tus permisos si necesitas trabajar en esta secci�n.
         </p>
       </ModalDialog>
       <ModalDialog
         abierto={!!revisionGuardado}
-        titulo={`Revisar antes de guardar · ${fechaCaptura}`}
+        titulo={`Revisar antes de guardar � ${fechaCaptura}`}
         subtitulo="Verifica los totales calculados antes de enviar los datos a la base compartida"
         onClose={() => setRevisionGuardado(null)}
         ancho={560}
@@ -3657,20 +3662,20 @@ export default function App() {
           const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id);
           return (
             <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
-              <b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento · {c?.muertas || 0} muertas
-              {anterior && <div style={{ color: C.textoSuave, fontSize: 11.5, marginTop: 2 }}>Antes: {anterior.cartones} cartones · {anterior.alimentoKg} kg alimento · {anterior.muertas} muertas</div>}
+              <b>G{l.galpon}</b> � {t.cartones} cartones � {t.pesoKg.toFixed(1)} kg � {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento � {c?.muertas || 0} muertas
+              {anterior && <div style={{ color: C.textoSuave, fontSize: 11.5, marginTop: 2 }}>Antes: {anterior.cartones} cartones � {anterior.alimentoKg} kg alimento � {anterior.muertas} muertas</div>}
             </div>
           );
         })}
         {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => (
-          <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>⚠ {a}</div>
+          <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>? {a}</div>
         ))}
       </ModalDialog>
       {modalAdv && (
         <div onClick={() => setModalAdv(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 99, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: modalAdv.accion === "eliminar" ? C.alerta : C.verde, marginBottom: 4 }}>
-              {modalAdv.accion === "eliminar" ? "🗑 Descartar / Eliminar Advertencia" : "✏️ Modificar Advertencia"}
+              {modalAdv.accion === "eliminar" ? "?? Descartar / Eliminar Advertencia" : "?? Modificar Advertencia"}
             </div>
             <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 12, lineHeight: 1.4, background: C.fondo, padding: "8px 10px", borderRadius: 8 }}>
               {modalAdv.item.texto}
@@ -3687,7 +3692,7 @@ export default function App() {
               <label style={{ flex: "1 1 45%", minWidth: 140 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Responsable</span>
                 <input type="text" list="responsables-frecuentes" value={modalAdv.responsable} onChange={e => setModalAdv({ ...modalAdv, responsable: e.target.value })} style={inputStyle} />
-                <datalist id="responsables-frecuentes"><option value="Roxana" /><option value="Ivannia Lizano" /><option value="José Daniel Quesada" /></datalist>
+                <datalist id="responsables-frecuentes"><option value="Roxana" /><option value="Ivannia Lizano" /><option value="Jos� Daniel Quesada" /></datalist>
               </label>
               <label style={{ flex: "1 1 45%", minWidth: 140 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del ajuste</span>
@@ -3696,13 +3701,13 @@ export default function App() {
             </div>
 
             <label style={{ display: "block", marginBottom: 14 }}>
-              <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Razón o justificación de la modificación <span style={{ color: C.alerta }}>*</span></span>
-              <textarea rows={2} placeholder="ej. Galpón en muda forzada programada, sin producción esperada." value={modalAdv.razon} onChange={e => setModalAdv({ ...modalAdv, razon: e.target.value })} style={{ ...inputStyle, resize: "vertical" }} />
+              <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Raz�n o justificaci�n de la modificaci�n <span style={{ color: C.alerta }}>*</span></span>
+              <textarea rows={2} placeholder="ej. Galp�n en muda forzada programada, sin producci�n esperada." value={modalAdv.razon} onChange={e => setModalAdv({ ...modalAdv, razon: e.target.value })} style={{ ...inputStyle, resize: "vertical" }} />
             </label>
 
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={guardarAjusteAdvertencia} style={{ ...btnStyle, flex: 1, background: modalAdv.accion === "eliminar" ? C.alerta : C.verde }}>
-                {modalAdv.accion === "eliminar" ? "Confirmar eliminación" : "Guardar modificación"}
+                {modalAdv.accion === "eliminar" ? "Confirmar eliminaci�n" : "Guardar modificaci�n"}
               </button>
               <button onClick={() => setModalAdv(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>
                 Cancelar
@@ -3716,15 +3721,15 @@ export default function App() {
         <div onClick={() => setModalFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde, marginBottom: 4 }}>
-              ➕ Nuevo producto de {modalFav.tipo === "fum" ? "fumigación" : modalFav.tipo === "med" ? "medicamento" : "vitamina"}
+              ? Nuevo producto de {modalFav.tipo === "fum" ? "fumigaci�n" : modalFav.tipo === "med" ? "medicamento" : "vitamina"}
             </div>
-            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Queda guardado en el menú para todo el equipo, con su dosis para autorrellenar.</div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Queda guardado en el men� para todo el equipo, con su dosis para autorrellenar.</div>
             <Campo etiqueta="Nombre del producto" type="text" placeholder="ej. Virkon S" value={modalFav.nombre} onChange={e => setModalFav({ ...modalFav, nombre: e.target.value })} />
             <Campo etiqueta="Dosis sugerida (editable al usarla)" type="text" placeholder="ej. 25 g por bomba de 18 L" value={modalFav.dosis} onChange={e => setModalFav({ ...modalFav, dosis: e.target.value })} />
-            {modalFav.tipo === "med" && <Campo etiqueta="Días de retiro del huevo (si aplica)" type="text" inputMode="numeric" placeholder="ej. 5" value={modalFav.retiro} onChange={e => setModalFav({ ...modalFav, retiro: e.target.value })} />}
+            {modalFav.tipo === "med" && <Campo etiqueta="D�as de retiro del huevo (si aplica)" type="text" inputMode="numeric" placeholder="ej. 5" value={modalFav.retiro} onChange={e => setModalFav({ ...modalFav, retiro: e.target.value })} />}
             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
               <button onClick={async () => {
-                if (!modalFav.nombre.trim()) { avisar("⚠ Escribe el nombre del producto"); return; }
+                if (!modalFav.nombre.trim()) { avisar("? Escribe el nombre del producto"); return; }
                 if (await guardarFavorito(modalFav.tipo, modalFav.nombre, modalFav.dosis, modalFav.retiro)) {
                   const i2 = modalFav.idx;
                   if (modalFav.tipo === "fum" && cap?.fums?.[i2] != null) { const fs = [...cap.fums]; fs[i2] = { ...fs[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis }; setCap({ fums: fs }); }
@@ -3732,7 +3737,7 @@ export default function App() {
                   if (modalFav.tipo === "vit" && cap?.vits?.[i2] != null) { const vs = [...cap.vits]; vs[i2] = { ...vs[i2], producto: modalFav.nombre.trim(), dosis: modalFav.dosis }; setCap({ vits: vs }); }
                   setModalFav(null);
                 }
-              }} style={{ ...btnStyle, flex: 1, marginTop: 0 }}>✓ Agregar al menú</button>
+              }} style={{ ...btnStyle, flex: 1, marginTop: 0 }}>� Agregar al men�</button>
               <button onClick={() => setModalFav(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>Cancelar</button>
             </div>
           </div>
@@ -3743,16 +3748,16 @@ export default function App() {
         <div onClick={() => setGestionFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde, marginBottom: 4 }}>
-              🗑 Quitar del menú de {gestionFav === "fum" ? "fumigación" : gestionFav === "med" ? "medicamentos" : "vitaminas"}
+              ?? Quitar del men� de {gestionFav === "fum" ? "fumigaci�n" : gestionFav === "med" ? "medicamentos" : "vitaminas"}
             </div>
-            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Esto solo quita la opción del menú desplegable — no borra ningún registro ya guardado.</div>
+            <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 14 }}>Esto solo quita la opci�n del men� desplegable - no borra ning�n registro ya guardado.</div>
             {favoritos.filter(f2 => f2.tipo === gestionFav).length === 0 && (
-              <div style={{ fontSize: 13, color: C.textoSuave, padding: "10px 0" }}>Todavía no hay productos agregados a este menú.</div>
+              <div style={{ fontSize: 13, color: C.textoSuave, padding: "10px 0" }}>Todav�a no hay productos agregados a este men�.</div>
             )}
             {favoritos.filter(f2 => f2.tipo === gestionFav).map(f2 => (
               <div key={f2.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "9px 0", borderBottom: `1px solid ${C.borde}` }}>
-                <span style={{ fontSize: 13.5 }}><b>{f2.nombre}</b>{f2.dosis ? <span style={{ color: C.textoSuave }}> · {f2.dosis}</span> : null}</span>
-                <span onClick={() => borrarFavorito(f2.id)} style={{ cursor: "pointer", color: C.alerta, fontSize: 18, padding: "0 6px", fontWeight: 700 }} title="Quitar del menú">×</span>
+                <span style={{ fontSize: 13.5 }}><b>{f2.nombre}</b>{f2.dosis ? <span style={{ color: C.textoSuave }}> � {f2.dosis}</span> : null}</span>
+                <span onClick={() => borrarFavorito(f2.id)} style={{ cursor: "pointer", color: C.alerta, fontSize: 18, padding: "0 6px", fontWeight: 700 }} title="Quitar del men�">x</span>
               </div>
             ))}
             <button onClick={() => setGestionFav(null)} style={{ ...btnStyle, marginTop: 16, background: "#F1F1EA", color: C.texto }}>Cerrar</button>
@@ -3763,18 +3768,18 @@ export default function App() {
       {elegirReporteActividades && <div role="dialog" aria-modal="true" aria-label="Elegir reporte de actividades" style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0009", display: "grid", placeItems: "center", padding: 16 }}>
         <div style={{ background: C.superficie, borderRadius: 16, padding: 20, width: "min(430px, 100%)" }}>
           <h2 style={{ margin: "0 0 8px", color: C.verde }}>Tareas por hacer hoy</h2>
-          <p style={{ fontSize: 13, color: C.textoSuave }}>Elige la galera o las tareas generales y añade aquí labores específicas antes de generar el reporte.</p>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>Ámbito del reporte
+          <p style={{ fontSize: 13, color: C.textoSuave }}>Elige la galera o las tareas generales y a�ade aqu� labores espec�ficas antes de generar el reporte.</p>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>Ambito del reporte
             <select value={alcanceReporteActividades} onChange={e => setAlcanceReporteActividades(e.target.value)} style={{ ...inputStyle, marginTop: 6 }}>
               <option value="">Actividades generales de la granja</option>
-              {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.raza} · lote {l.lote || ""}</option>)}
+              {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} � {l.raza} � lote {l.lote || ""}</option>)}
             </select>
           </label>
-          <label style={{ display: "block", marginTop: 14, fontSize: 13, fontWeight: 600 }}>Tareas manuales para hacer hoy (una por línea)
+          <label style={{ display: "block", marginTop: 14, fontSize: 13, fontWeight: 600 }}>Tareas manuales para hacer hoy (una por l�nea)
             <textarea value={tareasManualesReporte} onChange={e => setTareasManualesReporte(e.target.value)} maxLength={2000} rows={5} placeholder={"Ej. Revisar el tanque de agua\nLimpiar la entrada"} style={{ ...inputStyle, width: "100%", marginTop: 6, resize: "vertical", boxSizing: "border-box" }} />
           </label>
-          <p style={{ fontSize: 12, color: C.textoSuave, margin: "5px 0" }}>Estas tareas solo aparecerán en este reporte; no se guardan ni sustituyen las programadas.</p>
-          <div style={{ padding: "10px 0", fontSize: 13, color: C.textoSuave }}>{actividadesDelDia(tareasProgramadas, hoyISO(), alcanceReporteActividades).length} obligatorias por fecha · {pendientesReporte(alcanceReporteActividades, hoyISO()).length} pendientes de auditoría · {tareasManualesDelReporte(tareasManualesReporte).length} manuales</div>
+          <p style={{ fontSize: 12, color: C.textoSuave, margin: "5px 0" }}>Estas tareas solo aparecer�n en este reporte; no se guardan ni sustituyen las programadas.</p>
+          <div style={{ padding: "10px 0", fontSize: 13, color: C.textoSuave }}>{actividadesDelDia(tareasProgramadas, hoyISO(), alcanceReporteActividades).length} obligatorias por fecha � {pendientesReporte(alcanceReporteActividades, hoyISO()).length} pendientes de auditor�a � {tareasManualesDelReporte(tareasManualesReporte).length} manuales</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => { setPrintDoc({ tipo: "actividades", fecha: hoyISO(), lote: alcanceReporteActividades, manuales: tareasManualesDelReporte(tareasManualesReporte) }); setElegirReporteActividades(false); }} style={{ ...btnStyle, flex: 1 }}>Ver reporte para imprimir</button>
             <button onClick={() => setElegirReporteActividades(false)} style={{ padding: "10px 12px" }}>Cancelar</button>
@@ -3798,15 +3803,15 @@ export default function App() {
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <MarcaRancho />
               </div>
-              <div style={{ fontSize: 11.5, opacity: 0.75 }}>{totalAves.toLocaleString()} aves · 4 gallineros · último registro: {ultDia.slice(0, 5)} · {mostrarNombre(window.__usuarioEmail)} · {estadoSync === "Sin conexión" ? "Sin conexión (borrador local)" : estadoSync === "Guardando…" || estadoSync === "Error al guardar" ? estadoSync : Object.keys(suciosRef.current).length || notaSuciaRef.current ? "Borrador sin enviar" : estadoSync} · v{VERSION_APP}</div>
+              <div style={{ fontSize: 11.5, opacity: 0.75 }}>{totalAves.toLocaleString()} aves � 4 gallineros � �ltimo registro: {ultDia.slice(0, 5)} � {mostrarNombre(window.__usuarioEmail)} � {estadoSync === "Sin conexi�n" ? "Sin conexi�n (borrador local)" : estadoSync === "Guardando." || estadoSync === "Error al guardar" ? estadoSync : Object.keys(suciosRef.current).length || notaSuciaRef.current ? "Borrador sin enviar" : estadoSync} � v{VERSION_APP}</div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button type="button" className="v10-header-mobile-menu-btn" onClick={() => setMenuMovil(v => !v)} aria-label="Abrir menú de navegación" style={{ background: menuMovil ? "#F5B845" : "rgba(255,255,255,0.18)", color: menuMovil ? C.verde : "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 15 }}>☰</span>
-                <span style={{ fontSize: 12 }}>Menú</span>
+              <button type="button" className="v10-header-mobile-menu-btn" onClick={() => setMenuMovil(v => !v)} aria-label="Abrir men� de navegaci�n" style={{ background: menuMovil ? "#F5B845" : "rgba(255,255,255,0.18)", color: menuMovil ? C.verde : "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 15 }}>?</span>
+                <span style={{ fontSize: 12 }}>Men�</span>
               </button>
-              <button onClick={() => cargarTodo(false)} title="Actualizar" style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, color: "#fff", padding: "9px 12px", fontSize: 16, cursor: "pointer", opacity: cargandoFondo ? 0.5 : 1 }}>{cargandoFondo ? "…" : "⟳"}</button>
-              <button className="v10-search-action" onClick={() => setBuscadorAbierto(true)} aria-label="Buscar en la granja">⌕</button>
+              <button onClick={() => cargarTodo(false)} title="Actualizar" style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, color: "#fff", padding: "9px 12px", fontSize: 16, cursor: "pointer", opacity: cargandoFondo ? 0.5 : 1 }}>{cargandoFondo ? "." : "?"}</button>
+              <button className="v10-search-action" onClick={() => setBuscadorAbierto(true)} aria-label="Buscar en la granja">?</button>
               <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 12px", textAlign: "center" }}>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, color: "#F5B845" }}>{posturaDia.toFixed(1)}%</div>
                 <div style={{ fontSize: 10, opacity: 0.75 }}>postura</div>
@@ -3840,38 +3845,38 @@ export default function App() {
           avisar={avisar}
         />
         {miRol === "sin_acceso" && <div role="alert" className="v10-security-alert">Tu cuenta no tiene un rol activo. Solicita acceso a un administrador.</div>}
-        {miRol === "consulta" && <div className="v10-security-alert">Acceso de consulta: los cambios están bloqueados por la base de datos.</div>}
+        {miRol === "consulta" && <div className="v10-security-alert">Acceso de consulta: los cambios est�n bloqueados por la base de datos.</div>}
         {vista === "inicio" && <>
-          <Seccion titulo={`Hoy · ${hoyISO()}`} sub="Lo que necesita atención antes de cerrar el día">
+          <Seccion titulo={`Hoy � ${hoyISO()}`} sub="Lo que necesita atenci�n antes de cerrar el d�a">
             <div className="v10-home-grid">
               {preferencias.favoritos.filter(id => idsPermitidos.includes(id)).slice(0, 6).map(id => {
                 const t = tabs.find(x => x.id === id); if (!t) return null;
-                const detalle = id === "captura" ? `${activos.filter(l => registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length}/${activos.length} gallineros guardados` : id === "revision" ? `${hallazgosOperacion.length} asuntos por revisar` : ({ reporte: "Indicadores y reportes", bodega: "Movimientos y cierre del día", pesaje: "Pesajes y actividades", historial: "Consulta y auditoría", planta: "Producción y movimientos", insumos: "Existencias y consumos" })[id] || "Abrir módulo";
+                const detalle = id === "captura" ? `${activos.filter(l => registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length}/${activos.length} gallineros guardados` : id === "revision" ? `${hallazgosOperacion.length} asuntos por revisar` : ({ reporte: "Indicadores y reportes", bodega: "Movimientos y cierre del d�a", pesaje: "Pesajes y actividades", historial: "Consulta y auditor�a", planta: "Producci�n y movimientos", insumos: "Existencias y consumos" })[id] || "Abrir m�dulo";
                 return <button key={id} onClick={() => irA(id)}><b>{t.nombre}</b><span>{detalle}</span></button>;
               })}
             </div>
           </Seccion>
-          {!!retirosActivos.length && <Seccion titulo="Retiros activos">{retirosActivos.map((m, i) => <p key={i}>G{m.galpon} · {m.producto} · hasta {m.retiroHasta}</p>)}</Seccion>}
-          <Seccion titulo="Próximas actividades">{tareasProgramadas.slice(0, 8).map(t => <div key={t.id} className="v10-home-row">{t.nombre} · {proximaTarea(t) || "sin fecha"}</div>)}{!tareasProgramadas.length && <p>No hay actividades programadas.</p>}</Seccion>
+          {!!retirosActivos.length && <Seccion titulo="Retiros activos">{retirosActivos.map((m, i) => <p key={i}>G{m.galpon} � {m.producto} � hasta {m.retiroHasta}</p>)}</Seccion>}
+          <Seccion titulo="Pr�ximas actividades">{tareasProgramadas.slice(0, 8).map(t => <div key={t.id} className="v10-home-row">{t.nombre} � {proximaTarea(t) || "sin fecha"}</div>)}{!tareasProgramadas.length && <p>No hay actividades programadas.</p>}</Seccion>
         </>}
-        {guardado && <div role={guardado.startsWith("⚠") ? "alert" : "status"} style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
+        {guardado && <div role={guardado.startsWith("?") ? "alert" : "status"} style={{ background: guardado.startsWith("?") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("?") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
         {(() => {
           const conteo = new Map();
           registros.forEach(r => { const k = `${r.fecha}|${r.lote}`; conteo.set(k, (conteo.get(k) || 0) + 1); });
           const conflictos = [...conteo].filter(([, n]) => n > 1);
           return conflictos.length ? <div role="alert" style={{ padding: 12, marginBottom: 12, borderRadius: 10, background: C.alertaSuave, color: C.alerta, fontSize: 13 }}>
-            ⚠ {conflictos.length} fecha(s) con producción duplicada. Los totales pueden estar inflados. <button onClick={() => { const fecha = conflictos[0][0].split("|")[0]; setHistFecha(fechaHistorialISO(fecha)); irA("historial"); }} style={{ marginLeft: 8 }}>Revisar en Historial</button>
+            ? {conflictos.length} fecha(s) con producci�n duplicada. Los totales pueden estar inflados. <button onClick={() => { const fecha = conflictos[0][0].split("|")[0]; setHistFecha(fechaHistorialISO(fecha)); irA("historial"); }} style={{ marginLeft: 8 }}>Revisar en Historial</button>
           </div> : null;
         })()}
         {vista === "revision" && (
           <>
             <BarraSubmenu
               subsecciones={[
-                { id: "excepciones", nombre: "Excepciones y alertas", icono: "⚠️" },
-                { id: "cobertura", nombre: "Cobertura concentrado", icono: "⏳" },
-                { id: "conciliacion", nombre: "Conciliación de planta", icono: "⚖️" },
-                { id: "auditoria", nombre: "Exportar auditoría", icono: "📋" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "excepciones", nombre: "Excepciones y alertas", icono: "??" },
+                { id: "cobertura", nombre: "Cobertura concentrado", icono: "?" },
+                { id: "conciliacion", nombre: "Conciliaci�n de planta", icono: "??" },
+                { id: "auditoria", nombre: "Exportar auditor�a", icono: "??" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ]}
               activo={subRevision}
               onChange={setSubRevision}
@@ -3881,11 +3886,11 @@ export default function App() {
               <Seccion titulo="Excepciones por revisar" sub="Duplicados, controles pendientes, saldos y retiros activos; se actualiza con los datos cargados">
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
                   <label>Tipo <select value={filtroExcepciones} onChange={e => setFiltroExcepciones(e.target.value)} style={inputStyle}><option>Todas</option>{[...new Set(hallazgosOperacion.map(h => h.tipo))].map(t => <option key={t}>{t}</option>)}</select></label>
-                  <button onClick={() => window.print()}>Imprimir revisión</button>
+                  <button onClick={() => window.print()}>Imprimir revisi�n</button>
                 </div>
                 {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => (
                   <div key={i} style={{ padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
-                    <b>{h.tipo}</b> · {h.texto}
+                    <b>{h.tipo}</b> � {h.texto}
                   </div>
                 ))}
                 {!hallazgosOperacion.length && <p>Sin excepciones detectadas.</p>}
@@ -3893,7 +3898,7 @@ export default function App() {
             )}
 
             {(subRevision === "cobertura" || subRevision === "todo") && (
-              <Seccion titulo="Cobertura de concentrado por fórmula" sub="Existencias verificadas divididas entre el consumo diario promedio de los últimos siete días con datos">
+              <Seccion titulo="Cobertura de concentrado por f�rmula" sub="Existencias verificadas divididas entre el consumo diario promedio de los �ltimos siete d�as con datos">
                 {[["Aves", saldosAvesFormula], ["Ganado", saldosGanadoFormula]].map(([categoria, saldos]) => (
                   <div key={categoria} style={{ marginBottom: 12 }}>
                     <b>{categoria}</b>
@@ -3901,23 +3906,23 @@ export default function App() {
                       const consumo = categoria === "Aves" ? registros.filter(r => r.formulaConcentrado === formula && fechas.slice(0, 7).includes(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0) / Math.max(1, fechas.slice(0, 7).length) : plantaMovs.filter(m => m.tipo === "servido" && m.formula === formula && [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].sort().reverse().slice(0, 7).includes(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0) / Math.max(1, [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].slice(0, 7).length);
                       return (
                         <div key={formula} style={{ padding: 7, borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
-                          {formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : "sin consumo suficiente para estimar"}`}
+                          {formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg � ${consumo > 0 ? `${(kg / consumo).toFixed(1)} d�as` : "sin consumo suficiente para estimar"}`}
                         </div>
                       );
-                    }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por fórmula.</p>}
+                    }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por f�rmula.</p>}
                   </div>
                 ))}
               </Seccion>
             )}
 
             {(subRevision === "conciliacion" || subRevision === "todo") && (
-              <Seccion titulo="Conciliación de planta" sub="La diferencia muestra concentrado sin distribución o movimientos que necesitan revisión">
+              <Seccion titulo="Conciliaci�n de planta" sub="La diferencia muestra concentrado sin distribuci�n o movimientos que necesitan revisi�n">
                 {[["Aves", saldoAves, saldosAvesFormula], ["Ganado", saldoGanado, saldosGanadoFormula]].map(([categoria, total, saldos]) => {
                   const sumaF = saldos ? Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0) : null;
                   const dif = sumaF != null ? +(total - sumaF).toFixed(1) : null;
                   return (
                     <div key={categoria} style={{ padding: 8, fontSize: 13 }}>
-                      <b>{categoria}</b> · total {f2Dec(total)} kg · fórmulas {sumaF != null ? `${f2Dec(sumaF)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${f2Dec(dif)} kg` : "—"}
+                      <b>{categoria}</b> � total {f2Dec(total)} kg � f�rmulas {sumaF != null ? `${f2Dec(sumaF)} kg` : "sin conteo"} � diferencia {dif != null ? `${dif > 0 ? "+" : ""}${f2Dec(dif)} kg` : "-"}
                     </div>
                   );
                 })}
@@ -3925,25 +3930,25 @@ export default function App() {
             )}
 
             {(subRevision === "auditoria" || subRevision === "todo") && (
-              <Seccion titulo="Exportar auditoría" sub="Producción, bodega, conteos de planta y advertencias">
+              <Seccion titulo="Exportar auditor�a" sub="Producci�n, bodega, conteos de planta y advertencias">
                 {selectorHistorial("auditoria")}
-                <button onClick={descargarAuditoria} style={btnStyle}>Descargar CSV del período</button>
+                <button onClick={descargarAuditoria} style={btnStyle}>Descargar CSV del per�odo</button>
               </Seccion>
             )}
           </>
         )}
-        {/* ══ CONTROL DIARIO ══ */}
+        {/* �� CONTROL DIARIO �� */}
         {vista === "captura" && (
           <>
             {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay un borrador sin guardar de esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.nota) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={async () => { await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento); setBorradorDisponible(null); }} style={{ marginLeft: 8 }}>Descartar</button></div>}
             {conflictoEdicion && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>{conflictoEdicion} <button onClick={() => cargarTodo(false)}>Actualizar</button></div>}
-            {!!retirosActivos.length && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>⚠ Retiro de huevo activo: {retirosActivos.map(m => `G${m.galpon} hasta ${m.retiroHasta} (${m.producto})`).join(" · ")}. Evita comercializar ese huevo.</div>}
+            {!!retirosActivos.length && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>? Retiro de huevo activo: {retirosActivos.map(m => `G${m.galpon} hasta ${m.retiroHasta} (${m.producto})`).join(" � ")}. Evita comercializar ese huevo.</div>}
             <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: (fechaCaptura || hoyISO()).split("-").reverse().join("/") })}
               style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
-              🖨 Imprimir reporte diario ({(fechaCaptura || "").split("-").reverse().join("/") || "hoy"})
+              ?? Imprimir reporte diario ({(fechaCaptura || "").split("-").reverse().join("/") || "hoy"})
             </button>
 
-            {/* Matriz Visual: Qué falta registrar hoy (Punto 11) */}
+            {/* Matriz Visual: Qu� falta registrar hoy (Punto 11) */}
             <MatrizQueFaltaHoy
               activos={activos}
               registros={registros}
@@ -3962,7 +3967,7 @@ export default function App() {
             </div>
             {fechaCaptura !== hoyISO() && (
               <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9A6605", background: C.yemaSuave, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
-                📅 Estás capturando para el {fechaCaptura.split("-").reverse().join("/")} — si esa fecha ya tiene datos, se reemplazarán (edición).
+                ?? Est�s capturando para el {fechaCaptura.split("-").reverse().join("/")} - si esa fecha ya tiene datos, se reemplazar�n (edici�n).
               </div>
             )}
 
@@ -3976,17 +3981,17 @@ export default function App() {
                     border: galponActivo === l.id ? `2px solid ${C.verde}` : `1.5px solid ${C.borde}`,
                     background: galponActivo === l.id ? C.verdeSuave : C.superficie,
                   }}>
-                    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 14, color: C.verde }}>G{l.galpon}{lleno ? " ✓" : ""}</div>
+                    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 14, color: C.verde }}>G{l.galpon}{lleno ? " �" : ""}</div>
                     <div style={{ fontSize: 9.5, color: C.textoSuave }}>{semanasDe(l.nac).toFixed(0)} sem</div>
                   </button>
                 );
               })}
             </div>
             {loteActivo && <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 10, marginTop: -6 }}>
-              Gallinero {loteActivo.galpon} · {loteActivo.raza} · nacidas {loteActivo.nac.split("-").reverse().join("/")} · <b>{semanasDe(loteActivo.nac).toFixed(1)} semanas</b> · {loteActivo.aves.toLocaleString()} aves
+              Gallinero {loteActivo.galpon} � {loteActivo.raza} � nacidas {loteActivo.nac.split("-").reverse().join("/")} � <b>{semanasDe(loteActivo.nac).toFixed(1)} semanas</b> � {loteActivo.aves.toLocaleString()} aves
             </div>}
 
-            {/* Valores sugeridos del último control (Punto 16) */}
+            {/* Valores sugeridos del �ltimo control (Punto 16) */}
             {loteActivo && (() => {
               const prev = registros.filter(r => r.lote === loteActivo.id && fechaHistorialISO(r.fecha) < fechaCaptura).sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))[0];
               const actual = totalesGalpon(capturas[loteActivo.id]);
@@ -3994,9 +3999,9 @@ export default function App() {
               return (
                 <div style={{ background: C.verdeSuave, border: `1px solid #C4DBC7`, borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12.5, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: C.verde, textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 2 }}>Referencia del último control registrado ({prev.fecha}):</span>
-                    <b>{f2Dec(prev.cartones, "0")} cart</b> ({Math.round(Number(prev.cartones || 0) * 30).toLocaleString()} huevos) · <b>{f2Dec(prev.alimentoKg, "0")} kg alimento</b> ({f2Dec(prev.alimento6am, "0")} am / {f2Dec(prev.alimento1pm, "0")} pm) · <b>{f2Dec(prev.muertas, "0")} muertas</b> · {Number(prev.aguaL || 0) ? `${f2Dec(prev.aguaL)} L agua` : "sin dato agua"}
-                    <div style={{ color: C.textoSuave, fontSize: 11, marginTop: 2 }}>Actual en este formulario: {f2Dec(actual.cartones, "0")} cartones · {actual.huevos.toLocaleString()} huevos</div>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: C.verde, textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 2 }}>Referencia del �ltimo control registrado ({prev.fecha}):</span>
+                    <b>{f2Dec(prev.cartones, "0")} cart</b> ({Math.round(Number(prev.cartones || 0) * 30).toLocaleString()} huevos) � <b>{f2Dec(prev.alimentoKg, "0")} kg alimento</b> ({f2Dec(prev.alimento6am, "0")} am / {f2Dec(prev.alimento1pm, "0")} pm) � <b>{f2Dec(prev.muertas, "0")} muertas</b> � {Number(prev.aguaL || 0) ? `${f2Dec(prev.aguaL)} L agua` : "sin dato agua"}
+                    <div style={{ color: C.textoSuave, fontSize: 11, marginTop: 2 }}>Actual en este formulario: {f2Dec(actual.cartones, "0")} cartones � {actual.huevos.toLocaleString()} huevos</div>
                   </div>
                   <button
                     type="button"
@@ -4008,22 +4013,22 @@ export default function App() {
                         aguaL: Number(prev.aguaL || 0) ? f2Dec(prev.aguaL, "") : "",
                         muertas: cap.muertas !== "" ? cap.muertas : "0",
                       });
-                      avisar(`✓ Raciones de referencia del ${prev.fecha} cargadas como sugerencia — revisa y ajusta`);
+                      avisar(`� Raciones de referencia del ${prev.fecha} cargadas como sugerencia - revisa y ajusta`);
                     }}
                     style={{ padding: "6px 12px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                    ⚡ Usar referencia de raciones
+                    ? Usar referencia de raciones
                   </button>
                 </div>
               );
             })()}
 
-            <Seccion accion={<BotonGuardaMini />} num="1" titulo="Producción por tiquete" sub="Número de tiquete, cartones y peso (kg) — incluye cálculo de peso promedio por huevo">
+            <Seccion accion={<BotonGuardaMini />} num="1" titulo="Producci�n por tiquete" sub="N�mero de tiquete, cartones y peso (kg) - incluye c�lculo de peso promedio por huevo">
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
                 <button
                   type="button"
                   onClick={() => setModalPegarTiquetes(true)}
                   style={{ padding: "7px 13px", fontSize: 12.5, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: `1px solid ${C.borde}`, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-                  📋 Pegar tiquetes desde Excel
+                  ?? Pegar tiquetes desde Excel
                 </button>
               </div>
 
@@ -4060,12 +4065,12 @@ export default function App() {
                           setCap({ tiquetes: ts });
                         }}
                         style={{ padding: "6px 9px", background: "transparent", border: "none", color: C.textoSuave, fontSize: 16, cursor: "pointer" }}
-                        title="Quitar tiquete">×</button>
+                        title="Quitar tiquete">x</button>
                     </div>
                     {/* Feedback inline del peso por huevo para este tiquete */}
                     {pesoPromHuevo && (
                       <div style={{ fontSize: 11, marginTop: 3, paddingLeft: 4, color: alertaPeso ? C.alerta : C.textoSuave, fontWeight: alertaPeso ? 600 : 400 }}>
-                        {alertaPeso ? `⚠ Peso inusual: ${pesoPromHuevo.toFixed(1)} g/huevo (habitual: 55–68 g) — revisa tiquete y peso` : `✓ Peso promedio: ${pesoPromHuevo.toFixed(1)} g por huevo`}
+                        {alertaPeso ? `? Peso inusual: ${pesoPromHuevo.toFixed(1)} g/huevo (habitual: 55-68 g) - revisa tiquete y peso` : `� Peso promedio: ${pesoPromHuevo.toFixed(1)} g por huevo`}
                       </div>
                     )}
                   </div>
@@ -4076,12 +4081,12 @@ export default function App() {
                 + Agregar tiquete
               </button>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.verde, marginTop: 10, display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
-                <span>Total: <b>{tGal.cartones} cartones</b> = {tGal.huevos.toLocaleString()} huevos · <b>{tGal.pesoKg.toFixed(1)} kg</b></span>
+                <span>Total: <b>{tGal.cartones} cartones</b> = {tGal.huevos.toLocaleString()} huevos � <b>{tGal.pesoKg.toFixed(1)} kg</b></span>
                 {tGal.huevos > 0 && tGal.pesoKg > 0 && (
                   <span>Peso promedio: <b>{((tGal.pesoKg * 1000) / tGal.huevos).toFixed(1)} g/huevo</b></span>
                 )}
               </div>
-              {!!saltosTiquetes(tiquetesCompartidos).length && <div style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>⚠ Revisa la secuencia de tiquetes entre todos los gallineros: faltan #{saltosTiquetes(tiquetesCompartidos).slice(0, 12).join(", #")}.</div>}
+              {!!saltosTiquetes(tiquetesCompartidos).length && <div style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>? Revisa la secuencia de tiquetes entre todos los gallineros: faltan #{saltosTiquetes(tiquetesCompartidos).slice(0, 12).join(", #")}.</div>}
             </Seccion>
 
             <Seccion accion={<BotonGuardaMini />} num="2" titulo="Huevo quebrado">
@@ -4098,13 +4103,13 @@ export default function App() {
                     placeholder="ej. 45"
                     value={cap.quebrados}
                     onChange={e => setCap({ quebrados: e.target.value })}
-                    advertencia={pctQ > 3 ? `${pctQ.toFixed(1)}% quebrado (superior al estándar del 3%)` : pctQ > 0 ? `${pctQ.toFixed(1)}% quebrado (dentro de rango)` : null}
+                    advertencia={pctQ > 3 ? `${pctQ.toFixed(1)}% quebrado (superior al est�ndar del 3%)` : pctQ > 0 ? `${pctQ.toFixed(1)}% quebrado (dentro de rango)` : null}
                   />
                 );
               })()}
             </Seccion>
 
-            <Seccion accion={<BotonGuardaMini />} num="3" titulo="Gallinas muertas" sub="El saldo se calcula solo: saldo inicial − muertas = saldo final">
+            <Seccion accion={<BotonGuardaMini />} num="3" titulo="Gallinas muertas" sub="El saldo se calcula solo: saldo inicial - muertas = saldo final">
               {(() => {
                 const m = Number(cap.muertas) || 0;
                 const alertaM = m > 3;
@@ -4119,11 +4124,11 @@ export default function App() {
                       placeholder="ej. 1"
                       value={cap.muertas}
                       onChange={e => setCap({ muertas: e.target.value })}
-                      advertencia={alertaM ? `Mortalidad superior a lo habitual (>3 aves) — registra el diagnóstico o solicita necropsia` : null}
+                      advertencia={alertaM ? `Mortalidad superior a lo habitual (>3 aves) - registra el diagn�stico o solicita necropsia` : null}
                     />
                     <Campo
                       mitad
-                      etiqueta="Diagnóstico de muerte"
+                      etiqueta="Diagn�stico de muerte"
                       type="text"
                       placeholder="ej. prolapso, calor..."
                       value={cap.dx}
@@ -4134,14 +4139,14 @@ export default function App() {
                 );
               })()}
               <div style={{ fontSize: 14, display: "grid", gap: 6, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial de gallinas (día anterior)</span><b>{(loteActivo?.aves || 0).toLocaleString()}</b></div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>(−) Gallinas muertas hoy</span><b>{Number(cap.muertas || 0)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial de gallinas (d�a anterior)</span><b>{(loteActivo?.aves || 0).toLocaleString()}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>(-) Gallinas muertas hoy</span><b>{Number(cap.muertas || 0)}</b></div>
                 <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${C.borde}`, paddingTop: 6 }}><b>Saldo final de gallinas (=)</b><b style={{ color: C.verde }}>{((loteActivo?.aves || 0) - Number(cap.muertas || 0)).toLocaleString()}</b></div>
               </div>
             </Seccion>
 
-            <Seccion accion={<BotonGuardaMini />} num="4" titulo="Fumigación diaria" sub="Elige el producto del inventario de Insumos — la dosis sugerida es editable">
-              <datalist id="ins-desinf">{insumos.filter(x => ["Desinfección", "Protección Biológica", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "fum").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
+            <Seccion accion={<BotonGuardaMini />} num="4" titulo="Fumigaci�n diaria" sub="Elige el producto del inventario de Insumos - la dosis sugerida es editable">
+              <datalist id="ins-desinf">{insumos.filter(x => ["Desinfecci�n", "Protecci�n Biol�gica", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "fum").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
               <datalist id="ins-meds">{insumos.filter(x => ["Medicinas", "Vacunas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "med").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
               <datalist id="ins-vits">{insumos.filter(x => ["Vitaminas", "Otros"].includes(x.categoria)).map(x => <option key={x.id} value={x.nombre} />)}{favoritos.filter(f2 => f2.tipo === "vit").map(f2 => <option key={"fv" + f2.id} value={f2.nombre} />)}</datalist>
               {cap.fums.map((f, i) => (
@@ -4155,18 +4160,18 @@ export default function App() {
                   <input type="time" value={f.hora}
                     onChange={e => { const fs = [...cap.fums]; fs[i] = { ...f, hora: e.target.value }; setCap({ fums: fs }); }}
                     style={{ ...inputStyle, flex: 0.9 }} />
-                  {<button onClick={() => setModalFav({ tipo: "fum", idx: i, nombre: f.producto || "", dosis: f.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
-                  {<button onClick={() => setGestionFav("fum")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
-                  <button onClick={() => setCap({ fums: cap.fums.length > 1 ? cap.fums.filter((_, j) => j !== i) : [{ producto: "", dosis: "", hora: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                  {<button onClick={() => setModalFav({ tipo: "fum", idx: i, nombre: f.producto || "", dosis: f.dosis || "", retiro: "" })} title="Agregar producto nuevo al men�" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>?</button>}
+                  {<button onClick={() => setGestionFav("fum")} title="Quitar productos del men�" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>??</button>}
+                  <button onClick={() => setCap({ fums: cap.fums.length > 1 ? cap.fums.filter((_, j) => j !== i) : [{ producto: "", dosis: "", hora: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>x</button>
                 </div>
               ))}
               <button onClick={() => setCap({ fums: [...cap.fums, { producto: "", dosis: "", hora: "" }] })}
                 style={{ background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                + Agregar fumigación
+                + Agregar fumigaci�n
               </button>
             </Seccion>
 
-            <Seccion accion={<BotonGuardaMini />} num="5" titulo="Medicamentos" sub="Incluye la enfermedad a tratar y los días de retiro del huevo (si aplica)">
+            <Seccion accion={<BotonGuardaMini />} num="5" titulo="Medicamentos" sub="Incluye la enfermedad a tratar y los d�as de retiro del huevo (si aplica)">
               {cap.meds.map((m, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input type="text" list="ins-meds" placeholder="Medicamento" value={m.producto}
@@ -4175,15 +4180,15 @@ export default function App() {
                   <input type="text" placeholder="Dosis" value={m.dosis}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, dosis: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 0.8 }} />
-                  <input type="text" placeholder="Enfermedad / diagnóstico" value={m.enfermedad}
+                  <input type="text" placeholder="Enfermedad / diagn�stico" value={m.enfermedad}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, enfermedad: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 1.2 }} />
-                  <input type="text" inputMode="numeric" placeholder="Retiro (días)" title="Días de retiro del huevo" value={m.retiro}
+                  <input type="text" inputMode="numeric" placeholder="Retiro (d�as)" title="D�as de retiro del huevo" value={m.retiro}
                     onChange={e => { const ms = [...cap.meds]; ms[i] = { ...m, retiro: e.target.value }; setCap({ meds: ms }); }}
                     style={{ ...inputStyle, flex: 0.7 }} />
-                  {<button onClick={() => setModalFav({ tipo: "med", idx: i, nombre: m.producto || "", dosis: m.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
-                  {<button onClick={() => setGestionFav("med")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
-                  <button onClick={() => setCap({ meds: cap.meds.length > 1 ? cap.meds.filter((_, j) => j !== i) : [{ producto: "", dosis: "", enfermedad: "", retiro: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                  {<button onClick={() => setModalFav({ tipo: "med", idx: i, nombre: m.producto || "", dosis: m.dosis || "", retiro: "" })} title="Agregar producto nuevo al men�" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>?</button>}
+                  {<button onClick={() => setGestionFav("med")} title="Quitar productos del men�" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>??</button>}
+                  <button onClick={() => setCap({ meds: cap.meds.length > 1 ? cap.meds.filter((_, j) => j !== i) : [{ producto: "", dosis: "", enfermedad: "", retiro: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>x</button>
                 </div>
               ))}
               <button onClick={() => setCap({ meds: [...cap.meds, { producto: "", dosis: "", enfermedad: "" }] })}
@@ -4201,9 +4206,9 @@ export default function App() {
                   <input type="text" placeholder="Dosis" value={v.dosis}
                     onChange={e => { const vs = [...cap.vits]; vs[i] = { ...v, dosis: e.target.value }; setCap({ vits: vs }); }}
                     style={{ ...inputStyle, flex: 1 }} />
-                  {<button onClick={() => setModalFav({ tipo: "vit", idx: i, nombre: v.producto || "", dosis: v.dosis || "", retiro: "" })} title="Agregar producto nuevo al menú" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>➕</button>}
-                  {<button onClick={() => setGestionFav("vit")} title="Quitar productos del menú" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>🗑</button>}
-                  <button onClick={() => setCap({ vits: cap.vits.length > 1 ? cap.vits.filter((_, j) => j !== i) : [{ producto: "", dosis: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                  {<button onClick={() => setModalFav({ tipo: "vit", idx: i, nombre: v.producto || "", dosis: v.dosis || "", retiro: "" })} title="Agregar producto nuevo al men�" style={{ padding: "0 10px", fontSize: 15, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>?</button>}
+                  {<button onClick={() => setGestionFav("vit")} title="Quitar productos del men�" style={{ padding: "0 10px", fontSize: 14, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>??</button>}
+                  <button onClick={() => setCap({ vits: cap.vits.length > 1 ? cap.vits.filter((_, j) => j !== i) : [{ producto: "", dosis: "" }] })} title="Quitar" style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>x</button>
                 </div>
               ))}
               <button onClick={() => setCap({ vits: [...cap.vits, { producto: "", dosis: "" }] })}
@@ -4212,7 +4217,7 @@ export default function App() {
               </button>
             </Seccion>
 
-            <Seccion accion={<BotonGuardaMini />} num="7" titulo="Consumo de alimento" sub={`Fórmula: ${loteActivo?.formula || ""}${loteActivo?.racionGAve ? ` · ración definida: ${loteActivo.racionGAve} g/ave/día (40% a las 6 am, 60% a la 1 pm)` : ""}`}>
+            <Seccion accion={<BotonGuardaMini />} num="7" titulo="Consumo de alimento" sub={`F�rmula: ${loteActivo?.formula || ""}${loteActivo?.racionGAve ? ` � raci�n definida: ${loteActivo.racionGAve} g/ave/d�a (40% a las 6 am, 60% a la 1 pm)` : ""}`}>
               {(() => {
                 const espDia = loteActivo?.racionGAve && loteActivo?.aves ? (loteActivo.racionGAve * loteActivo.aves) / 1000 : 0;
                 const esp6 = espDia * 0.4, esp1 = espDia * 0.6;
@@ -4223,8 +4228,8 @@ export default function App() {
                 return (
                   <>
                     <label style={{ display: "block", marginBottom: 12 }}>
-                      <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>⚡ Repartir consumo total automáticamente (kg) — al salir de la casilla reparte 40% a las 6 am y 60% a la 1 pm</span>
-                      <input type="text" inputMode="decimal" placeholder="ej. 240 → llena 96 y 144" style={inputStyle}
+                      <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>? Repartir consumo total autom�ticamente (kg) - al salir de la casilla reparte 40% a las 6 am y 60% a la 1 pm</span>
+                      <input type="text" inputMode="decimal" placeholder="ej. 240  llena 96 y 144" style={inputStyle}
                         onBlur={e => {
                           const tot = parseFloat(String(e.target.value).replace(",", "."));
                           if (!isNaN(tot) && tot > 0) { setCap({ alimento6am: String(+(tot * 0.4).toFixed(1)), alimento1pm: String(+(tot * 0.6).toFixed(1)) }); e.target.value = ""; }
@@ -4254,24 +4259,24 @@ export default function App() {
                         onChange={e => setCap({ alimento1pm: e.target.value })}
                       />
                     </div>
-                    <Campo etiqueta="Observaciones del consumo" type="text" placeholder="ej. dejaron alimento en comederos, cambio de fórmula, calor fuerte…" value={cap.obsAlimento} onChange={e => setCap({ obsAlimento: e.target.value })} />
+                    <Campo etiqueta="Observaciones del consumo" type="text" placeholder="ej. dejaron alimento en comederos, cambio de f�rmula, calor fuerte." value={cap.obsAlimento} onChange={e => setCap({ obsAlimento: e.target.value })} />
                     <div style={{ fontSize: 13.5, display: "grid", gap: 5, background: C.fondo, borderRadius: 10, padding: "10px 12px" }}>
-                      {espDia > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Esperado del día</span><b>{f2Dec(espDia)} kg · {f2Dec(loteActivo.racionGAve)} g/ave</b></div>}
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>Servido real</span><b>{real.toFixed(1)} kg{gAveReal ? ` · ${gAveReal.toFixed(0)} g/ave` : ""}</b></div>
+                      {espDia > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Esperado del d�a</span><b>{f2Dec(espDia)} kg � {f2Dec(loteActivo.racionGAve)} g/ave</b></div>}
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>Servido real</span><b>{real.toFixed(1)} kg{gAveReal ? ` � ${gAveReal.toFixed(0)} g/ave` : ""}</b></div>
                       {desv != null && <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${C.borde}`, paddingTop: 5, color: Math.abs(desv) > 5 ? C.alerta : C.verde }}>
-                        <b>Diferencia vs ración</b><b>{desv > 0 ? "+" : ""}{desv.toFixed(1)}%{Math.abs(desv) > 5 ? " ⚠" : " ✓"}</b>
+                        <b>Diferencia vs raci�n</b><b>{desv > 0 ? "+" : ""}{desv.toFixed(1)}%{Math.abs(desv) > 5 ? " ?" : " �"}</b>
                       </div>}
                     </div>
                     <div style={{ marginTop: 12 }}>
                       <Campo
-                        etiqueta="Consumo de agua del día (litros) — indicador temprano de salud"
+                        etiqueta="Consumo de agua del d�a (litros) - indicador temprano de salud"
                         unidad="litros"
                         type="text"
                         inputMode="decimal"
                         placeholder="ej. 480"
                         value={cap.aguaL}
                         onChange={e => setCap({ aguaL: e.target.value })}
-                        advertencia={ratioAgua && (ratioAgua < 1.6 || ratioAgua > 2.6) ? `Relación agua:alimento atípica (${ratioAgua.toFixed(1)}:1) — rango sano: 1.8–2.2` : null}
+                        advertencia={ratioAgua && (ratioAgua < 1.6 || ratioAgua > 2.6) ? `Relaci�n agua:alimento at�pica (${ratioAgua.toFixed(1)}:1) - rango sano: 1.8-2.2` : null}
                       />
                     </div>
                   </>
@@ -4291,59 +4296,59 @@ export default function App() {
             </Seccion>
 
             <Seccion titulo="Actividades programadas" sub="Avisos dentro de la app para labores de la granja o de una galera. Marca Realizada para calcular el siguiente aviso.">
-              <button onClick={() => { setAlcanceReporteActividades(""); setTareasManualesReporte(""); setElegirReporteActividades(true); }} style={{ ...btnStyle, marginBottom: 14 }}>🖨 Tareas por hacer hoy</button>
+              <button onClick={() => { setAlcanceReporteActividades(""); setTareasManualesReporte(""); setElegirReporteActividades(true); }} style={{ ...btnStyle, marginBottom: 14 }}>?? Tareas por hacer hoy</button>
               {deshacerTarea && <div style={{ background: C.yemaSuave, padding: 9, marginBottom: 10, borderRadius: 8, fontSize: 12 }}>Actividad marcada como realizada. <button onClick={revertirActividadReciente}>Deshacer (30 segundos)</button></div>}
-              <label style={{ fontSize: 12 }}>Plantilla frecuente<select value="" onChange={e => { const t = JSON.parse(e.target.value || "null"); if (t) setFormTarea(v => ({ ...v, nombre: t.nombre, repeticion: t.repeticion, cadaDias: t.cadaDias || 22, diasSemana: t.diasSemana || [5] })); }} style={inputStyle}><option value="">Elegir plantilla</option>{[{ nombre: "Mantenimiento del zacate", repeticion: "dias", cadaDias: 22 }, { nombre: "Revisión de bebederos", repeticion: "semanal", diasSemana: [5] }, { nombre: "Limpieza profunda de galera", repeticion: "dias", cadaDias: 30 }, { nombre: "Conteo físico de inventario", repeticion: "dias", cadaDias: 30 }, ...plantillasTarea].map(t => <option key={t.nombre} value={JSON.stringify(t)}>{t.nombre}</option>)}</select></label>
-              <button onClick={async () => { const nombre = formTarea.nombre.trim(); if (!nombre) { avisar("⚠ Escribe el nombre de la plantilla"); return; } const actuales = await leer(K.plantillasTarea, []); const nuevos = [...actuales.filter(t => t.nombre !== nombre), { nombre, repeticion: formTarea.repeticion, cadaDias: formTarea.cadaDias, diasSemana: formTarea.diasSemana }]; if (await escribir(K.plantillasTarea, nuevos)) { setPlantillasTarea(nuevos); avisar("✓ Plantilla guardada para todos los dispositivos"); } }} style={{ marginBottom: 12 }}>Guardar actividad como plantilla</button>
+              <label style={{ fontSize: 12 }}>Plantilla frecuente<select value="" onChange={e => { const t = JSON.parse(e.target.value || "null"); if (t) setFormTarea(v => ({ ...v, nombre: t.nombre, repeticion: t.repeticion, cadaDias: t.cadaDias || 22, diasSemana: t.diasSemana || [5] })); }} style={inputStyle}><option value="">Elegir plantilla</option>{[{ nombre: "Mantenimiento del zacate", repeticion: "dias", cadaDias: 22 }, { nombre: "Revisi�n de bebederos", repeticion: "semanal", diasSemana: [5] }, { nombre: "Limpieza profunda de galera", repeticion: "dias", cadaDias: 30 }, { nombre: "Conteo f�sico de inventario", repeticion: "dias", cadaDias: 30 }, ...plantillasTarea].map(t => <option key={t.nombre} value={JSON.stringify(t)}>{t.nombre}</option>)}</select></label>
+              <button onClick={async () => { const nombre = formTarea.nombre.trim(); if (!nombre) { avisar("? Escribe el nombre de la plantilla"); return; } const actuales = await leer(K.plantillasTarea, []); const nuevos = [...actuales.filter(t => t.nombre !== nombre), { nombre, repeticion: formTarea.repeticion, cadaDias: formTarea.cadaDias, diasSemana: formTarea.diasSemana }]; if (await escribir(K.plantillasTarea, nuevos)) { setPlantillasTarea(nuevos); avisar("� Plantilla guardada para todos los dispositivos"); } }} style={{ marginBottom: 12 }}>Guardar actividad como plantilla</button>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 <Campo mitad etiqueta="Actividad" placeholder="ej. Mantenimiento del zacate" value={formTarea.nombre} onChange={e => setFormTarea({ ...formTarea, nombre: e.target.value })} />
-                <Campo mitad etiqueta="Asignada a" placeholder="Nombre de quien hará la actividad" value={formTarea.responsable || ""} onChange={e => setFormTarea({ ...formTarea, responsable: e.target.value })} />
-                <label style={{ flex: "1 1 190px", fontSize: 12.5 }}>Ámbito
+                <Campo mitad etiqueta="Asignada a" placeholder="Nombre de quien har� la actividad" value={formTarea.responsable || ""} onChange={e => setFormTarea({ ...formTarea, responsable: e.target.value })} />
+                <label style={{ flex: "1 1 190px", fontSize: 12.5 }}>Ambito
                   <select value={formTarea.lote} onChange={e => setFormTarea({ ...formTarea, lote: e.target.value })} style={selectStyle}>
                     <option value="">Toda la granja</option>
-                    {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.raza}</option>)}
+                    {activos.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} � {l.raza}</option>)}
                   </select>
                 </label>
                 <label style={{ flex: "1 1 160px", fontSize: 12.5 }}>Primera fecha
                   <input type="date" value={formTarea.inicio} onChange={e => setFormTarea({ ...formTarea, inicio: e.target.value })} style={inputStyle} />
                 </label>
-                <label style={{ flex: "1 1 160px", fontSize: 12.5 }}>Repetición
+                <label style={{ flex: "1 1 160px", fontSize: 12.5 }}>Repetici�n
                   <select value={formTarea.repeticion} onChange={e => setFormTarea({ ...formTarea, repeticion: e.target.value })} style={selectStyle}>
-                    <option value="dias">Cada cierto número de días</option><option value="semanal">Días de la semana</option><option value="una">Una sola vez</option>
+                    <option value="dias">Cada cierto n�mero de d�as</option><option value="semanal">D�as de la semana</option><option value="una">Una sola vez</option>
                   </select>
                 </label>
-                {formTarea.repeticion === "dias" && <Campo tercio etiqueta="Cada cuántos días" type="number" min="1" max="3650" value={formTarea.cadaDias} onChange={e => setFormTarea({ ...formTarea, cadaDias: e.target.value })} />}
+                {formTarea.repeticion === "dias" && <Campo tercio etiqueta="Cada cu�ntos d�as" type="number" min="1" max="3650" value={formTarea.cadaDias} onChange={e => setFormTarea({ ...formTarea, cadaDias: e.target.value })} />}
               </div>
               {formTarea.repeticion === "semanal" && <div style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "8px 0" }}>
-                {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((dia, i) => <label key={dia} style={{ fontSize: 13 }}>
+                {["Dom", "Lun", "Mar", "Mi�", "Jue", "Vie", "S�b"].map((dia, i) => <label key={dia} style={{ fontSize: 13 }}>
                   <input type="checkbox" checked={formTarea.diasSemana.includes(i)} onChange={e => setFormTarea(t => ({ ...t, diasSemana: e.target.checked ? [...t.diasSemana, i] : t.diasSemana.filter(x => x !== i) }))} /> {dia}
                 </label>)}
               </div>}
               <button onClick={guardarActividad} disabled={guardandoTarea || cargandoFondo} style={btnStyle}>{formTarea.id ? "Guardar cambios" : "Agregar actividad"}</button>
-              {formTarea.id && <button onClick={() => setFormTarea({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] })} style={{ marginLeft: 8 }}>Cancelar edición</button>}
+              {formTarea.id && <button onClick={() => setFormTarea({ nombre: "", lote: "", inicio: hoyISO(), repeticion: "dias", cadaDias: 22, diasSemana: [5] })} style={{ marginLeft: 8 }}>Cancelar edici�n</button>}
               <div style={{ marginTop: 14 }}>
                 {tareasProgramadas.map(t => {
                   const prox = proximaTarea(t);
                   const dias = prox ? diasHastaTarea(prox, hoyISO()) : null;
                   const alcance = t.lote ? `Galera ${lotes.find(l => l.id === t.lote)?.galpon || t.lote}` : "Toda la granja";
                   return <div key={t.id} style={{ borderTop: `1px solid ${C.borde}`, padding: "11px 0", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ flex: "1 1 240px", fontSize: 13 }}><b>{t.nombre}</b> · {alcance}{t.responsable ? ` · ${t.responsable}` : ""}<br />
+                    <span style={{ flex: "1 1 240px", fontSize: 13 }}><b>{t.nombre}</b> � {alcance}{t.responsable ? ` � ${t.responsable}` : ""}<br />
                       <small style={{ color: dias != null && dias <= 0 ? C.alerta : C.textoSuave }}>
-                        {prox ? `${dias < 0 ? `Atrasada ${-dias} día(s)` : dias === 0 ? "Para hoy" : `En ${dias} día(s)`} · ${prox}` : "Finalizada"}
-                        {t.repeticion === "dias" ? ` · cada ${t.cadaDias} días` : t.repeticion === "semanal" ? " · semanal" : " · una vez"}
+                        {prox ? `${dias < 0 ? `Atrasada ${-dias} d�a(s)` : dias === 0 ? "Para hoy" : `En ${dias} d�a(s)`} � ${prox}` : "Finalizada"}
+                        {t.repeticion === "dias" ? ` � cada ${t.cadaDias} d�as` : t.repeticion === "semanal" ? " � semanal" : " � una vez"}
                       </small>
-                      {!!t.historialRealizaciones?.length && <details><summary>Historial ({t.historialRealizaciones.length})</summary>{t.historialRealizaciones.slice().reverse().map((h, i) => <div key={i}>{h.fecha} · {h.accion === "reversión" ? "Realización deshecha" : "Realizada"} por {mostrarNombre(h.por)}{h.responsable && ` · asignada a ${h.responsable}`}</div>)}</details>}
+                      {!!t.historialRealizaciones?.length && <details><summary>Historial ({t.historialRealizaciones.length})</summary>{t.historialRealizaciones.slice().reverse().map((h, i) => <div key={i}>{h.fecha} � {h.accion === "reversi�n" ? "Realizaci�n deshecha" : "Realizada"} por {mostrarNombre(h.por)}{h.responsable && ` � asignada a ${h.responsable}`}</div>)}</details>}
                     </span>
-                    {prox && <button disabled={guardandoTarea} onClick={() => completarActividad(t)}>✓ Realizada</button>}
+                    {prox && <button disabled={guardandoTarea} onClick={() => completarActividad(t)}>� Realizada</button>}
                     <button disabled={guardandoTarea} onClick={() => setFormTarea({ ...t })}>Editar</button>
                     <button disabled={guardandoTarea} onClick={() => borrarActividad(t)}>Eliminar</button>
                   </div>;
                 })}
-                {!tareasProgramadas.length && <span style={{ fontSize: 13, color: C.textoSuave }}>Todavía no hay actividades programadas.</span>}
+                {!tareasProgramadas.length && <span style={{ fontSize: 13, color: C.textoSuave }}>Todav�a no hay actividades programadas.</span>}
               </div>
             </Seccion>
 
-            <Seccion accion={<BotonGuardaMini />} num="9" titulo="Chequeo sanitario y ambiente" sub="Observación diaria del galpón — 2 minutos que detectan problemas antes que los números">
+            <Seccion accion={<BotonGuardaMini />} num="9" titulo="Chequeo sanitario y ambiente" sub="Observaci�n diaria del galp�n - 2 minutos que detectan problemas antes que los n�meros">
               {(() => {
                 const ch = cap.chequeo || {};
                 const setCh = (campo, v) => setCap({ chequeo: { ...ch, [campo]: v } });
@@ -4351,7 +4356,7 @@ export default function App() {
                   <label style={{ display: "block", marginBottom: 10, flex: "1 1 45%", minWidth: 130 }}>
                     <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>{etiqueta}</span>
                     <select value={ch[campo] || ""} onChange={e => setCh(campo, e.target.value)} style={inputStyle}>
-                      <option value="">— sin revisar —</option>
+                      <option value="">- sin revisar -</option>
                       {ops.map(o => <option key={o}>{o}</option>)}
                     </select>
                   </label>
@@ -4359,31 +4364,31 @@ export default function App() {
                 return (
                   <>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <Sel campo="cascara" etiqueta="Calidad de cáscara" ops={["Buena", "Regular", "Mala (frágil)"]} />
-                      <Sel campo="cresta" etiqueta="Color de cresta" ops={["Roja intensa", "Pálida", "Morada/oscura"]} />
+                      <Sel campo="cascara" etiqueta="Calidad de c�scara" ops={["Buena", "Regular", "Mala (fr�gil)"]} />
+                      <Sel campo="cresta" etiqueta="Color de cresta" ops={["Rojo normal", "Roja intensa", "P�lida", "Morada/oscura"]} />
                       <Sel campo="consumoObs" etiqueta="Consumo alimento observado" ops={["Normal", "Bajo", "Seleccionan / botan"]} />
                       <Sel campo="aguaObs" etiqueta="Consumo agua observado" ops={["Normal", "Bajo", "Alto"]} />
                       <Sel campo="heces" etiqueta="Consistencia de heces" ops={["Normal", "Diarrea", "Con sangre"]} />
-                      <Sel campo="respiratorio" etiqueta="Sonidos respiratorios" ops={["No", "Sí"]} />
-                      <Sel campo="secrecion" etiqueta="Secreción nasal" ops={["No", "Sí"]} />
+                      <Sel campo="respiratorio" etiqueta="Sonidos respiratorios" ops={["No", "S�"]} />
+                      <Sel campo="secrecion" etiqueta="Secreci�n nasal" ops={["No", "S�"]} />
                       <Sel campo="comederos" etiqueta="Uniformidad de comederos" ops={["Buena", "Mala"]} />
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <Campo tercio etiqueta="pH del agua" unidad="pH" type="text" inputMode="decimal" placeholder="ej. 6.5" value={ch.ph || ""} onChange={e => setCh("ph", e.target.value)} />
                       <Campo tercio etiqueta="Cloro residual" unidad="ppm" type="text" placeholder="ej. 0.08" value={ch.cloro || ""} onChange={e => setCh("cloro", e.target.value)} />
-                      <Campo tercio etiqueta="Temperatura" unidad="°C" type="text" inputMode="decimal" placeholder="27–29" value={ch.temp || ""} onChange={e => setCh("temp", e.target.value)} />
-                      <Campo tercio etiqueta="Humedad relativa" unidad="%" type="text" inputMode="numeric" placeholder="50–70" value={ch.humedad || ""} onChange={e => setCh("humedad", e.target.value)} />
+                      <Campo tercio etiqueta="Temperatura" unidad="�C" type="text" inputMode="decimal" placeholder="27-29" value={ch.temp || ""} onChange={e => setCh("temp", e.target.value)} />
+                      <Campo tercio etiqueta="Humedad relativa" unidad="%" type="text" inputMode="numeric" placeholder="50-70" value={ch.humedad || ""} onChange={e => setCh("humedad", e.target.value)} />
                       <Campo tercio etiqueta="Horas de luz" unidad="horas" type="text" inputMode="decimal" placeholder="16" value={ch.luz || ""} onChange={e => setCh("luz", e.target.value)} />
                     </div>
                     <Campo etiqueta="Observaciones del chequeo" type="text" placeholder="ej. tolvas llenas al fondo, poca actividad" value={ch.obs || ""} onChange={e => setCh("obs", e.target.value)} />
-                    <button onClick={() => setPrintDoc({ tipo: "medidas", lote: galponActivo })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir boleta de medidas de producción</button>
+                    <button onClick={() => setPrintDoc({ tipo: "medidas", lote: galponActivo })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>?? Imprimir boleta de medidas de producci�n</button>
                   </>
                 );
               })()}
             </Seccion>
 
-            <Seccion titulo="Bitácora de novedades" sub="UNA sola para toda la granja — compartida entre los gallineros y guardada con el control">
-              <textarea value={notaDia} onChange={e => { notaSuciaRef.current = true; setNotaDia(e.target.value); }} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}
+            <Seccion titulo="Bit�cora de novedades" sub="UNA sola para toda la granja - compartida entre los gallineros y guardada con el control">
+              <textarea value={notaDia} onChange={e => { notaSuciaRef.current = true; setNotaDia(e.target.value); }} placeholder="ej. Se detect� gotera en G2, lleg� pedido de ma�z..." rows={3}
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
             </Seccion>
 
@@ -4396,67 +4401,67 @@ export default function App() {
             </div>
           </>
         )}
-        {/* ══ REPORTE ══ */}
+        {/* �� REPORTE �� */}
         {vista === "reporte" && (
           <>
             <BarraSubmenu
               subsecciones={[
-                { id: "resumen", nombre: "Resumen", icono: "📌" },
-                { id: "comparativo", nombre: "Comparativo", icono: "↔" },
-                { id: "decisiones", nombre: "Decisiones", icono: "⚠️" },
-                { id: "bitacora", nombre: "Bitácora", icono: "📝" },
-                { id: "auditoria", nombre: "Auditoría", icono: "🔍" },
-                { id: "kpis", nombre: "KPIs técnicos", icono: "📊" },
-                { id: "economia", nombre: "Economía", icono: "₡" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "resumen", nombre: "Resumen", icono: "??" },
+                { id: "comparativo", nombre: "Comparativo", icono: "" },
+                { id: "decisiones", nombre: "Decisiones", icono: "??" },
+                { id: "bitacora", nombre: "Bit�cora", icono: "??" },
+                { id: "auditoria", nombre: "Auditor�a", icono: "??" },
+                { id: "kpis", nombre: "KPIs t�cnicos", icono: "??" },
+                { id: "economia", nombre: "Econom�a", icono: "?" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ]}
               activo={subReporte}
               onChange={setSubReporte}
             />
-            <button onClick={() => setPrintDoc({ tipo: "reporte", seccion: subReporte })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir: {nombreSeccionReporte}</button>
+            <button onClick={() => setPrintDoc({ tipo: "reporte", seccion: subReporte })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>?? Imprimir: {nombreSeccionReporte}</button>
           </>
         )}
         {vista === "reporte" && dHoy && (() => {
           const Delta = ({ hoy, contra, invertir, unidad = "", dec = 1 }) => {
-            if (contra == null || !isFinite(contra)) return <span style={{ color: C.textoSuave }}>—</span>;
+            if (contra == null || !isFinite(contra)) return <span style={{ color: C.textoSuave }}>-</span>;
             const d = hoy - contra;
             const mejora = invertir ? d < 0 : d > 0;
             const igual = Math.abs(d) < 0.05;
             const color = igual ? C.textoSuave : mejora ? C.verde : C.alerta;
-            return <span style={{ color, fontWeight: 600 }}>{igual ? "=" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(dec)}${unidad}`}</span>;
+            return <span style={{ color, fontWeight: 600 }}>{igual ? "=" : `${d > 0 ? "" : ""} ${Math.abs(d).toFixed(dec)}${unidad}`}</span>;
           };
           const filas = [
-            { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dFechaCercana?.cartones, hoy: dHoy.cartones, u: "" },
+            { n: "Producci�n", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dFechaCercana?.cartones, hoy: dHoy.cartones, u: "" },
             { n: "% Postura", v: `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dFechaCercana?.postura, hoy: dHoy.postura, u: " pts" },
             { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: dFechaCercana?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
-            { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: dFechaCercana?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
+            { n: "Conversi�n", v: dHoy.conv ? dHoy.conv.toFixed(2) : "-", a: dAyer?.conv, m: dFechaCercana?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
             { n: "Mortalidad", v: `${dHoy.muertas} aves`, a: dAyer?.muertas, m: dFechaCercana?.muertas, hoy: dHoy.muertas, u: "", inv: true, dec: 0 },
             { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: dFechaCercana?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
-            { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dFechaCercana?.pesoH, hoy: dHoy.pesoH, u: " g" },
+            { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "-", a: dAyer?.pesoH, m: dFechaCercana?.pesoH, hoy: dHoy.pesoH, u: " g" },
           ];
           const brechaGen = metaGenetica == null ? null : metaGenetica - dHoy.postura;
           const notasHoy = bitacora.filter(b => b.fecha === fHoy);
           return (
             <>
               {verReporte("resumen") && <div style={{ background: C.verde, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 14 }}>
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>Reporte del día · {fHoy}</div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>Reporte del d�a � {fHoy}</div>
                 <div style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.6, opacity: 0.95 }}>
                   Se produjeron <b>{dHoy.cartones.toFixed(1)} cartones</b> con postura de <b>{dHoy.postura.toFixed(1)}%</b>
-                  {dAyer && <> ({dHoy.postura >= dAyer.postura ? "▲" : "▼"} {Math.abs(dHoy.postura - dAyer.postura).toFixed(1)} pts vs ayer)</>},
-                  {brechaGen != null && <> a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta genética ({metaGenetica.toFixed(1)}%).</>}
+                  {dAyer && <> ({dHoy.postura >= dAyer.postura ? "" : ""} {Math.abs(dHoy.postura - dAyer.postura).toFixed(1)} pts vs ayer)</>},
+                  {brechaGen != null && <> a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta gen�tica ({metaGenetica.toFixed(1)}%).</>}
                   Mortalidad: <b>{dHoy.muertas}</b>. Quebrado: <b>{dHoy.pctQueb.toFixed(1)}%</b>. Concentrado en planta: <b>{saldoPlanta.toFixed(0)} kg</b>.
                 </div>
               </div>}
 
-              {verReporte("comparativo") && <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} día(s) ${diasDiferencia < 0 ? "antes" : "después"}`}` : ""}). ${fechasDescartadas ? `${fechasDescartadas} control(es) con producción superior a las aves alojadas excluido(s).` : ""}`}>
+              {verReporte("comparativo") && <Seccion titulo="Comparativo" sub={`Datos del ${fHoy} comparados con ${fAyer || "sin registro anterior"} y con ${fechaComparacion || "sin otro registro"} (fecha buscada: ${fechaObjetivo}${fechaComparacion ? `; ${diasDiferencia === 0 ? "fecha exacta" : `${Math.abs(diasDiferencia)} d�a(s) ${diasDiferencia < 0 ? "antes" : "despu�s"}`}` : ""}). ${fechasDescartadas ? `${fechasDescartadas} control(es) con producci�n superior a las aves alojadas excluido(s).` : ""}`}>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                     <thead>
                       <tr style={{ color: C.textoSuave, textAlign: "right", fontSize: 12 }}>
                         <th style={{ textAlign: "left", padding: "6px 4px" }}>Indicador</th>
                         <th style={{ padding: "6px 4px" }}>Datos {fHoy}</th>
-                        <th style={{ padding: "6px 4px" }}>vs {fAyer || "—"}</th>
-                        <th style={{ padding: "6px 4px" }}>vs {fechaComparacion || "—"}</th>
+                        <th style={{ padding: "6px 4px" }}>vs {fAyer || "-"}</th>
+                        <th style={{ padding: "6px 4px" }}>vs {fechaComparacion || "-"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4473,14 +4478,14 @@ export default function App() {
                 </div>
               </Seccion>}
 
-              {verReporte("comparativo") && <Seccion titulo="vs Genética — por gallinero" sub="Postura del día contra la tabla de la casa genética">
+              {verReporte("comparativo") && <Seccion titulo="vs Gen�tica - por gallinero" sub="Postura del d�a contra la tabla de la casa gen�tica">
                 {activos.map(l => {
                   const r = registros.find(x => x.fecha === fHoy && x.lote === l.id);
                   const p = r ? (r.cartones * HXC / l.aves) * 100 : null;
                   return (
                     <div key={l.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: p != null ? 0 : 4 }}>
-                        <b>Gallinero {l.galpon} · {l.raza} ({semanasDe(l.nac).toFixed(0)} sem){l.estadoProd && l.estadoProd !== "Producción normal" ? <span style={{ color: "#9A6605", fontWeight: 700 }}> · {l.estadoProd}</span> : null}</b>
+                        <b>Gallinero {l.galpon} � {l.raza} ({semanasDe(l.nac).toFixed(0)} sem){l.estadoProd && l.estadoProd !== "Producci�n normal" ? <span style={{ color: "#9A6605", fontWeight: 700 }}> � {l.estadoProd}</span> : null}</b>
                         {p == null && <span style={{ color: C.textoSuave }}>sin registro hoy</span>}
                       </div>
                       {p != null && <BarraPostura actual={p} meta={metaPosturaLote(l, fHoy)} />}
@@ -4489,7 +4494,7 @@ export default function App() {
                 })}
               </Seccion>}
 
-              {verReporte("comparativo") && <Seccion titulo="⚖️ Peso corporal vs tabla genética" sub="Tu medida crítica — del último pesaje de cada gallinero">
+              {verReporte("comparativo") && <Seccion titulo="?? Peso corporal vs tabla gen�tica" sub="Tu medida cr�tica - del �ltimo pesaje de cada gallinero">
                 {activos.map(l => {
                   const pes = pesajes.find(p2 => p2.lote === l.id);
                   if (!pes || !pes.pesos?.length) return (
@@ -4507,13 +4512,13 @@ export default function App() {
                   return (
                     <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, flexWrap: "wrap", gap: 4 }}>
-                        <b>Gallinero {l.galpon} · {l.raza}</b>
-                        <span style={{ fontSize: 12, color: C.textoSuave }}>pesaje {pes.fecha.slice(0, 5)} · {pes.pesos.length} aves{dias > 21 ? " ⚠ viejo" : ""}</span>
+                        <b>Gallinero {l.galpon} � {l.raza}</b>
+                        <span style={{ fontSize: 12, color: C.textoSuave }}>pesaje {pes.fecha.slice(0, 5)} � {pes.pesos.length} aves{dias > 21 ? " ? viejo" : ""}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3 }}>
                         <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>{prom.toFixed(0)} g</span>
                         {meta > 0
-                          ? <b style={{ color, fontSize: 13.5 }}>{brechaG >= 0 ? "+" : ""}{brechaG.toFixed(0)} g vs tabla ({brechaP >= 0 ? "+" : ""}{brechaP.toFixed(1)}%) · meta {meta} g</b>
+                          ? <b style={{ color, fontSize: 13.5 }}>{brechaG >= 0 ? "+" : ""}{brechaG.toFixed(0)} g vs tabla ({brechaP >= 0 ? "+" : ""}{brechaP.toFixed(1)}%) � meta {meta} g</b>
                           : <span style={{ fontSize: 12.5, color: C.textoSuave }}>define el peso meta en Lotes para comparar</span>}
                       </div>
                     </div>
@@ -4521,85 +4526,85 @@ export default function App() {
                 })}
               </Seccion>}
 
-              {verReporte("decisiones") && <Seccion titulo="Para decidir hoy" sub={decisiones.length ? "Generado automáticamente con los datos del día — puedes modificar o descartar cada punto" : ""}>
-                {decisionesVisibles.length === 0 && <div style={{ fontSize: 14, color: C.verde, fontWeight: 500 }}>✓ Sin alertas — el día se comportó dentro de los rangos esperados.</div>}
+              {verReporte("decisiones") && <Seccion titulo="Para decidir hoy" sub={decisiones.length ? "Generado autom�ticamente con los datos del d�a - puedes modificar o descartar cada punto" : ""}>
+                {decisionesVisibles.length === 0 && <div style={{ fontSize: 14, color: C.verde, fontWeight: 500 }}>� Sin alertas - el d�a se comport� dentro de los rangos esperados.</div>}
                 {decisionesVisibles.map((d, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: d.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5 }}>
                     <div style={{ display: "flex", gap: 8, flex: 1 }}>
-                      <span>{d.nivel === "rojo" ? "🔴" : "🟡"}</span>
+                      <span>{d.nivel === "rojo" ? "??" : "??"}</span>
                       <div>
                         <span>{d.textoAjustado || d.texto}</span>
                         {d.ajuste && (
                           <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>
-                            ✏️ Modificado por <b>{mostrarNombre(d.ajuste.responsable)}</b> ({d.ajuste.fecha}): <i>"{d.ajuste.razon}"</i>
+                            ?? Modificado por <b>{mostrarNombre(d.ajuste.responsable)}</b> ({d.ajuste.fecha}): <i>"{d.ajuste.razon}"</i>
                           </div>
                         )}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "modificar")} title="Modificar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
-                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "eliminar")} title="Descartar / eliminar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
+                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "modificar")} title="Modificar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>??</button>
+                      <button onClick={() => abrirModalAjusteAdv(d, "decisiones", "eliminar")} title="Descartar / eliminar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>x</button>
                     </div>
                   </div>
                 ))}
               </Seccion>}
 
               {verReporte("bitacora") && notasHoy.length > 0 && (
-                <Seccion titulo="Bitácora del día">
+                <Seccion titulo="Bit�cora del d�a">
                   {notasHoy.map((n, i) => (
                     <div key={i} style={{ fontSize: 13.5, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
-                      {n.texto}{n.por && <span style={{ color: C.textoSuave }}> — {mostrarNombre(n.por)}</span>}
+                      {n.texto}{n.por && <span style={{ color: C.textoSuave }}> - {mostrarNombre(n.por)}</span>}
                     </div>
                   ))}
                 </Seccion>
               )}
-              {verReporte("bitacora") && notasHoy.length === 0 && <Seccion titulo="Bitácora del día"><div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin novedades registradas para esta fecha.</div></Seccion>}
+              {verReporte("bitacora") && notasHoy.length === 0 && <Seccion titulo="Bit�cora del d�a"><div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin novedades registradas para esta fecha.</div></Seccion>}
             </>
           );
         })()}
         {vista === "reporte" && !dHoy && verReporte("resumen", "comparativo", "decisiones", "bitacora") && (
-          <Seccion titulo="Reporte del día">
-            <div style={{ fontSize: 14, color: C.textoSuave }}>Aún no hay registros. Captura el control diario y el reporte se genera solo.</div>
+          <Seccion titulo="Reporte del d�a">
+            <div style={{ fontSize: 14, color: C.textoSuave }}>A�n no hay registros. Captura el control diario y el reporte se genera solo.</div>
           </Seccion>
         )}
-        {/* ══ BODEGA ══ */}
+        {/* �� BODEGA �� */}
         {vista === "bodega" && (
           <>
             {retirosActivos.length > 0 && (
               <div style={{ background: C.alertaSuave, border: `1px solid #EBC0B5`, borderRadius: 14, padding: "12px 15px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.5 }}>
-                <b>🔴 Retiro de medicamento activo:</b> {retirosActivos.map(m => `G${m.galpon} (${m.producto}) hasta ${m.retiroHasta}`).join(" · ")}. No comercializar huevo de esos gallineros.
+                <b>?? Retiro de medicamento activo:</b> {retirosActivos.map(m => `G${m.galpon} (${m.producto}) hasta ${m.retiroHasta}`).join(" � ")}. No comercializar huevo de esos gallineros.
               </div>
             )}
-            <button onClick={() => setPrintDoc({ tipo: "bodega" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir movimiento de bodega</button>
+            <button onClick={() => setPrintDoc({ tipo: "bodega" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>?? Imprimir movimiento de bodega</button>
             <label id="form-bodega" style={{ display: "block", marginBottom: 10, scrollMarginTop: 110 }}>
               <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del movimiento de bodega</span>
               <input type="date" value={fechaBodega} onChange={e => cambiarFechaBodega(e.target.value)} style={inputStyle} />
             </label>
             {bodegaMovs.filter(m => fechaHistorialISO(m.fecha) === fechaBodega).length > 1 && <div style={{ padding: "9px 12px", marginBottom: 10, background: C.alertaSuave, borderRadius: 9, fontSize: 12.5, color: C.alerta }}>
-              Hay movimientos duplicados para {fechaB}. Elige «Editar / conservar» en la fila correcta del historial; al guardar con un motivo se unificarán y quedará copia de los otros valores en la bitácora.
+              Hay movimientos duplicados para {fechaB}. Elige �Editar / conservar� en la fila correcta del historial; al guardar con un motivo se unificar�n y quedar� copia de los otros valores en la bit�cora.
             </div>}
             {fechaBodega !== hoyISO() && (
               <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9A6605", background: C.yemaSuave, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
-                📅 Estás en la bodega del {fechaB} — al guardar se {bodegaMovs.some(m => m.fecha === fechaB) ? "editará ese día y se recalcularán los saldos siguientes" : "creará ese día y se recalculará la cadena de saldos"}.
+                ?? Est�s en la bodega del {fechaB} - al guardar se {bodegaMovs.some(m => m.fecha === fechaB) ? "editar� ese d�a y se recalcular�n los saldos siguientes" : "crear� ese d�a y se recalcular� la cadena de saldos"}.
               </div>
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
               <KPI etiqueta="Entradas (+)" valor={f2Dec(producidoHoyCart + Number(movBodega.comprado || 0))} unidad="cart" tono="ok" sub={`Producido ${producidoHoyCart.toFixed(1)}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${Number(movBodega.comprado).toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Salidas (−)" valor={f2Dec(rutaNeta + Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0))} unidad="cart" tono={rutaNeta > 0 ? "alerta" : undefined} sub={`Ruta neta ${rutaNeta.toFixed(1)}${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)) > 0 ? ` + otras ${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)).toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Saldo proyectado" valor={f2Dec(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : "= inicial + entradas − salidas"} />
+              <KPI etiqueta="Salidas (-)" valor={f2Dec(rutaNeta + Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0))} unidad="cart" tono={rutaNeta > 0 ? "alerta" : undefined} sub={`Ruta neta ${rutaNeta.toFixed(1)}${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)) > 0 ? ` + otras ${(Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0)).toFixed(1)}` : ""}`} />
+              <KPI etiqueta="Saldo proyectado" valor={f2Dec(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo f�sico" : "= inicial + entradas - salidas"} />
             </div>
 
-            {/* Sub-menú de funciones de Bodega */}
+            {/* Sub-men� de funciones de Bodega */}
             <div className="v10-subnav" style={{ display: "flex", gap: 7, overflowX: "auto", padding: "4px 2px 14px", marginBottom: 14, borderBottom: `1px solid ${C.borde}` }}>
               {[
-                { id: "producido", nombre: "1. Huevo producido", icono: "🥚" },
-                { id: "ruta", nombre: "2. Salida a ruta", icono: "🚚" },
-                { id: "otros", nombre: "3. Otros movimientos", icono: "📦" },
-                { id: "cierre", nombre: "4. Cierre del día", icono: "🔒" },
-                { id: "historial", nombre: "Historial", icono: "📋" },
-                { id: "apertura", nombre: "Apertura", icono: "⚙️" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "producido", nombre: "1. Huevo producido", icono: "??" },
+                { id: "ruta", nombre: "2. Salida a ruta", icono: "??" },
+                { id: "otros", nombre: "3. Otros movimientos", icono: "??" },
+                { id: "cierre", nombre: "4. Cierre del d�a", icono: "??" },
+                { id: "historial", nombre: "Historial", icono: "??" },
+                { id: "apertura", nombre: "Apertura", icono: "??" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ].map(sub => (
                 <button
                   key={sub.id}
@@ -4625,10 +4630,10 @@ export default function App() {
             </div>
 
             {(subBodega === "producido" || subBodega === "todo") && (
-            <Seccion num="1" titulo="Huevo producido por gallinero" sub={`Automático desde el Control diario del ${fechaB}`}>
+            <Seccion num="1" titulo="Huevo producido por gallinero" sub={`Autom�tico desde el Control diario del ${fechaB}`}>
               {producidoPorGalpon.map(g => (
                 <div key={g.galpon} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 14 }}>
-                  <span><b>Gallinero {g.galpon}</b> <span style={{ color: C.textoSuave, fontSize: 12 }}>· {g.raza}</span></span>
+                  <span><b>Gallinero {g.galpon}</b> <span style={{ color: C.textoSuave, fontSize: 12 }}>� {g.raza}</span></span>
                   <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: g.cartones > 0 ? C.verde : C.textoSuave }}>
                     {g.cartones > 0 ? `${g.cartones.toFixed(1)} cart` : "sin registro"}
                   </span>
@@ -4640,7 +4645,7 @@ export default function App() {
               </div>
               {subBodega !== "todo" && (
                 <button type="button" onClick={() => setSubBodega("ruta")} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 12, padding: "10px", fontSize: 13.5 }}>
-                  Siguiente: 2. Salida a ruta por repartidor ›
+                  Siguiente: 2. Salida a ruta por repartidor >
                 </button>
               )}
             </Seccion>
@@ -4663,7 +4668,7 @@ export default function App() {
                       <button onClick={() => {
                         const rs = repartos.filter((_, j) => j !== i); setRepartos(rs);
                         guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });
-                      }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
+                      }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>x</button>
                     </div>
                     {(() => {
                       const nums = String(r.tiq || "").trim().split(/[\s,;]+/).filter(Boolean);
@@ -4682,7 +4687,7 @@ export default function App() {
                       return (
                         <div style={{ marginBottom: 8 }}>
                           <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textoSuave, marginBottom: 3 }}>
-                            Tiquetes que se lleva — NÚMEROS separados por espacio: el sistema busca cada tiquete y suma sus cartones
+                            Tiquetes que se lleva - NUMEROS separados por espacio: el sistema busca cada tiquete y suma sus cartones
                           </span>
                           <input type="text" placeholder="ej. 4521 4522 4530" value={r.tiq || ""}
                             onChange={e => {
@@ -4701,12 +4706,12 @@ export default function App() {
                                 <span key={j} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 10,
                                   background: !d.hallado ? "#FBEAE6" : d.repetido ? C.yemaSuave : C.verdeSuave,
                                   color: !d.hallado ? C.alerta : d.repetido ? "#9A6605" : C.verde }}>
-                                  #{d.num}{d.hallado ? `: ${d.cartones} cart` + (d.peso ? ` · ${d.peso.toFixed(1)} kg` : "") + ` (G${d.galpon} ${String(d.fecha).slice(0, 5)})` : ": no existe en producción"}{d.repetido ? " ⚠ ya salió antes" : ""}
+                                  #{d.num}{d.hallado ? `: ${d.cartones} cart` + (d.peso ? ` � ${d.peso.toFixed(1)} kg` : "") + ` (G${d.galpon} ${String(d.fecha).slice(0, 5)})` : ": no existe en producci�n"}{d.repetido ? " ? ya sali� antes" : ""}
                                 </span>
                               ))}
                               {hallados.length > 0 && (
                                 <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: C.verde, color: "#fff" }}>
-                                  Σ {hallados.length} tiq · {totalCart.toFixed(1)} cart{totalKg > 0 ? ` · ${totalKg.toFixed(1)} kg` : ""} → Salida
+                                  � {hallados.length} tiq � {totalCart.toFixed(1)} cart{totalKg > 0 ? ` � ${totalKg.toFixed(1)} kg` : ""}  Salida
                                 </span>
                               )}
                             </div>
@@ -4728,55 +4733,55 @@ export default function App() {
             )}
 
             {(subBodega === "otros" || subBodega === "todo") && (
-            <Seccion num="3" titulo="Otros movimientos del día" sub="Solo si aplica — en cartones">
+            <Seccion num="3" titulo="Otros movimientos del d�a" sub="Solo si aplica - en cartones">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta="Huevo comprado (+)" type="text" inputMode="decimal" placeholder="0" value={movBodega.comprado} onChange={e => setMovBodega({ ...movBodega, comprado: e.target.value })} />
-                <Campo mitad etiqueta="Vendido en granja (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.vendGranja} onChange={e => setMovBodega({ ...movBodega, vendGranja: e.target.value })} />
-                <Campo mitad etiqueta="Destruido/quebrado en bodega (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => setMovBodega({ ...movBodega, destruido: e.target.value })} />
-                <Campo mitad etiqueta="Regalado / salida gratis (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => setMovBodega({ ...movBodega, regalado: e.target.value })} />
+                <Campo mitad etiqueta="Vendido en granja (-)" type="text" inputMode="decimal" placeholder="0" value={movBodega.vendGranja} onChange={e => setMovBodega({ ...movBodega, vendGranja: e.target.value })} />
+                <Campo mitad etiqueta="Destruido/quebrado en bodega (-)" type="text" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => setMovBodega({ ...movBodega, destruido: e.target.value })} />
+                <Campo mitad etiqueta="Regalado / salida gratis (-)" type="text" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => setMovBodega({ ...movBodega, regalado: e.target.value })} />
               </div>
               {subBodega !== "todo" && (
                 <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => setSubBodega("ruta")} style={{ padding: "10px 14px", fontSize: 13, background: "transparent", border: `1px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>‹ 2. Salida a ruta</button>
-                  <button type="button" onClick={() => setSubBodega("cierre")} style={{ ...btnStyle, flex: 1, margin: 0, padding: "10px", fontSize: 13.5 }}>Siguiente: 4. Cierre del día ›</button>
+                  <button type="button" onClick={() => setSubBodega("ruta")} style={{ padding: "10px 14px", fontSize: 13, background: "transparent", border: `1px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>< 2. Salida a ruta</button>
+                  <button type="button" onClick={() => setSubBodega("cierre")} style={{ ...btnStyle, flex: 1, margin: 0, padding: "10px", fontSize: 13.5 }}>Siguiente: 4. Cierre del d�a ></button>
                 </div>
               )}
             </Seccion>
             )}
 
             {(subBodega === "cierre" || subBodega === "todo") && (
-            <Seccion num="4" titulo="Cierre del día" sub="Revisa el movimiento completo, ajusta si contaste, y guarda">
+            <Seccion num="4" titulo="Cierre del d�a" sub="Revisa el movimiento completo, ajusta si contaste, y guarda">
               <div style={{ fontSize: 14, marginBottom: 12, display: "grid", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del día (=)</span><b>{f2Dec(saldoBase)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del d�a (=)</span><b>{f2Dec(saldoBase)}</b></div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Huevo producido (+)</span><b>{f2Dec(producidoHoyCart)}</b></div>
                 {Number(movBodega.comprado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Comprado (+)</span><b>{Number(movBodega.comprado).toFixed(1)}</b></div>}
-                <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Salida neta a ruta (−)</span><b>{rutaNeta.toFixed(1)}</b></div>
-                {Number(movBodega.vendGranja || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Vendido en granja (−)</span><b>{Number(movBodega.vendGranja).toFixed(1)}</b></div>}
-                {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (−)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}
-                {Number(movBodega.regalado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Regalado (−)</span><b>{Number(movBodega.regalado).toFixed(1)}</b></div>}
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Salida neta a ruta (-)</span><b>{rutaNeta.toFixed(1)}</b></div>
+                {Number(movBodega.vendGranja || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Vendido en granja (-)</span><b>{Number(movBodega.vendGranja).toFixed(1)}</b></div>}
+                {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (-)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}
+                {Number(movBodega.regalado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Regalado (-)</span><b>{Number(movBodega.regalado).toFixed(1)}</b></div>}
               </div>
-              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${f2Dec(saldoCalculado)})`} type="text" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
+              <Campo etiqueta={`Ajuste / conteo f�sico - cartones reales (calculado: ${f2Dec(saldoCalculado)})`} type="text" inputMode="decimal" placeholder="D�jalo vac�o si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
               {hayAjuste && <div style={{ fontSize: 12.5, color: difAjuste === 0 ? C.verde : "#9A6605", marginTop: -6, marginBottom: 10 }}>
-                {difAjuste === 0 ? "✓ El conteo coincide con lo calculado" : `El saldo se fijará en ${f2Dec(ajusteBodega)} cartones — diferencia de ${difAjuste > 0 ? "+" : ""}${f2Dec(difAjuste)} vs lo calculado (quedará registrada)`}
+                {difAjuste === 0 ? "� El conteo coincide con lo calculado" : `El saldo se fijar� en ${f2Dec(ajusteBodega)} cartones - diferencia de ${difAjuste > 0 ? "+" : ""}${f2Dec(difAjuste)} vs lo calculado (quedar� registrada)`}
               </div>}
-              <Campo etiqueta="Observaciones del día" type="text" placeholder="Opcional" value={obsInv} onChange={e => setObsInv(e.target.value)} />
-              {movBodegaId != null && <Campo etiqueta="Motivo del cambio (obligatorio para editar)" type="text" placeholder="Ej. corregir devolución de ruta del 25" value={motivoEdicionBodega} onChange={e => setMotivoEdicionBodega(e.target.value)} />}
+              <Campo etiqueta="Observaciones del d�a" type="text" placeholder="Opcional" value={obsInv} onChange={e => setObsInv(e.target.value)} />
+              {movBodegaId != null && <Campo etiqueta="Motivo del cambio (obligatorio para editar)" type="text" placeholder="Ej. corregir devoluci�n de ruta del 25" value={motivoEdicionBodega} onChange={e => setMotivoEdicionBodega(e.target.value)} />}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, marginBottom: 12 }}>
                 <b>Saldo final en bodega (=)</b><b style={{ color: C.verde }}>{saldoFinal.toFixed(1)} cartones</b>
               </div>
-              <button onClick={guardarBodega} disabled={guardando} style={btnStyle}>{guardando ? "Guardando…" : "Guardar movimiento del día"}</button>
+              <button onClick={guardarBodega} disabled={guardando} style={btnStyle}>{guardando ? "Guardando." : "Guardar movimiento del d�a"}</button>
               <details style={{ marginTop: 12, padding: 10, background: C.verdeSuave, borderRadius: 10 }}><summary style={{ fontWeight: 700 }}>Cierre guiado de bodega</summary>
-                <p style={{ fontSize: 12 }}>Revisa los tiquetes de cada ruta, digita las devoluciones y cuenta los cartones físicos arriba. Guarda el movimiento antes de confirmar el cierre.</p>
-                {[["salidas", "Tiquetes y salidas revisados"], ["devoluciones", "Devoluciones buenas y malas revisadas"], ["conteo", "Saldo físico contado y registrado"]].map(([k, etiqueta]) => <label key={k} style={{ display: "block", fontSize: 12, padding: 5 }}><input type="checkbox" checked={pasosBodega[k]} onChange={e => setPasosBodega(v => ({ ...v, [k]: e.target.checked }))} /> {etiqueta}</label>)}
-                {bodegaMovs.find(m => String(m.id) === String(movBodegaId))?.cierreVerificado && <div style={{ color: C.verde, fontSize: 12 }}>✓ Cerrado por {mostrarNombre(bodegaMovs.find(m => String(m.id) === String(movBodegaId)).cierreVerificado.responsable)}</div>}
-                <button disabled={guardando} onClick={cerrarBodegaDia} style={{ ...btnStyle, marginTop: 8 }}>Confirmar cierre del día</button>
+                <p style={{ fontSize: 12 }}>Revisa los tiquetes de cada ruta, digita las devoluciones y cuenta los cartones f�sicos arriba. Guarda el movimiento antes de confirmar el cierre.</p>
+                {[["salidas", "Tiquetes y salidas revisados"], ["devoluciones", "Devoluciones buenas y malas revisadas"], ["conteo", "Saldo f�sico contado y registrado"]].map(([k, etiqueta]) => <label key={k} style={{ display: "block", fontSize: 12, padding: 5 }}><input type="checkbox" checked={pasosBodega[k]} onChange={e => setPasosBodega(v => ({ ...v, [k]: e.target.checked }))} /> {etiqueta}</label>)}
+                {bodegaMovs.find(m => String(m.id) === String(movBodegaId))?.cierreVerificado && <div style={{ color: C.verde, fontSize: 12 }}>� Cerrado por {mostrarNombre(bodegaMovs.find(m => String(m.id) === String(movBodegaId)).cierreVerificado.responsable)}</div>}
+                <button disabled={guardando} onClick={cerrarBodegaDia} style={{ ...btnStyle, marginTop: 8 }}>Confirmar cierre del d�a</button>
               </details>
-              <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>Los cambios de movimientos existentes conservan la versión anterior y el motivo en el historial.</div>
+              <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>Los cambios de movimientos existentes conservan la versi�n anterior y el motivo en el historial.</div>
             </Seccion>
             )}
 
             {(subBodega === "apertura" || subBodega === "todo") && (
-            <Seccion titulo="Apertura de bodega — saldo inicial" sub="El punto de arranque oficial: desde esta fecha corren los balances; lo anterior queda como histórico sin afectar">
+            <Seccion titulo="Apertura de bodega - saldo inicial" sub="El punto de arranque oficial: desde esta fecha corren los balances; lo anterior queda como hist�rico sin afectar">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta="Cartones iniciales" type="text" inputMode="decimal" placeholder="ej. 1470" value={bodegaCfg.inicialCart}
                   onChange={e => guardarCfgBodega({ ...bodegaCfg, inicialCart: e.target.value })} />
@@ -4785,7 +4790,7 @@ export default function App() {
                   <input type="date" value={bodegaCfg.inicialFecha || ""} onChange={e => guardarCfgBodega({ ...bodegaCfg, inicialFecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
-              {bodegaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La bodega abre el {bodegaCfg.inicialFecha.split("-").reverse().join("/")} con {bodegaCfg.inicialCart || 0} cartones.</div>}
+              {bodegaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>� La bodega abre el {bodegaCfg.inicialFecha.split("-").reverse().join("/")} con {bodegaCfg.inicialCart || 0} cartones.</div>}
             </Seccion>
             )}
 
@@ -4796,29 +4801,29 @@ export default function App() {
                   const duplicados = bodegaMovs.filter(x => fechaHistorialISO(x.fecha) === fechaHistorialISO(m.fecha)).length;
                   return <div key={m.id} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 7 }}>
-                      <span><b>{m.fecha}</b> · +{m.producido} prod · −{Number(m.rutaNeta || 0).toFixed(1)} ruta{duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> · cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
+                      <span><b>{m.fecha}</b> � +{m.producido} prod � -{Number(m.rutaNeta || 0).toFixed(1)} ruta{duplicados > 1 && <b style={{ color: C.alerta }}> � {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> � cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
                       <b style={{ color: C.verde }}>= {f2Dec(m.saldoFinal)} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
                       <button onClick={() => { cambiarFechaBodega(fechaHistorialISO(m.fecha), m.id); setSubBodega("cierre"); document.getElementById("form-bodega")?.scrollIntoView({ behavior: "smooth" }); }} style={{ padding: "5px 9px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>Editar{duplicados > 1 ? " / conservar este" : ""}</button>
-                      <button onClick={() => setPrintDoc({ tipo: "bodega", movimientoId: m.id })} style={{ padding: "5px 9px", fontSize: 11.5, background: "#fff", color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>🖨 Imprimir</button>
+                      <button onClick={() => setPrintDoc({ tipo: "bodega", movimientoId: m.id })} style={{ padding: "5px 9px", fontSize: 11.5, background: "#fff", color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>?? Imprimir</button>
                     </div>
                     {!!m.historialEdiciones?.length && <details style={{ marginTop: 7 }}><summary style={{ cursor: "pointer", fontSize: 11.5 }}>Ver cambios ({m.historialEdiciones.length})</summary>
                       {m.historialEdiciones.map((c, i) => <div key={i} style={{ padding: "7px 0", borderTop: `1px solid ${C.borde}`, fontSize: 11.5 }}>
-                        <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> · {mostrarNombre(c.por)} · {c.motivo}<br />
-                        Antes: {f2Dec(c.anterior?.saldoFinal)} cart → después: {f2Dec(c.nuevo?.saldoFinal)} cart.
+                        <b>{new Date(c.fechaHora).toLocaleString("es-CR")}</b> � {mostrarNombre(c.por)} � {c.motivo}<br />
+                        Antes: {f2Dec(c.anterior?.saldoFinal)} cart  despu�s: {f2Dec(c.nuevo?.saldoFinal)} cart.
                         {!!c.duplicadosRetirados?.length && <details><summary>Registros duplicados retirados ({c.duplicadosRetirados.length})</summary>{c.duplicadosRetirados.map((retirado, j) => <ResumenMovimientoBodega key={j} movimiento={retirado} />)}</details>}
                         <details><summary>Ver datos modificados</summary><CambiosBodega anterior={c.anterior} nuevo={c.nuevo} /></details>
                       </div>)}
                     </details>}
                   </div>;
                 })}
-                {!historialVisible(bodegaMovs, "bodega").length && <div style={{ fontSize: 12.5, color: C.textoSuave }}>Sin movimientos en este período. Elige «Todo el historial» para ver fechas anteriores.</div>}
+                {!historialVisible(bodegaMovs, "bodega").length && <div style={{ fontSize: 12.5, color: C.textoSuave }}>Sin movimientos en este per�odo. Elige �Todo el historial� para ver fechas anteriores.</div>}
               </Seccion>
             )}
           </>
         )}
-        {/* ══ PLANTA DE CONCENTRADO ══ */}
+        {/* �� PLANTA DE CONCENTRADO �� */}
         {vista === "planta" && (
           <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
@@ -4827,35 +4832,35 @@ export default function App() {
               <KPI etiqueta="Producido hoy" valor={f2Dec(producidoPlantaHoy)} unidad="kg" sub={`${plantaHoy.filter(m => m.tipo === "bache").reduce((s, m) => s + Number(m.baches || 0), 0)} baches`} />
             </div>
             <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 12, padding: "0 2px" }}>
-              Esquema por categoría: inventario inicial + baches producidos − servido (aves automático del Control diario · ganado se digita aquí) ± ajustes = inventario final.
+              Esquema por categor�a: inventario inicial + baches producidos - servido (aves autom�tico del Control diario � ganado se digita aqu�) � ajustes = inventario final.
             </div>
             {[["Aves", saldosAvesFormula, saldoAves], ["Ganado", saldosGanadoFormula, saldoGanado]].map(([categoria, saldos, total]) => <div key={categoria} style={{ padding: 12, background: C.superficie, borderRadius: 12, marginBottom: 10, fontSize: 13 }}>
-              <b>Existencias por fórmula · {categoria}</b>
-              {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por fórmula. El total de {total.toFixed(1)} kg aún no tiene distribución verificada.</div> : <>
+              <b>Existencias por f�rmula � {categoria}</b>
+              {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por f�rmula. El total de {total.toFixed(1)} kg a�n no tiene distribuci�n verificada.</div> : <>
                 {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg == null ? C.textoSuave : kg < 0 ? C.alerta : C.verde }}>{kg == null ? "Sin conteo" : `${f2Dec(kg)} kg`}</b></div>)}
-                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."}</div> : null; })()}
+                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin f�rmula."}</div> : null; })()}
               </>}
             </div>)}
 
             <BarraSubmenu
               subsecciones={[
-                { id: "baches", nombre: "1. Baches producidos", icono: "🏗️" },
-                { id: "nucleo", nombre: "2. Núcleo (micros)", icono: "🧪" },
-                { id: "ganado", nombre: "3. Servido a ganado", icono: "🐄" },
-                { id: "ajustes", nombre: "4. Conteo y ajustes", icono: "⚖️" },
-                { id: "facturas", nombre: "5. Facturas MP", icono: "🧾" },
-                { id: "historial", nombre: "Historial", icono: "📋" },
-                { id: "apertura", nombre: "Apertura", icono: "⚙️" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "baches", nombre: "1. Baches producidos", icono: "???" },
+                { id: "nucleo", nombre: "2. N�cleo (micros)", icono: "??" },
+                { id: "ganado", nombre: "3. Servido a ganado", icono: "??" },
+                { id: "ajustes", nombre: "4. Conteo y ajustes", icono: "??" },
+                { id: "facturas", nombre: "5. Facturas MP", icono: "??" },
+                { id: "historial", nombre: "Historial", icono: "??" },
+                { id: "apertura", nombre: "Apertura", icono: "??" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ]}
               activo={subPlanta}
               onChange={setSubPlanta}
             />
 
             {(subPlanta === "baches" || subPlanta === "todo") && (
-            <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
+            <Seccion titulo="A. Registrar baches producidos" sub="La categor�a (Aves/Ganado) se asigna sola seg�n el uso de la f�rmula">
               <select value={fBache.formula} onChange={e => setFBache({ ...fBache, formula: e.target.value })} style={selectStyle}>
-                {Object.keys(recetas.formulas).map(f => <option key={f} value={f}>{f} — {usoFormula(f)}</option>)}
+                {Object.keys(recetas.formulas).map(f => <option key={f} value={f}>{f} - {usoFormula(f)}</option>)}
               </select>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta={`Cantidad de baches (mixer ${recetas.bacheKg} kg)`} type="text" inputMode="numeric" placeholder="ej. 2" value={fBache.baches} onChange={e => setFBache({ ...fBache, baches: e.target.value, kg: e.target.value ? String(Number(e.target.value) * recetas.bacheKg) : fBache.kg })} />
@@ -4866,22 +4871,22 @@ export default function App() {
                   <input type="date" value={fBache.fecha} onChange={e => setFBache({ ...fBache, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
-              <button onClick={guardarBache} disabled={guardando} style={btnStyle}>Registrar producción</button>
+              <button onClick={guardarBache} disabled={guardando} style={btnStyle}>Registrar producci�n</button>
               <button onClick={() => setPrintDoc({ tipo: "bache", formula: fBache.formula, kg: fBache.kg || recetas.bacheKg })}
                 style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
-                🖨 Imprimir checklist del bache (básculas 1–4)
+                ?? Imprimir checklist del bache (b�sculas 1-4)
               </button>
             </Seccion>
             )}
 
             {(subPlanta === "nucleo" || subPlanta === "todo") && (
-            <Seccion titulo="Núcleo — premezcla de micros (báscula 4)" sub="Produce porciones por adelantado; cada bache de concentrado descuenta 1 porción automáticamente">
+            <Seccion titulo="N�cleo - premezcla de micros (b�scula 4)" sub="Produce porciones por adelantado; cada bache de concentrado descuenta 1 porci�n autom�ticamente">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
                 {Object.entries(recetas.formulas).filter(([n2]) => kgNucleoDe(n2) > 0).map(([n2]) => {
                   const disp = nucleoInv[n2] || 0;
                   return (
                     <div key={n2} style={{ flex: "1 1 130px", background: disp < 2 ? C.alertaSuave : C.fondo, borderRadius: 12, padding: "10px 12px" }}>
-                      <div style={{ fontSize: 11.5, color: C.textoSuave }}>{n2} · {kgNucleoDe(n2).toFixed(1)} kg/bache</div>
+                      <div style={{ fontSize: 11.5, color: C.textoSuave }}>{n2} � {kgNucleoDe(n2).toFixed(1)} kg/bache</div>
                       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: disp < 0 ? C.alerta : C.texto }}>{disp} porciones</div>
                     </div>
                   );
@@ -4892,38 +4897,38 @@ export default function App() {
                   {Object.keys(recetas.formulas).filter(n2 => kgNucleoDe(n2) > 0).map(n2 => <option key={n2}>{n2}</option>)}
                 </select>
                 <Campo mitad etiqueta="Porciones producidas (1 = un bache de concentrado)" type="text" inputMode="numeric" placeholder="ej. 10" value={fNucleo.porciones} onChange={e => setFNucleo({ ...fNucleo, porciones: e.target.value })} />
-                <Campo mitad etiqueta="No. de producción de núcleo" type="text" placeholder="ej. N-012" value={fNucleo.numNucleo} onChange={e => setFNucleo({ ...fNucleo, numNucleo: e.target.value })} />
+                <Campo mitad etiqueta="No. de producci�n de n�cleo" type="text" placeholder="ej. N-012" value={fNucleo.numNucleo} onChange={e => setFNucleo({ ...fNucleo, numNucleo: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
-                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de producción</span>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de producci�n</span>
                   <input type="date" value={fNucleo.fecha} onChange={e => setFNucleo({ ...fNucleo, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={producirNucleo} style={{ ...btnStyle, flex: 1 }}>Registrar núcleo producido</button>
+                <button onClick={producirNucleo} style={{ ...btnStyle, flex: 1 }}>Registrar n�cleo producido</button>
                 <button onClick={() => setPrintDoc({ tipo: "nucleo", formula: fNucleo.formula, baches: fNucleo.porciones || 1 })}
                   style={{ flex: 1, padding: "12px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                  🖨 Imprimir hoja de núcleo
+                  ?? Imprimir hoja de n�cleo
                 </button>
               </div>
             </Seccion>
             )}
 
             {(subPlanta === "ganado" || subPlanta === "todo") && (
-            <Seccion titulo="B. Servido a ganado" sub="Calcula el servido de hoy desde animales × kg por animal configurados en Materias primas, o registra el peso real manualmente.">
+            <Seccion titulo="B. Servido a ganado" sub="Calcula el servido de hoy desde animales x kg por animal configurados en Materias primas, o registra el peso real manualmente.">
               {(() => {
                 const plan = planServidoGanado(mpConfig.ganado || [], hoyISO(), plantaMovs);
                 return <div style={{ background: C.verdeSuave, borderRadius: 12, padding: 13, marginBottom: 16 }}>
-                  <b style={{ color: C.verde, fontSize: 14 }}>Servido calculado de hoy · {hoyStr()}</b>
-                  <div style={{ fontSize: 12, color: C.textoSuave, margin: "4px 0 9px" }}>Confirma el servido real antes de registrarlo. Se descontará del inventario de ganado una sola vez por corral.</div>
+                  <b style={{ color: C.verde, fontSize: 14 }}>Servido calculado de hoy � {hoyStr()}</b>
+                  <div style={{ fontSize: 12, color: C.textoSuave, margin: "4px 0 9px" }}>Confirma el servido real antes de registrarlo. Se descontar� del inventario de ganado una sola vez por corral.</div>
                   {plan.filas.map(g => <div key={g.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, borderTop: "1px solid #c7d8c9", padding: "7px 0", fontSize: 13, flexWrap: "wrap" }}>
-                    <span><b>{g.nombre}</b> · {g.formula}<br /><small>{g.animales} animales × {g.kgAnimal} kg</small></span>
-                    <label style={{ fontSize: 11 }}>Porción kg/animal<input type="number" min="0.01" step="0.01" value={racionesGanado[g.key] ?? (mpConfig.ganado || [])[Number(g.key)]?.kgAnimal ?? ""} onChange={e => setRacionesGanado(v => ({ ...v, [g.key]: e.target.value }))} style={{ ...inputStyle, width: 90, margin: 0 }} /></label>
-                    <b style={{ color: g.registrado ? C.textoSuave : C.verde, whiteSpace: "nowrap" }}>{g.kg.toFixed(1)} kg {g.registrado ? "✓ registrado" : ""}</b>
+                    <span><b>{g.nombre}</b> � {g.formula}<br /><small>{g.animales} animales x {g.kgAnimal} kg</small></span>
+                    <label style={{ fontSize: 11 }}>Porci�n kg/animal<input type="number" min="0.01" step="0.01" value={racionesGanado[g.key] ?? (mpConfig.ganado || [])[Number(g.key)]?.kgAnimal ?? ""} onChange={e => setRacionesGanado(v => ({ ...v, [g.key]: e.target.value }))} style={{ ...inputStyle, width: 90, margin: 0 }} /></label>
+                    <b style={{ color: g.registrado ? C.textoSuave : C.verde, whiteSpace: "nowrap" }}>{g.kg.toFixed(1)} kg {g.registrado ? "� registrado" : ""}</b>
                   </div>)}
                   {Object.keys(racionesGanado).length > 0 && <button onClick={guardarRacionesGanado} style={{ ...btnStyle, marginTop: 8 }}>Guardar nuevas porciones</button>}
-                  {!plan.filas.length && <div style={{ fontSize: 12.5 }}>Configura animales, ración y fórmula para cada corral en Materias primas → Consumo proyectado.</div>}
+                  {!plan.filas.length && <div style={{ fontSize: 12.5 }}>Configura animales, raci�n y f�rmula para cada corral en Materias primas  Consumo proyectado.</div>}
                   {plan.sinGrupo.length > 0 && <div style={{ color: C.alerta, fontSize: 12, marginBottom: 8 }}>Hay {plan.sinGrupo.length} servido(s) manual(es) de hoy sin corral. El registro calculado se detiene para evitar duplicarlos.</div>}
-                  <div style={{ fontWeight: 700, fontSize: 13, margin: "8px 0" }}>Pendiente: {plan.pendientes.reduce((s, g) => s + g.kg, 0).toFixed(1)} kg en {plan.pendientes.length} corral(es) · inventario actual: {saldoGanado.toFixed(1)} kg</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, margin: "8px 0" }}>Pendiente: {plan.pendientes.reduce((s, g) => s + g.kg, 0).toFixed(1)} kg en {plan.pendientes.length} corral(es) � inventario actual: {saldoGanado.toFixed(1)} kg</div>
                   <button onClick={registrarServidoCalculado} disabled={guardando || cargandoFondo || !!Object.keys(racionesGanado).length || !plan.pendientes.length || !!plan.sinGrupo.length} style={btnStyle}>Registrar servido calculado de hoy</button>
                 </div>;
               })()}
@@ -4955,31 +4960,31 @@ export default function App() {
             )}
 
             {(subPlanta === "ajustes" || subPlanta === "todo") && (
-            <Seccion titulo="C. Ajuste por conteo físico" sub="Cuenta el concentrado real y la app registra la diferencia">
+            <Seccion titulo="C. Ajuste por conteo f�sico" sub="Cuenta el concentrado real y la app registra la diferencia">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 40%" }}>
-                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categor�a</span>
                   <select value={fAjPlanta.categoria} onChange={e => setFAjPlanta({ ...fAjPlanta, categoria: e.target.value, formula: "", saldoReal: "" })} style={inputStyle}>
-                    <option>Aves</option><option>Ganado</option><option>Núcleo</option>
+                    <option>Aves</option><option>Ganado</option><option>N�cleo</option>
                   </select>
                 </label>
-                <label style={{ flex: "1 1 160px", fontSize: 12 }}>{fAjPlanta.categoria === "Núcleo" ? "Núcleo / fórmula" : "Tipo de concentrado"}<select value={fAjPlanta.formula} onChange={e => setFAjPlanta({ ...fAjPlanta, formula: e.target.value, saldoReal: "" })} style={inputStyle}><option value="">Elegir fórmula</option>{(fAjPlanta.categoria === "Núcleo" ? [...new Set([...Object.keys(recetas.formulas).filter(n => kgNucleoDe(n) > 0), ...Object.keys(nucleoInv)])] : Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria)).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
-                <Campo mitad etiqueta={`Saldo real de esta fórmula (app: ${fAjPlanta.categoria === "Núcleo" ? Number(nucleoInv[fAjPlanta.formula] || 0).toFixed(1) : (fAjPlanta.categoria === "Aves" ? saldosAvesFormula : saldosGanadoFormula)?.[fAjPlanta.formula]?.toFixed(1) ?? "Sin conteo"} ${fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"})`} type="text" inputMode="decimal" placeholder={fAjPlanta.categoria === "Núcleo" ? "porciones" : "kg"} value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
-                <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre de quien contó" value={fAjPlanta.responsable} onChange={e => setFAjPlanta({ ...fAjPlanta, responsable: e.target.value })} />
+                <label style={{ flex: "1 1 160px", fontSize: 12 }}>{fAjPlanta.categoria === "N�cleo" ? "N�cleo / f�rmula" : "Tipo de concentrado"}<select value={fAjPlanta.formula} onChange={e => setFAjPlanta({ ...fAjPlanta, formula: e.target.value, saldoReal: "" })} style={inputStyle}><option value="">Elegir f�rmula</option>{(fAjPlanta.categoria === "N�cleo" ? [...new Set([...Object.keys(recetas.formulas).filter(n => kgNucleoDe(n) > 0), ...Object.keys(nucleoInv)])] : Object.keys(recetas.formulas).filter(n => usoFormula(n) === fAjPlanta.categoria)).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+                <Campo mitad etiqueta={`Saldo real de esta f�rmula (app: ${fAjPlanta.categoria === "N�cleo" ? Number(nucleoInv[fAjPlanta.formula] || 0).toFixed(1) : (fAjPlanta.categoria === "Aves" ? saldosAvesFormula : saldosGanadoFormula)?.[fAjPlanta.formula]?.toFixed(1) ?? "Sin conteo"} ${fAjPlanta.categoria === "N�cleo" ? "porciones" : "kg"})`} type="text" inputMode="decimal" placeholder={fAjPlanta.categoria === "N�cleo" ? "porciones" : "kg"} value={fAjPlanta.saldoReal} onChange={e => setFAjPlanta({ ...fAjPlanta, saldoReal: e.target.value })} />
+                <Campo mitad etiqueta="Responsable del conteo" type="text" placeholder="Nombre de quien cont�" value={fAjPlanta.responsable} onChange={e => setFAjPlanta({ ...fAjPlanta, responsable: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
                   <input type="date" value={fAjPlanta.fecha} onChange={e => setFAjPlanta({ ...fAjPlanta, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
-              {fAjPlanta.categoria !== "Núcleo" && <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 10 }}>Cuenta una fórmula a la vez. Los kilos sin fórmula asignada permanecen como pendientes hasta que cuentes las demás. Anota 0 si no queda de la fórmula elegida.</div>}
+              {fAjPlanta.categoria !== "N�cleo" && <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 10 }}>Cuenta una f�rmula a la vez. Los kilos sin f�rmula asignada permanecen como pendientes hasta que cuentes las dem�s. Anota 0 si no queda de la f�rmula elegida.</div>}
               <button onClick={guardarAjustePlanta} disabled={guardando} style={btnStyle}>Registrar ajuste</button>
-              <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes físicos</div>
+              <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13 }}>Historial de ajustes f�sicos</div>
               {selectorHistorial("ajustesPlanta")}
               {historialVisible(plantaMovs.filter(m => m.tipo === "ajuste"), "ajustesPlanta").map(m => (
                 <div key={m.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
                   <div>
-                    <b>{m.fecha} · {m.categoria === "Núcleo" ? `Núcleo ${m.formula}` : m.categoria}</b> · {m.saldoAnterior ?? "—"} → {m.saldoReal ?? "—"} {m.categoria === "Núcleo" ? "porciones" : "kg"} ({m.categoria === "Núcleo" ? m.porciones : m.kg} de ajuste) · Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}
-                    {m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" · ")}</div>}
+                    <b>{m.fecha} � {m.categoria === "N�cleo" ? `N�cleo ${m.formula}` : m.categoria}</b> � {m.saldoAnterior ?? "-"}  {m.saldoReal ?? "-"} {m.categoria === "N�cleo" ? "porciones" : "kg"} ({m.categoria === "N�cleo" ? m.porciones : m.kg} de ajuste) � Responsable: {mostrarNombre(m.responsable || m.por || "No registrado")}
+                    {m.conteosFormula && <div style={{ marginTop: 4 }}>Desglose: {Object.entries(m.conteosFormula).map(([nombre, kg]) => `${nombre}: ${kg} kg`).join(" � ")}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button type="button" onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ fontSize: 11, padding: "3px 8px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Editar</button>
@@ -4994,8 +4999,8 @@ export default function App() {
             <Seccion titulo="D. Productos y facturas recibidas">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo tercio etiqueta="Proveedor" type="text" placeholder="ej. AVIN" value={fFactura.proveedor} onChange={e => setFFactura({ ...fFactura, proveedor: e.target.value })} />
-                <Campo tercio etiqueta="Producto" type="text" placeholder="ej. Maíz 2 ton" value={fFactura.producto} onChange={e => setFFactura({ ...fFactura, producto: e.target.value })} />
-                <Campo tercio etiqueta="Monto ₡" type="text" inputMode="decimal" placeholder="0" value={fFactura.monto} onChange={e => setFFactura({ ...fFactura, monto: e.target.value })} />
+                <Campo tercio etiqueta="Producto" type="text" placeholder="ej. Ma�z 2 ton" value={fFactura.producto} onChange={e => setFFactura({ ...fFactura, producto: e.target.value })} />
+                <Campo tercio etiqueta="Monto ?" type="text" inputMode="decimal" placeholder="0" value={fFactura.monto} onChange={e => setFFactura({ ...fFactura, monto: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha</span>
                   <input type="date" value={fFactura.fecha} onChange={e => setFFactura({ ...fFactura, fecha: e.target.value })} style={inputStyle} />
@@ -5006,9 +5011,9 @@ export default function App() {
                 {selectorHistorial("facturasPlanta")}
                 {historialVisible(facturas, "facturasPlanta").map((f, i) => (
                   <div key={i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-                    <span><b>{f.fecha.slice(0, 5)}</b> · {f.proveedor} — {f.producto}</span>
-                    {f.monto && <b>₡{Number(f.monto).toLocaleString()}</b>}
-                    <button onClick={() => eliminarFacturaPlanta(f)} title="Eliminar" style={{ padding: "0 9px", fontSize: 14, background: "transparent", color: C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
+                    <span><b>{f.fecha.slice(0, 5)}</b> � {f.proveedor} - {f.producto}</span>
+                    {f.monto && <b>?{Number(f.monto).toLocaleString()}</b>}
+                    <button onClick={() => eliminarFacturaPlanta(f)} title="Eliminar" style={{ padding: "0 9px", fontSize: 14, background: "transparent", color: C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>x</button>
                   </div>
                 ))}
               </div>
@@ -5018,26 +5023,26 @@ export default function App() {
             {(subPlanta === "historial" || subPlanta === "todo") && movsPlanta.length > 0 && (
               <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. Puedes editar cualquier detalle o ajuste, o eliminar movimientos.">
                 <div className="v10-plant-filters">
-                  <input aria-label="Buscar movimiento de planta" placeholder="Fórmula, detalle, número o responsable" value={filtroPlanta.texto} onChange={e => setFiltroPlanta(v => ({ ...v, texto: e.target.value }))} />
+                  <input aria-label="Buscar movimiento de planta" placeholder="F�rmula, detalle, n�mero o responsable" value={filtroPlanta.texto} onChange={e => setFiltroPlanta(v => ({ ...v, texto: e.target.value }))} />
                   <select aria-label="Tipo de movimiento" value={filtroPlanta.tipo} onChange={e => setFiltroPlanta(v => ({ ...v, tipo: e.target.value }))}><option value="">Todos los tipos</option>{["bache", "nucleo", "servido", "ajuste"].map(t => <option key={t}>{t}</option>)}</select>
-                  <select aria-label="Categoría" value={filtroPlanta.categoria} onChange={e => setFiltroPlanta(v => ({ ...v, categoria: e.target.value }))}><option value="">Todas las categorías</option>{["Aves", "Ganado", "Núcleo"].map(t => <option key={t}>{t}</option>)}</select>
-                  <select aria-label="Fórmula" value={filtroPlanta.formula} onChange={e => setFiltroPlanta(v => ({ ...v, formula: e.target.value }))}><option value="">Todas las fórmulas</option>{Object.keys(recetas.formulas).map(f => <option key={f}>{f}</option>)}</select>
+                  <select aria-label="Categor�a" value={filtroPlanta.categoria} onChange={e => setFiltroPlanta(v => ({ ...v, categoria: e.target.value }))}><option value="">Todas las categor�as</option>{["Aves", "Ganado", "N�cleo"].map(t => <option key={t}>{t}</option>)}</select>
+                  <select aria-label="F�rmula" value={filtroPlanta.formula} onChange={e => setFiltroPlanta(v => ({ ...v, formula: e.target.value }))}><option value="">Todas las f�rmulas</option>{Object.keys(recetas.formulas).map(f => <option key={f}>{f}</option>)}</select>
                   <label>Desde <input type="date" value={filtroPlanta.desde} onChange={e => setFiltroPlanta(v => ({ ...v, desde: e.target.value }))} /></label><label>Hasta <input type="date" value={filtroPlanta.hasta} onChange={e => setFiltroPlanta(v => ({ ...v, hasta: e.target.value }))} /></label>
                   <button onClick={() => setFiltroPlanta(filtroPlantaInicial())}>Limpiar</button>
                 </div>
-                <div className="v10-history-actions">{selectorHistorial("planta")}<span>{historialVisible(plantaFiltrada, "planta").length} de {movsPlanta.length} movimientos</span><button onClick={() => setPrintDoc({ tipo: "planta_historial", items: historialVisible(plantaFiltrada, "planta") })}>🖨 Imprimir filtrados</button></div>
+                <div className="v10-history-actions">{selectorHistorial("planta")}<span>{historialVisible(plantaFiltrada, "planta").length} de {movsPlanta.length} movimientos</span><button onClick={() => setPrintDoc({ tipo: "planta_historial", items: historialVisible(plantaFiltrada, "planta") })}>?? Imprimir filtrados</button></div>
                 {historialVisible(plantaFiltrada, "planta").map((m, i) => (
                   <div key={m.id || i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
-                    <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
-                    <button onClick={() => eliminarMovPlanta(m)} title="Eliminar movimiento" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
+                    <span><b>{m.fecha.slice(0, 5)}</b> � {m.categoria} - {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` � #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `N�cleo ${m.formula} � ${m.porciones} porci�n(es)${m.numNucleo ? ` � #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` � ${mostrarNombre(m.responsable || m.por)}`}</span>
+                    <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "N�cleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "-" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
+                    <button onClick={() => eliminarMovPlanta(m)} title="Eliminar movimiento" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>x</button>
                     </div>
                     {m.tipo === "ajuste" && (
                       <button onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ marginTop: 7, fontSize: 12, marginRight: 8, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 600 }}>Editar ajuste</button>
                     )}
                     <button onClick={() => { setEditarDetallePlanta({ original: plantaMovs.find(x => String(x.id) === String(m.id)) || m, campos: { detalle: m.detalle || "", numBache: m.numBache || "", numNucleo: m.numNucleo || "", responsable: m.responsable || m.por || completadoPor } }); setMotivoDetallePlanta(""); }} style={{ marginTop: 7, fontSize: 12 }}>Corregir detalle</button>
-                    {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} · {mostrarNombre(ed.por)} · {ed.motivo}<div>Antes: {ed.anterior?.detalle || ed.anterior?.numBache || ed.anterior?.numNucleo || "—"} → Después: {ed.nuevo?.detalle || ed.nuevo?.numBache || ed.nuevo?.numNucleo || "—"}</div></div>)}</details>}
+                    {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} � {mostrarNombre(ed.por)} � {ed.motivo}<div>Antes: {ed.anterior?.detalle || ed.anterior?.numBache || ed.anterior?.numNucleo || "-"}  Despu�s: {ed.nuevo?.detalle || ed.nuevo?.numBache || ed.nuevo?.numNucleo || "-"}</div></div>)}</details>}
                   </div>
                 ))}
                 {!historialVisible(plantaFiltrada, "planta").length && <p>No hay movimientos con estos filtros.</p>}
@@ -5045,7 +5050,7 @@ export default function App() {
             )}
 
             {(subPlanta === "apertura" || subPlanta === "todo") && (
-            <Seccion titulo="Apertura de planta — inventario inicial" sub="Desde la fecha de apertura corren los balances; baches y consumos anteriores quedan como histórico sin afectar">
+            <Seccion titulo="Apertura de planta - inventario inicial" sub="Desde la fecha de apertura corren los balances; baches y consumos anteriores quedan como hist�rico sin afectar">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo tercio etiqueta="Inicial AVES (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialAves} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialAves: e.target.value })} />
                 <Campo tercio etiqueta="Inicial GANADO (kg)" type="text" inputMode="decimal" value={plantaCfg.inicialGanado} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialGanado: e.target.value })} />
@@ -5054,31 +5059,31 @@ export default function App() {
                   <input type="date" value={plantaCfg.inicialFecha || ""} onChange={e => guardarCfgPlanta({ ...plantaCfg, inicialFecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
-              {plantaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>✓ La planta abre el {plantaCfg.inicialFecha.split("-").reverse().join("/")} con {plantaCfg.inicialAves || 0} kg (aves) y {plantaCfg.inicialGanado || 0} kg (ganado).</div>}
+              {plantaCfg.inicialFecha && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600 }}>� La planta abre el {plantaCfg.inicialFecha.split("-").reverse().join("/")} con {plantaCfg.inicialAves || 0} kg (aves) y {plantaCfg.inicialGanado || 0} kg (ganado).</div>}
             </Seccion>
             )}
           </>
         )}
-        {/* ══ PEDIDO MATERIA PRIMA ══ */}
+        {/* �� PEDIDO MATERIA PRIMA �� */}
         {vista === "pedidomp" && (
           <>
                         <BarraSubmenu
               subsecciones={[
-                { id: "kardex", nombre: "Kardex MP", icono: "📦" },
-                { id: "consumo", nombre: "1. Consumo", icono: "📊" },
-                { id: "inventario", nombre: "2. Inventario", icono: "📋" },
-                { id: "calculado", nombre: "3. Calculado", icono: "🧮" },
-                { id: "proveedor", nombre: "4. Proveedor", icono: "📱" },
-                { id: "pedidos", nombre: "5. Historial", icono: "🚚" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "kardex", nombre: "Kardex MP", icono: "??" },
+                { id: "consumo", nombre: "1. Consumo", icono: "??" },
+                { id: "inventario", nombre: "2. Inventario", icono: "??" },
+                { id: "calculado", nombre: "3. Calculado", icono: "??" },
+                { id: "proveedor", nombre: "4. Proveedor", icono: "??" },
+                { id: "pedidos", nombre: "5. Historial", icono: "??" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ]}
               activo={subPedidoMP}
               onChange={setSubPedidoMP}
             />
 
             {(subPedidoMP === "kardex" || subPedidoMP === "todo") && (
-              <Seccion titulo="📦 Kardex de materias primas" sub="Perpetuo: entradas por facturas − salidas por baches y núcleo = saldo teórico, conciliado contra tu conteo físico">
-              {kardex.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Aún sin movimientos — se llena solo con las facturas (PDF con líneas) y la producción registrada.</div>}
+              <Seccion titulo="?? Kardex de materias primas" sub="Perpetuo: entradas por facturas - salidas por baches y n�cleo = saldo te�rico, conciliado contra tu conteo f�sico">
+              {kardex.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>A�n sin movimientos - se llena solo con las facturas (PDF con l�neas) y la producci�n registrada.</div>}
               {kardex.length > 0 && (() => {
                 const codigos = [...new Set(kardex.map(m2 => m2.mp))];
                 return (
@@ -5088,7 +5093,7 @@ export default function App() {
                         <thead><tr style={{ color: C.textoSuave, fontSize: 11, textAlign: "right" }}>
                           <th style={{ textAlign: "left", padding: "5px 4px" }}>Materia prima</th>
                           <th style={{ padding: "5px 4px" }}>Entradas</th><th style={{ padding: "5px 4px" }}>Salidas</th>
-                          <th style={{ padding: "5px 4px" }}>Saldo kardex</th><th style={{ padding: "5px 4px" }}>Conteo físico</th><th style={{ padding: "5px 4px" }}>Diferencia</th>
+                          <th style={{ padding: "5px 4px" }}>Saldo kardex</th><th style={{ padding: "5px 4px" }}>Conteo f�sico</th><th style={{ padding: "5px 4px" }}>Diferencia</th>
                         </tr></thead>
                         <tbody>
                           {codigos.map(c2 => {
@@ -5105,22 +5110,22 @@ export default function App() {
                                 <td style={{ padding: "8px 4px", color: C.verde }}>{ent.toFixed(1)}</td>
                                 <td style={{ padding: "8px 4px", color: C.alerta }}>{sal.toFixed(1)}</td>
                                 <td style={{ padding: "8px 4px", fontWeight: 700 }}>{teorico.toFixed(1)} kg</td>
-                                <td style={{ padding: "8px 4px" }}>{fisico != null ? `${fisico.toFixed(1)} kg` : "—"}</td>
-                                <td style={{ padding: "8px 4px", fontWeight: 700, color: dif == null ? C.textoSuave : Math.abs(dif) <= Math.max(5, Math.abs(teorico) * 0.03) ? C.verde : "#9A6605" }}>{dif != null ? `${dif > 0 ? "+" : ""}${dif.toFixed(1)}` : "—"}</td>
+                                <td style={{ padding: "8px 4px" }}>{fisico != null ? `${fisico.toFixed(1)} kg` : "-"}</td>
+                                <td style={{ padding: "8px 4px", fontWeight: 700, color: dif == null ? C.textoSuave : Math.abs(dif) <= Math.max(5, Math.abs(teorico) * 0.03) ? C.verde : "#9A6605" }}>{dif != null ? `${dif > 0 ? "+" : ""}${dif.toFixed(1)}` : "-"}</td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Diferencia = conteo físico − saldo kardex. Positiva: hay más de lo esperado (falta registrar facturas). Negativa: merma o consumo sin registrar.</div>
+                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Diferencia = conteo f�sico - saldo kardex. Positiva: hay m�s de lo esperado (falta registrar facturas). Negativa: merma o consumo sin registrar.</div>
                     <details style={{ marginTop: 10 }}>
-                      <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Últimos movimientos del kardex</summary>
+                      <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Ultimos movimientos del kardex</summary>
                       {selectorHistorial("kardex")}
                       {historialVisible(kardex, "kardex").map(m2 => (
                         <div key={m2.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "6px 0", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
-                          <span>{m2.fecha.slice(0, 5)} · <b>{(mpCat.find(x => x.c === m2.mp) || { n: m2.mp }).n}</b> · {m2.ref}</span>
-                          <b style={{ color: m2.tipo === "salida" ? C.alerta : C.verde }}>{m2.tipo === "salida" ? "−" : "+"}{Number(m2.kg).toFixed(1)} kg</b>
+                          <span>{m2.fecha.slice(0, 5)} � <b>{(mpCat.find(x => x.c === m2.mp) || { n: m2.mp }).n}</b> � {m2.ref}</span>
+                          <b style={{ color: m2.tipo === "salida" ? C.alerta : C.verde }}>{m2.tipo === "salida" ? "-" : "+"}{Number(m2.kg).toFixed(1)} kg</b>
                         </div>
                       ))}
                     </details>
@@ -5132,19 +5137,19 @@ export default function App() {
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Consumo diario total" valor={Object.values(consumoFormulas).reduce((a, b) => a + b, 0).toFixed(0)} unidad="kg" sub="Aves (desde Lotes) + ganado" />
-              <KPI etiqueta="Cobertura" valor={mpConfig.cobertura} unidad="días" sub="Jueves → lunes de entrega" />
-              <KPI etiqueta="Último conteo" valor={mpFechaConteo ? mpFechaConteo.slice(0, 5) : "—"} unidad="" sub={mpResponsable || "sin responsable"} />
+              <KPI etiqueta="Cobertura" valor={mpConfig.cobertura} unidad="d�as" sub="Jueves  lunes de entrega" />
+              <KPI etiqueta="Ultimo conteo" valor={mpFechaConteo ? mpFechaConteo.slice(0, 5) : "-"} unidad="" sub={mpResponsable || "sin responsable"} />
             </div>
 
             {(subPedidoMP === "consumo" || subPedidoMP === "todo") && (
-              <Seccion titulo="1 · Consumo proyectado" sub="Las aves se calculan solas desde Lotes (aves vivas × ración). Asigna la fórmula de receta de cada lote.">
+              <Seccion titulo="1 � Consumo proyectado" sub="Las aves se calculan solas desde Lotes (aves vivas x raci�n). Asigna la f�rmula de receta de cada lote.">
               {activos.map(l => {
                 const kgDia = l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0;
                 return (
                   <div key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-                    <span style={{ flex: "1 1 150px", fontSize: 13.5 }}><b>G{l.galpon}</b> · {l.aves.toLocaleString()} aves · <b>{l.racionGAve || 0} g/ave</b> · {kgDia.toFixed(0)} kg/día</span>
+                    <span style={{ flex: "1 1 150px", fontSize: 13.5 }}><b>G{l.galpon}</b> � {l.aves.toLocaleString()} aves � <b>{l.racionGAve || 0} g/ave</b> � {kgDia.toFixed(0)} kg/d�a</span>
                     <span style={{ fontSize: 13, fontWeight: 600, color: recetas.formulas[l.formula] ? C.verde : C.alerta, background: recetas.formulas[l.formula] ? C.verdeSuave : C.alertaSuave, padding: "6px 12px", borderRadius: 16 }}>
-                      {formulaDelLote(l)}{!recetas.formulas[l.formula] && " (asigna la fórmula en Lotes)"}
+                      {formulaDelLote(l)}{!recetas.formulas[l.formula] && " (asigna la f�rmula en Lotes)"}
                     </span>
                   </div>
                 );
@@ -5167,14 +5172,14 @@ export default function App() {
                 </div>
               ))}
               <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "flex-end" }}>
-                <Campo mitad etiqueta="Días de cobertura" type="text" inputMode="numeric" value={mpConfig.cobertura}
+                <Campo mitad etiqueta="D�as de cobertura" type="text" inputMode="numeric" value={mpConfig.cobertura}
                   onChange={e => guardarConfigMP({ ...mpConfig, cobertura: e.target.value })} />
               </div>
             </Seccion>
             )}
 
             {(subPedidoMP === "inventario" || subPedidoMP === "todo") && (
-              <Seccion titulo="2 · Inventario físico" sub="El encargado cuenta el jueves: sacos completos + saldo suelto en kg de cada materia prima">
+              <Seccion titulo="2 � Inventario f�sico" sub="El encargado cuenta el jueves: sacos completos + saldo suelto en kg de cada materia prima">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del conteo</span>
@@ -5186,7 +5191,7 @@ export default function App() {
                 const inv = mpInv[mp.c] || {};
                 return (
                   <div key={mp.c} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ flex: "1 1 140px", fontSize: 12, lineHeight: 1.3 }}><b>{mp.n}</b><br /><span style={{ color: C.textoSuave, fontSize: 10.5 }}>{mp.c} · {mp.pres === 1 ? "por kg" : `saco ${mp.pres} kg`} · {mp.prov}</span></span>
+                    <span style={{ flex: "1 1 140px", fontSize: 12, lineHeight: 1.3 }}><b>{mp.n}</b><br /><span style={{ color: C.textoSuave, fontSize: 10.5 }}>{mp.c} � {mp.pres === 1 ? "por kg" : `saco ${mp.pres} kg`} � {mp.prov}</span></span>
                     {mp.pres !== 1 && <input type="text" inputMode="numeric" placeholder="Sacos" value={inv.sacos ?? ""}
                       onChange={e => setMpInv({ ...mpInv, [mp.c]: { ...inv, sacos: e.target.value } })}
                       style={{ ...inputStyle, flex: "0 1 80px", padding: "8px 9px", fontSize: 14 }} />}
@@ -5199,19 +5204,19 @@ export default function App() {
               <button onClick={guardarInventarioMP} disabled={guardando} style={{ ...btnStyle, marginTop: 8 }}>Guardar inventario del conteo</button>
               {mpInvHist.length > 0 && (
                 <details style={{ marginTop: 14 }}>
-                  <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>📋 Historial de conteos ({mpInvHist.length})</summary>
+                  <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>?? Historial de conteos ({mpInvHist.length})</summary>
                   {selectorHistorial("conteos")}
                   {historialVisible(mpInvHist, "conteos").map(h => (
                     <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 2px", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
-                      <span><b>{String(h.fecha).slice(0, 5)}</b> · {mostrarNombre(h.responsable || "sin responsable")} · {Object.keys(h.items || {}).length} materias primas contadas</span>
+                      <span><b>{String(h.fecha).slice(0, 5)}</b> � {mostrarNombre(h.responsable || "sin responsable")} � {Object.keys(h.items || {}).length} materias primas contadas</span>
                       <span style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => { setMpInv(h.items || {}); setMpResponsable(h.responsable || ""); avisar(`✓ Conteo del ${String(h.fecha).slice(0, 5)} cargado en el formulario — puedes editarlo y guardar de nuevo`); }}
+                        <button onClick={() => { setMpInv(h.items || {}); setMpResponsable(h.responsable || ""); avisar(`� Conteo del ${String(h.fecha).slice(0, 5)} cargado en el formulario - puedes editarlo y guardar de nuevo`); }}
                           style={{ fontSize: 11.5, padding: "4px 10px", background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Ver / reusar</button>
                         <span onClick={async () => {
-                          if (!pideConfirm(`borrarConteo-${h.id}`, "⚠ Toca otra vez para borrar este conteo del historial")) return;
+                          if (!pideConfirm(`borrarConteo-${h.id}`, "? Toca otra vez para borrar este conteo del historial")) return;
                           const nuevo = mpInvHist.filter(x => x.id !== h.id);
-                          if (await escribir(K.mpInvHist, nuevo)) { setMpInvHist(nuevo); avisar("✓ Conteo borrado del historial"); }
-                        }} style={{ cursor: "pointer", color: C.alerta, fontSize: 15, padding: "0 4px" }} title="Borrar este conteo">×</span>
+                          if (await escribir(K.mpInvHist, nuevo)) { setMpInvHist(nuevo); avisar("� Conteo borrado del historial"); }
+                        }} style={{ cursor: "pointer", color: C.alerta, fontSize: 15, padding: "0 4px" }} title="Borrar este conteo">x</span>
                       </span>
                     </div>
                   ))}
@@ -5221,7 +5226,7 @@ export default function App() {
             )}
 
             {(subPedidoMP === "calculado" || subPedidoMP === "todo") && (
-              <Seccion titulo="3 · Pedido calculado" sub={`Consumo × ${mpConfig.cobertura} días − inventario, redondeado a presentación completa (mín. ${mpConfig.minKg1} kg en granel)`}>
+              <Seccion titulo="3 � Pedido calculado" sub={`Consumo x ${mpConfig.cobertura} d�as - inventario, redondeado a presentaci�n completa (m�n. ${mpConfig.minKg1} kg en granel)`}>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                   <thead>
@@ -5238,7 +5243,7 @@ export default function App() {
                         <td style={{ textAlign: "left", padding: "7px 4px", fontWeight: 500 }}>{x.n}</td>
                         <td style={{ padding: "7px 4px" }}>{f2Dec(x.proyKg)}</td>
                         <td style={{ padding: "7px 4px" }}>{f2Dec(x.invKg)}</td>
-                        <td style={{ padding: "7px 4px", fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>{x.pedido > 0 ? `${x.pedido} ${x.pres === 1 ? "kg" : "sc"}` : "—"}</td>
+                        <td style={{ padding: "7px 4px", fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>{x.pedido > 0 ? `${x.pedido} ${x.pres === 1 ? "kg" : "sc"}` : "-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5249,7 +5254,7 @@ export default function App() {
 
             {(subPedidoMP === "pedidos" || subPedidoMP === "todo") && (
               <>
-              <Seccion titulo="4 · Registrar pedido realizado" sub="El pedido que colocaste al proveedor — al marcarlo recibido, las materias primas entran solas al kardex">
+              <Seccion titulo="4 � Registrar pedido realizado" sub="El pedido que colocaste al proveedor - al marcarlo recibido, las materias primas entran solas al kardex">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del pedido</span>
@@ -5260,39 +5265,39 @@ export default function App() {
               {fPedidoMP.lineas.map((l2, i2) => (
                 <div key={i2} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                   <select value={l2.mp} onChange={e => { const ls = [...fPedidoMP.lineas]; ls[i2] = { ...l2, mp: e.target.value }; setFPedidoMP({ ...fPedidoMP, lineas: ls }); }} style={{ ...inputStyle, flex: 1.4, marginBottom: 0 }}>
-                    <option value="">— Materia prima —</option>
+                    <option value="">- Materia prima -</option>
                     {mpCat.map(m => <option key={m.c} value={m.c}>{m.n}</option>)}
                   </select>
                   <input type="text" inputMode="decimal" placeholder="kg" value={l2.kg} onChange={e => { const ls = [...fPedidoMP.lineas]; ls[i2] = { ...l2, kg: e.target.value }; setFPedidoMP({ ...fPedidoMP, lineas: ls }); }} style={{ ...inputStyle, flex: 0.7, marginBottom: 0 }} />
-                  <button onClick={() => setFPedidoMP({ ...fPedidoMP, lineas: fPedidoMP.lineas.length > 1 ? fPedidoMP.lineas.filter((_, j) => j !== i2) : [{ mp: "", kg: "" }] })} style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>×</button>
+                  <button onClick={() => setFPedidoMP({ ...fPedidoMP, lineas: fPedidoMP.lineas.length > 1 ? fPedidoMP.lineas.filter((_, j) => j !== i2) : [{ mp: "", kg: "" }] })} style={{ padding: "0 11px", fontSize: 15, background: "#F1F1EA", color: C.textoSuave, border: "none", borderRadius: 10, cursor: "pointer" }}>x</button>
                 </div>
               ))}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button onClick={() => setFPedidoMP({ ...fPedidoMP, lineas: [...fPedidoMP.lineas, { mp: "", kg: "" }] })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Línea</button>
+                <button onClick={() => setFPedidoMP({ ...fPedidoMP, lineas: [...fPedidoMP.lineas, { mp: "", kg: "" }] })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ L�nea</button>
                 <button onClick={async () => {
                   const ls = fPedidoMP.lineas.filter(l2 => l2.mp && Number(l2.kg) > 0);
-                  if (!ls.length) { avisar("⚠ Agrega al menos una materia prima con kilos"); return; }
+                  if (!ls.length) { avisar("? Agrega al menos una materia prima con kilos"); return; }
                   const doc = { id: Date.now(), fecha: fPedidoMP.fecha.split("-").reverse().join("/"), proveedor: fPedidoMP.proveedor.trim(), nota: fPedidoMP.nota, manual: true, estado: "pendiente", lineas: ls.map(l2 => ({ c: l2.mp, n: (mpCat.find(m => m.c === l2.mp) || {}).n, kg: Number(l2.kg) })) };
                   const nuevos = [doc, ...mpPedidos];
-                  if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); setFPedidoMP({ fecha: hoyISO(), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] }); avisar("✓ Pedido registrado — pendiente de recibir"); }
+                  if (await escribir(K.mpPedidos, nuevos)) { setMpPedidos(nuevos); setFPedidoMP({ fecha: hoyISO(), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] }); avisar("� Pedido registrado - pendiente de recibir"); }
                 }} style={{ ...btnStyle, flex: 1, marginTop: 0 }}>Registrar pedido</button>
               </div>
             </Seccion>
 
-            <Seccion titulo="5 · Historial de pedidos" sub="Pendientes y recibidos — al recibir, el kardex se alimenta solo">
-              {mpPedidos.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin pedidos registrados todavía.</div>}
+            <Seccion titulo="5 � Historial de pedidos" sub="Pendientes y recibidos - al recibir, el kardex se alimenta solo">
+              {mpPedidos.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin pedidos registrados todav�a.</div>}
               {selectorHistorial("pedidos")}
               {historialVisible(mpPedidos, "pedidos").map((p, i2) => (
                 <div key={p.id || i2} style={{ padding: "10px 12px", background: C.fondo, borderRadius: 10, marginBottom: 7, fontSize: 12.5 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <span><b>{p.fecha}</b>{p.proveedor ? ` · ${p.proveedor}` : ""}{p.manual ? "" : " · calculado"}</span>
+                    <span><b>{p.fecha}</b>{p.proveedor ? ` � ${p.proveedor}` : ""}{p.manual ? "" : " � calculado"}</span>
                     <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 10, background: p.estado === "recibido" ? C.verdeSuave : C.yemaSuave, color: p.estado === "recibido" ? C.verde : "#9A6605" }}>{p.estado === "recibido" ? `✓ recibido ${p.recibido ? p.recibido.slice(0, 5) : ""}` : "pendiente"}</span>
-                      {p.estado !== "recibido" && <button onClick={() => recibirPedidoMP(p)} style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>✓ Recibido</button>}
-                      <button onClick={() => eliminarPedidoMP(p)} style={{ padding: "2px 8px", fontSize: 13, background: "transparent", color: C.textoSuave, border: "none", cursor: "pointer" }}>×</button>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 10, background: p.estado === "recibido" ? C.verdeSuave : C.yemaSuave, color: p.estado === "recibido" ? C.verde : "#9A6605" }}>{p.estado === "recibido" ? `� recibido ${p.recibido ? p.recibido.slice(0, 5) : ""}` : "pendiente"}</span>
+                      {p.estado !== "recibido" && <button onClick={() => recibirPedidoMP(p)} style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>� Recibido</button>}
+                      <button onClick={() => eliminarPedidoMP(p)} style={{ padding: "2px 8px", fontSize: 13, background: "transparent", color: C.textoSuave, border: "none", cursor: "pointer" }}>x</button>
                     </span>
                   </div>
-                  <div style={{ color: C.textoSuave, marginTop: 4 }}>{(p.lineas || []).map(l2 => `${l2.n || l2.c}: ${(l2.kg ?? l2.pedidoKg ?? 0)} kg`).join(" · ")}</div>
+                  <div style={{ color: C.textoSuave, marginTop: 4 }}>{(p.lineas || []).map(l2 => `${l2.n || l2.c}: ${(l2.kg ?? l2.pedidoKg ?? 0)} kg`).join(" � ")}</div>
                 </div>
               ))}
             </Seccion>
@@ -5300,13 +5305,13 @@ export default function App() {
             )}
 
             {(subPedidoMP === "proveedor" || subPedidoMP === "todo") && (
-              <Seccion titulo="4 · Pedido por proveedor" sub="Envía cada orden por WhatsApp o cópiala">
-              {Object.keys(pedidoPorProveedor).length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 500 }}>✓ Con el inventario actual no hace falta pedir nada.</div>}
+              <Seccion titulo="4 � Pedido por proveedor" sub="Env�a cada orden por WhatsApp o c�piala">
+              {Object.keys(pedidoPorProveedor).length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 500 }}>� Con el inventario actual no hace falta pedir nada.</div>}
               {Object.entries(pedidoPorProveedor).map(([prov, items]) => (
                 <div key={prov} style={{ border: `1px solid ${C.borde}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                     <b style={{ fontSize: 15 }}>{prov}</b>
-                    <span style={{ fontSize: 12.5, color: C.textoSuave }}>{items.reduce((s2, x) => s2 + x.pedido, 0)} unid · {items.reduce((s2, x) => s2 + x.pedidoKg, 0).toFixed(0)} kg</span>
+                    <span style={{ fontSize: 12.5, color: C.textoSuave }}>{items.reduce((s2, x) => s2 + x.pedido, 0)} unid � {items.reduce((s2, x) => s2 + x.pedidoKg, 0).toFixed(0)} kg</span>
                   </div>
                   {items.map(x => (
                     <div key={x.c} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
@@ -5314,7 +5319,7 @@ export default function App() {
                     </div>
                   ))}
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button onClick={() => enviarWhatsApp(prov, items)} style={{ flex: 1, padding: "11px", fontSize: 13.5, fontWeight: 600, background: "#25D366", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>📱 Enviar por WhatsApp</button>
+                    <button onClick={() => enviarWhatsApp(prov, items)} style={{ flex: 1, padding: "11px", fontSize: 13.5, fontWeight: 600, background: "#25D366", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>?? Enviar por WhatsApp</button>
                     <button onClick={() => copiarPedido(prov, items)} style={{ flex: 0.6, padding: "11px", fontSize: 13.5, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Copiar</button>
                   </div>
                 </div>
@@ -5326,7 +5331,7 @@ export default function App() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textoSuave, marginBottom: 6 }}>Pedidos anteriores</div>
                   {mpPedidos.slice(0, 5).map((pd, i) => (
                     <div key={i} style={{ fontSize: 13, padding: "8px 12px", background: C.fondo, borderRadius: 10, marginBottom: 5 }}>
-                      <b>{pd.fecha.slice(0, 5)}</b> — {pd.lineas.length} materias primas · {pd.lineas.reduce((s2, x) => s2 + x.kg, 0).toFixed(0)} kg
+                      <b>{pd.fecha.slice(0, 5)}</b> - {pd.lineas.length} materias primas � {pd.lineas.reduce((s2, x) => s2 + x.kg, 0).toFixed(0)} kg
                     </div>
                   ))}
                 </div>
@@ -5336,7 +5341,7 @@ export default function App() {
           </>
         )}
 
-        {/* ══ FÓRMULAS ══ */}
+        {/* �� FORMULAS �� */}
         {vista === "formulas" && (() => {
           const f = recetas.formulas[recActiva];
           const total = f ? sumaBache(f) : 0;
@@ -5345,17 +5350,17 @@ export default function App() {
             <>
                           <BarraSubmenu
               subsecciones={[
-                { id: "recetas", nombre: "Fórmulas activas", icono: "🥣" },
-                { id: "nueva", nombre: "Crear fórmula", icono: "➕" },
-                { id: "catalogo", nombre: "Catálogo MP", icono: "📦" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "recetas", nombre: "F�rmulas activas", icono: "??" },
+                { id: "nueva", nombre: "Crear f�rmula", icono: "?" },
+                { id: "catalogo", nombre: "Cat�logo MP", icono: "??" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ]}
               activo={subFormulas}
               onChange={setSubFormulas}
             />
 
             {(subFormulas === "recetas" || subFormulas === "todo") && (
-              <><Seccion titulo="Fórmulas de concentrado" sub={`Definidas en kg por bache — capacidad del mixer: ${recetas.bacheKg} kg. Todo el cálculo de consumo y pedido sale de aquí.`}>
+              <><Seccion titulo="F�rmulas de concentrado" sub={`Definidas en kg por bache - capacidad del mixer: ${recetas.bacheKg} kg. Todo el c�lculo de consumo y pedido sale de aqu�.`}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
                   {Object.entries(recetas.formulas).map(([n, f2]) => (
                     <button key={n} onClick={() => setRecActiva(n)} style={{
@@ -5368,7 +5373,7 @@ export default function App() {
               </Seccion>
 
               {f && (
-                <Seccion titulo={`${recActiva} — kg por bache`} sub={`Uso: ${f.uso}`}>
+                <Seccion titulo={`${recActiva} - kg por bache`} sub={`Uso: ${f.uso}`}>
                   {Object.entries(f.items).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0)).map(([mpc, kg]) => {
                     const mp = mpCat.find(m => m.c === mpc);
                     const pct = total > 0 ? (Number(kg || 0) / total) * 100 : 0;
@@ -5379,13 +5384,13 @@ export default function App() {
                           onChange={e => setKgIngrediente(recActiva, mpc, e.target.value)}
                           style={{ ...inputStyle, flex: "0 1 100px", padding: "8px 10px", fontSize: 14 }} />
                         <span style={{ fontSize: 12, color: C.textoSuave, flex: "0 0 18px" }}>kg</span>
-                        <button onClick={() => quitarIngrediente(recActiva, mpc)} style={{ padding: "6px 9px", fontSize: 13, background: "transparent", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 8, cursor: "pointer" }}>×</button>
+                        <button onClick={() => quitarIngrediente(recActiva, mpc)} style={{ padding: "6px 9px", fontSize: 13, background: "transparent", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 8, cursor: "pointer" }}>x</button>
                       </div>
                     );
                   })}
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "10px 12px", background: Math.abs(dif) <= 2 ? C.verdeSuave : C.yemaSuave, borderRadius: 10, marginTop: 8 }}>
                     <b>Total del bache</b>
-                    <b style={{ color: Math.abs(dif) <= 2 ? C.verde : "#9A6605" }}>{total.toFixed(2)} kg {Math.abs(dif) > 2 ? `(${dif > 0 ? "+" : ""}${dif.toFixed(1)} vs ${recetas.bacheKg})` : "✓"}</b>
+                    <b style={{ color: Math.abs(dif) <= 2 ? C.verde : "#9A6605" }}>{total.toFixed(2)} kg {Math.abs(dif) > 2 ? `(${dif > 0 ? "+" : ""}${dif.toFixed(1)} vs ${recetas.bacheKg})` : "�"}</b>
                   </div>
 
                   <div style={{ fontSize: 13.5, fontWeight: 700, margin: "14px 0 8px", color: C.verde }}>Agregar ingrediente</div>
@@ -5397,16 +5402,16 @@ export default function App() {
                     <button onClick={agregarIngrediente} style={{ padding: "10px 14px", fontSize: 13.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+</button>
                   </div>
 
-                  <button onClick={() => eliminarFormula(recActiva)} style={{ marginTop: 16, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, background: "transparent", color: C.alerta, border: `1.5px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Eliminar esta fórmula</button>
+                  <button onClick={() => eliminarFormula(recActiva)} style={{ marginTop: 16, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, background: "transparent", color: C.alerta, border: `1.5px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Eliminar esta f�rmula</button>
                 </Seccion>
               )}
             </>
             )}
 
               {(subFormulas === "nueva" || subFormulas === "todo") && (
-              <Seccion titulo="Crear fórmula nueva" sub="Del nutricionista — se define en kg por bache del mixer">
+              <Seccion titulo="Crear f�rmula nueva" sub="Del nutricionista - se define en kg por bache del mixer">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Campo mitad etiqueta="Nombre de la fórmula" type="text" placeholder="ej. Postura F2" value={fNuevaRec.nombre} onChange={e => setFNuevaRec({ ...fNuevaRec, nombre: e.target.value })} />
+                  <Campo mitad etiqueta="Nombre de la f�rmula" type="text" placeholder="ej. Postura F2" value={fNuevaRec.nombre} onChange={e => setFNuevaRec({ ...fNuevaRec, nombre: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%" }}>
                     <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Uso</span>
                     <select value={fNuevaRec.uso} onChange={e => setFNuevaRec({ ...fNuevaRec, uso: e.target.value })} style={inputStyle}>
@@ -5414,7 +5419,7 @@ export default function App() {
                     </select>
                   </label>
                 </div>
-                <button onClick={crearFormula} style={btnStyle}>Crear fórmula</button>
+                <button onClick={crearFormula} style={btnStyle}>Crear f�rmula</button>
                 <div style={{ marginTop: 12 }}>
                   <Campo mitad etiqueta="Capacidad del mixer (kg por bache)" type="text" inputMode="numeric" value={recetas.bacheKg}
                     onChange={e => persistirRecetas({ ...recetas, bacheKg: Number(e.target.value || BACHE_KG_DEFAULT) })} />
@@ -5423,7 +5428,7 @@ export default function App() {
             )}
 
               {(subFormulas === "catalogo" || subFormulas === "todo") && (
-              <Seccion titulo="Catálogo de materias primas" sub="La lista maestra que alimenta fórmulas, inventario y pedido — nombre, presentación y proveedor editables">
+              <Seccion titulo="Cat�logo de materias primas" sub="La lista maestra que alimenta f�rmulas, inventario y pedido - nombre, presentaci�n y proveedor editables">
                 {mpCat.map(mp => {
                   const enUso = Object.values(recetas.formulas).some(f2 => f2.items[mp.c] !== undefined);
                   return (
@@ -5431,41 +5436,41 @@ export default function App() {
                       <span style={{ flex: "0 0 46px", fontSize: 10.5, color: C.textoSuave }}>{mp.c}</span>
                       <input type="text" value={mp.n} onChange={e => actualizarMP(mp.c, "n", e.target.value)}
                         style={{ ...inputStyle, flex: "2 1 130px", padding: "8px 9px", fontSize: 13 }} />
-                      <input type="text" inputMode="decimal" title="Presentación kg/unidad" value={mp.pres} onChange={e => actualizarMP(mp.c, "pres", e.target.value)}
+                      <input type="text" inputMode="decimal" title="Presentaci�n kg/unidad" value={mp.pres} onChange={e => actualizarMP(mp.c, "pres", e.target.value)}
                         style={{ ...inputStyle, flex: "0 1 64px", padding: "8px 8px", fontSize: 13 }} />
                       <input list="provs" type="text" value={mp.prov} onChange={e => actualizarMP(mp.c, "prov", e.target.value)}
                         style={{ ...inputStyle, flex: "1 1 90px", padding: "8px 9px", fontSize: 13 }} />
-                      <button onClick={() => eliminarMP(mp)} title={enUso ? "En uso en fórmulas" : "Eliminar"}
-                        style={{ padding: "6px 9px", fontSize: 13, background: "transparent", color: enUso ? C.borde : C.alerta, border: `1px solid ${C.borde}`, borderRadius: 8, cursor: "pointer" }}>×</button>
+                      <button onClick={() => eliminarMP(mp)} title={enUso ? "En uso en f�rmulas" : "Eliminar"}
+                        style={{ padding: "6px 9px", fontSize: 13, background: "transparent", color: enUso ? C.borde : C.alerta, border: `1px solid ${C.borde}`, borderRadius: 8, cursor: "pointer" }}>x</button>
                     </div>
                   );
                 })}
                 <datalist id="provs">{proveedoresCat.map(pv => <option key={pv} value={pv} />)}</datalist>
-                <div style={{ fontSize: 11.5, color: C.textoSuave, margin: "4px 0 12px" }}>Columnas: código · nombre · presentación (kg por saco o unidad; usa 1 para granel) · proveedor. Las materias en uso en fórmulas no se pueden eliminar.</div>
+                <div style={{ fontSize: 11.5, color: C.textoSuave, margin: "4px 0 12px" }}>Columnas: c�digo � nombre � presentaci�n (kg por saco o unidad; usa 1 para granel) � proveedor. Las materias en uso en f�rmulas no se pueden eliminar.</div>
 
                 <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Agregar materia prima nueva</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Campo tercio etiqueta="Nombre" type="text" placeholder="ej. AFRECHO DE TRIGO" value={fNuevaMP.n} onChange={e => setFNuevaMP({ ...fNuevaMP, n: e.target.value })} />
-                  <Campo tercio etiqueta="Presentación (kg/unidad)" type="text" inputMode="decimal" placeholder="ej. 46 (o 1)" value={fNuevaMP.pres} onChange={e => setFNuevaMP({ ...fNuevaMP, pres: e.target.value })} />
+                  <Campo tercio etiqueta="Presentaci�n (kg/unidad)" type="text" inputMode="decimal" placeholder="ej. 46 (o 1)" value={fNuevaMP.pres} onChange={e => setFNuevaMP({ ...fNuevaMP, pres: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 96 }}>
                     <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Proveedor</span>
                     <input list="provs" type="text" placeholder="ej. AVIN" value={fNuevaMP.prov} onChange={e => setFNuevaMP({ ...fNuevaMP, prov: e.target.value })} style={inputStyle} />
                   </label>
                 </div>
-                <button onClick={agregarMP} style={btnStyle}>Agregar al catálogo</button>
+                <button onClick={agregarMP} style={btnStyle}>Agregar al cat�logo</button>
               </Seccion>
             )}
             </>
           );
         })()}
 
-        {/* ══ INSUMOS Y MEDICINAS ══ */}
+        {/* �� INSUMOS Y MEDICINAS �� */}
         {vista === "insumos" && (() => {
           const agotados = insumos.filter(it => it.saldo <= 0);
           return (
             <>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-                <KPI etiqueta="Insumos en catálogo" valor={insumos.length} unidad="" />
+                <KPI etiqueta="Insumos en cat�logo" valor={insumos.length} unidad="" />
                 <KPI etiqueta="Agotados o en cero" valor={agotados.length} unidad="" tono={agotados.length ? "alerta" : "ok"} />
                 <KPI etiqueta="Movimientos registrados" valor={insumosMovs.length} unidad="" />
               </div>
@@ -5473,18 +5478,18 @@ export default function App() {
  
               <BarraSubmenu
                 subsecciones={[
-                  { id: "catalogo", nombre: "Inventario por categoría", icono: "📦" },
-                  { id: "conteo", nombre: "Balance / conteo general", icono: "⚡" },
-                  { id: "movimiento", nombre: "Registrar movimiento", icono: "🔄" },
-                  { id: "nuevo", nombre: "Agregar nuevo insumo", icono: "➕" },
-                  { id: "todo", nombre: "Ver todo", icono: "☰" },
+                  { id: "catalogo", nombre: "Inventario por categor�a", icono: "??" },
+                  { id: "conteo", nombre: "Balance / conteo general", icono: "?" },
+                  { id: "movimiento", nombre: "Registrar movimiento", icono: "??" },
+                  { id: "nuevo", nombre: "Agregar nuevo insumo", icono: "?" },
+                  { id: "todo", nombre: "Ver todo", icono: "?" },
                 ]}
                 activo={subInsumos}
                 onChange={setSubInsumos}
               />
 
              {(subInsumos === "conteo" || subInsumos === "todo") && (
-                <Seccion titulo="⚡ Balance inicial / conteo general" sub="Digita el saldo real de los productos que tengas hoy y guarda todo de una vez — cada carga queda registrada como movimiento">
+                <Seccion titulo="? Balance inicial / conteo general" sub="Digita el saldo real de los productos que tengas hoy y guarda todo de una vez - cada carga queda registrada como movimiento">
                 {CATEGORIAS_INSUMOS.map(cat => {
                   const items = insumos.filter(it => it.categoria === cat);
                   if (!items.length) return null;
@@ -5503,12 +5508,12 @@ export default function App() {
                   );
                 })}
                 <button onClick={guardarAperturaInsumos} disabled={guardando} style={btnStyle}>Guardar balances iniciales</button>
-                <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Solo se actualizan los que tengan un número digitado; los demás quedan igual. Sirve también para conteos generales futuros.</div>
+                <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Solo se actualizan los que tengan un n�mero digitado; los dem�s quedan igual. Sirve tambi�n para conteos generales futuros.</div>
               </Seccion>
               )}
 
               {(subInsumos === "catalogo" || subInsumos === "todo") && (
-                <Seccion titulo="Inventario por categoría" sub="Saldo inicial + compras − salidas del control diario = saldo actual. Las salidas se descuentan solas al guardar el día.">
+                <Seccion titulo="Inventario por categor�a" sub="Saldo inicial + compras - salidas del control diario = saldo actual. Las salidas se descuentan solas al guardar el d�a.">
                 {CATEGORIAS_INSUMOS.map(cat => {
                   const items = insumos.filter(it => it.categoria === cat);
                   if (!items.length) return null;
@@ -5521,10 +5526,10 @@ export default function App() {
                             <input type="text" value={it.nombre} onChange={e => actualizarInsumo(it.id, "nombre", e.target.value)}
                               style={{ ...inputStyle, flex: 1, padding: "7px 9px", fontSize: 13.5, fontWeight: 600, background: C.superficie }} />
                             <b style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14.5, whiteSpace: "nowrap", color: it.saldo <= 0 ? C.alerta : C.texto }}>{it.saldo} {it.unidad}</b>
-                            <button onClick={() => eliminarInsumo(it)} style={{ padding: "4px 8px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
+                            <button onClick={() => eliminarInsumo(it)} style={{ padding: "4px 8px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>x</button>
                           </div>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            <input type="text" placeholder="Presentación (ej. galón 3.785 L)" title="Presentación" value={it.presentacion || ""}
+                            <input type="text" placeholder="Presentaci�n (ej. gal�n 3.785 L)" title="Presentaci�n" value={it.presentacion || ""}
                               onChange={e => actualizarInsumo(it.id, "presentacion", e.target.value)}
                               style={{ ...inputStyle, flex: "1 1 30%", minWidth: 100, padding: "6px 8px", fontSize: 12, background: C.superficie }} />
                             <input type="text" placeholder="Dosis (ej. 1 ml/L agua)" title="Dosis a utilizar" value={it.dosis || ""}
@@ -5544,9 +5549,9 @@ export default function App() {
 
               <datalist id="provsIns">{proveedoresIns.map(pv => <option key={pv} value={pv} />)}</datalist>
               {(subInsumos === "movimiento" || subInsumos === "todo") && (
-                <Seccion titulo="Registrar movimiento" sub="Entrada por compra (con # de factura), salida manual, o ajuste por conteo físico">
+                <Seccion titulo="Registrar movimiento" sub="Entrada por compra (con # de factura), salida manual, o ajuste por conteo f�sico">
                 <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                  {[["entrada", "+ Entrada"], ["salida", "− Salida"], ["ajuste", "Ajuste"]].map(([t, lbl]) => (
+                  {[["entrada", "+ Entrada"], ["salida", "- Salida"], ["ajuste", "Ajuste"]].map(([t, lbl]) => (
                     <button key={t} onClick={() => setFMovIns({ ...fMovIns, tipo: t })} style={{
                       flex: 1, padding: "10px", fontSize: 13.5, fontWeight: 600, borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif",
                       border: fMovIns.tipo === t ? `2px solid ${C.verde}` : `1.5px solid ${C.borde}`,
@@ -5555,7 +5560,7 @@ export default function App() {
                   ))}
                 </div>
                 <select value={fMovIns.itemId} onChange={e => setFMovIns({ ...fMovIns, itemId: e.target.value })} style={selectStyle}>
-                  <option value="">— Elegir insumo —</option>
+                  <option value="">- Elegir insumo -</option>
                   {CATEGORIAS_INSUMOS.map(cat => insumos.filter(i2 => i2.categoria === cat).map(i2 =>
                     <option key={i2.id} value={i2.id}>{cat}: {i2.nombre} (saldo {i2.saldo} {i2.unidad})</option>))}
                 </select>
@@ -5578,9 +5583,9 @@ export default function App() {
                       const colores = { entrada: C.verde, salida: C.alerta, ajuste: "#9A6605" };
                       return (
                         <div key={i} style={{ fontSize: 12.5, padding: "7px 11px", background: C.fondo, borderRadius: 9, marginBottom: 5, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                          <span><b>{m.fecha.slice(0, 5)}</b> · {it?.nombre || "?"} {m.detalle && <span style={{ color: C.textoSuave }}>· {m.detalle}{m.auto ? " (auto)" : ""}</span>}</span>
-                          <b style={{ color: colores[m.tipo] }}>{m.tipo === "entrada" ? "+" : m.tipo === "salida" ? "−" : "="}{m.cantidad} {it?.unidad}</b>
-                          <button onClick={() => eliminarMovInsumo(m)} title="Eliminar" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delins:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delins:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
+                          <span><b>{m.fecha.slice(0, 5)}</b> � {it?.nombre || "?"} {m.detalle && <span style={{ color: C.textoSuave }}>� {m.detalle}{m.auto ? " (auto)" : ""}</span>}</span>
+                          <b style={{ color: colores[m.tipo] }}>{m.tipo === "entrada" ? "+" : m.tipo === "salida" ? "-" : "="}{m.cantidad} {it?.unidad}</b>
+                          <button onClick={() => eliminarMovInsumo(m)} title="Eliminar" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delins:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delins:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>x</button>
                         </div>
                       );
                     })}
@@ -5590,11 +5595,11 @@ export default function App() {
               )}
 
               {(subInsumos === "nuevo" || subInsumos === "todo") && (
-                <Seccion titulo="Agregar insumo al catálogo" sub="Escribe el nombre TAL CUAL lo anotan en el control diario para que el descuento automático lo reconozca">
+                <Seccion titulo="Agregar insumo al cat�logo" sub="Escribe el nombre TAL CUAL lo anotan en el control diario para que el descuento autom�tico lo reconozca">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Campo mitad etiqueta="Nombre del producto" type="text" placeholder="ej. Respinorm" value={fNuevoIns.nombre} onChange={e => setFNuevoIns({ ...fNuevoIns, nombre: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%" }}>
-                    <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
+                    <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categor�a</span>
                     <select value={fNuevoIns.categoria} onChange={e => setFNuevoIns({ ...fNuevoIns, categoria: e.target.value })} style={inputStyle}>
                       {CATEGORIAS_INSUMOS.map(c2 => <option key={c2}>{c2}</option>)}
                     </select>
@@ -5606,7 +5611,7 @@ export default function App() {
                     </select>
                   </label>
                   <Campo mitad etiqueta="Saldo inicial" type="text" inputMode="decimal" placeholder="0" value={fNuevoIns.saldo} onChange={e => setFNuevoIns({ ...fNuevoIns, saldo: e.target.value })} />
-                  <Campo tercio etiqueta="Presentación" type="text" placeholder="ej. galón 3.785 L" value={fNuevoIns.presentacion} onChange={e => setFNuevoIns({ ...fNuevoIns, presentacion: e.target.value })} />
+                  <Campo tercio etiqueta="Presentaci�n" type="text" placeholder="ej. gal�n 3.785 L" value={fNuevoIns.presentacion} onChange={e => setFNuevoIns({ ...fNuevoIns, presentacion: e.target.value })} />
                   <Campo tercio etiqueta="Dosis a utilizar" type="text" placeholder="ej. 1 ml/L agua" value={fNuevoIns.dosis} onChange={e => setFNuevoIns({ ...fNuevoIns, dosis: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 30%", minWidth: 96 }}>
                     <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Proveedor</span>
@@ -5619,7 +5624,7 @@ export default function App() {
             </>
           );
         })()}
-        {/* ══ KPIs ══ */}
+        {/* �� KPIs �� */}
         {vista === "reporte" && (() => {
           const avesTot = activos.reduce((a, l) => a + l.aves, 0);
           const kgHuevoHoy = regsHoy.reduce((a, r) => a + Number(r.pesoKg || 0), 0);
@@ -5631,41 +5636,41 @@ export default function App() {
           const mort7Pct = avesTot > 0 ? (mort7 / avesTot) * 100 : 0;
           return (
             <>
-              {verReporte("auditoria") && <Seccion titulo="🔍 Auditoría de gestión" sub="Tareas sin realizar, patrones anómalos y controles vencidos — lo que NO está pasando">
-                {auditoriaVisibles.length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>✓ Gestión al día — sin hallazgos de auditoría.</div>}
+              {verReporte("auditoria") && <Seccion titulo="?? Auditor�a de gesti�n" sub="Tareas sin realizar, patrones an�malos y controles vencidos - lo que NO est� pasando">
+                {auditoriaVisibles.length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>� Gesti�n al d�a - sin hallazgos de auditor�a.</div>}
                 {auditoriaVisibles.map((a, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 9, padding: "9px 12px", background: a.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 6, fontSize: 13, lineHeight: 1.5 }}>
                     <div style={{ display: "flex", gap: 8, flex: 1 }}>
-                      <span>{a.nivel === "rojo" ? "🔴" : "🟡"}</span>
+                      <span>{a.nivel === "rojo" ? "??" : "??"}</span>
                       <div>
                         <span>{a.textoAjustado || a.texto}</span>
                         {a.ajuste && (
                           <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>
-                            ✏️ Modificado por <b>{mostrarNombre(a.ajuste.responsable)}</b> ({a.ajuste.fecha}): <i>"{a.ajuste.razon}"</i>
+                            ?? Modificado por <b>{mostrarNombre(a.ajuste.responsable)}</b> ({a.ajuste.fecha}): <i>"{a.ajuste.razon}"</i>
                           </div>
                         )}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => abrirModalAjusteAdv(a, "auditoria", "modificar")} title="Modificar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
-                      <button onClick={() => abrirModalAjusteAdv(a, "auditoria", "eliminar")} title="Descartar / eliminar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
+                      <button onClick={() => abrirModalAjusteAdv(a, "auditoria", "modificar")} title="Modificar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>??</button>
+                      <button onClick={() => abrirModalAjusteAdv(a, "auditoria", "eliminar")} title="Descartar / eliminar advertencia" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>x</button>
                     </div>
                   </div>
                 ))}
                 {idsPermitidos.includes("historial") && ajustesAuditoria.length > 0 && (
                   <details style={{ marginTop: 12, padding: "8px 10px", background: C.fondo, borderRadius: 10 }}>
                     <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: C.texto }}>
-                      📋 Historial de advertencias gestionadas / descartadas ({ajustesAuditoria.length})
+                      ?? Historial de advertencias gestionadas / descartadas ({ajustesAuditoria.length})
                     </summary>
                     <div style={{ marginTop: 8 }}>
                       {selectorHistorial("advertencias")}
                       {historialVisible(ajustesAuditoria, "advertencias").map((aj, idx) => (
                         <div key={aj.id || idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
                           <div>
-                            <div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}:</b> {aj.textoOriginal}</div>
+                            <div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : "Auditor�a"}:</b> {aj.textoOriginal}</div>
                             <div style={{ color: C.textoSuave, marginTop: 2 }}>
                               <span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : "#9A6605" }}>{aj.accion === "eliminar" ? "Descartada" : "Modificada"}</span> por <b>{mostrarNombre(aj.responsable)}</b> el {aj.fecha}
-                              {aj.razon ? ` — Razón: "${aj.razon}"` : ""}
+                              {aj.razon ? ` - Raz�n: "${aj.razon}"` : ""}
                             </div>
                             {aj.accion === "modificar" && aj.nuevoTexto && (
                               <div style={{ color: C.verde, marginTop: 2 }}><b>Texto ajustado:</b> {aj.nuevoTexto}</div>
@@ -5687,21 +5692,21 @@ export default function App() {
               </Seccion>}
 
               {verReporte("kpis") && <>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, color: C.verde, margin: "18px 0 10px", borderTop: `2px solid ${C.borde}`, paddingTop: 16 }}>📊 KPIs técnicos de la granja</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, color: C.verde, margin: "18px 0 10px", borderTop: `2px solid ${C.borde}`, paddingTop: 16 }}>?? KPIs t�cnicos de la granja</div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-                <KPI etiqueta="Masa de huevo" valor={masaHuevo ? masaHuevo.toFixed(1) : "—"} unidad="g/ave/día" tono={masaHuevo && masaHuevo < 45 ? "alerta" : "ok"} sub="Meta en pico: 55–60" />
-                <KPI etiqueta="Agua : alimento" valor={ratioAgua ? ratioAgua.toFixed(1) : "—"} unidad=": 1" tono={ratioAgua && (ratioAgua < 1.6 || ratioAgua > 2.6) ? "alerta" : "ok"} sub="Sano: 1.8–2.2" />
+                <KPI etiqueta="Masa de huevo" valor={masaHuevo ? masaHuevo.toFixed(1) : "-"} unidad="g/ave/d�a" tono={masaHuevo && masaHuevo < 45 ? "alerta" : "ok"} sub="Meta en pico: 55-60" />
+                <KPI etiqueta="Agua : alimento" valor={ratioAgua ? ratioAgua.toFixed(1) : "-"} unidad=": 1" tono={ratioAgua && (ratioAgua < 1.6 || ratioAgua > 2.6) ? "alerta" : "ok"} sub="Sano: 1.8-2.2" />
                 <KPI etiqueta="Mortalidad 7d granja" valor={mort7Pct.toFixed(2)} unidad="%" tono={mort7Pct > 0.35 ? "alerta" : "ok"} sub={`${mort7} aves`} />
               </div>
 
-              <Seccion titulo="Semáforo técnico por gallinero" sub="Todas las variables críticas cruzadas — verde bien · ámbar vigilar · rojo actuar">
+              <Seccion titulo="Sem�foro t�cnico por gallinero" sub="Todas las variables cr�ticas cruzadas - verde bien � �mbar vigilar � rojo actuar">
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
                     <thead>
                       <tr style={{ color: C.textoSuave, fontSize: 11, textAlign: "right" }}>
                         <th style={{ textAlign: "left", padding: "5px 4px" }}>Gall.</th>
                         <th style={{ padding: "5px 4px" }}>Postura vs tabla</th>
-                        <th style={{ padding: "5px 4px" }}>Consumo vs ración</th>
+                        <th style={{ padding: "5px 4px" }}>Consumo vs raci�n</th>
                         <th style={{ padding: "5px 4px" }}>Agua:alim</th>
                         <th style={{ padding: "5px 4px" }}>Mort. 7d</th>
                         <th style={{ padding: "5px 4px" }}>Peso vs tabla</th>
@@ -5734,12 +5739,12 @@ export default function App() {
                         return (
                           <tr key={l.id} style={{ borderTop: `1px solid ${C.borde}` }}>
                             <td style={{ padding: "8px 4px", fontWeight: 700 }}>G{l.galpon}</td>
-                            <td style={{ ...celd, color: cPost }}>{dPost != null ? `${post.toFixed(1)}% (${dPost > 0 ? "+" : ""}${dPost.toFixed(1)})` : "—"}</td>
-                            <td style={{ ...celd, color: cCons }}>{dCons != null ? `${dCons > 0 ? "+" : ""}${dCons.toFixed(0)}%` : "—"}</td>
-                            <td style={{ ...celd, color: cAgua }}>{ratio != null ? ratio.toFixed(1) : "—"}</td>
-                            <td style={{ ...celd, color: cM7 }}>{pM7 != null ? `${pM7.toFixed(2)}%` : "—"}</td>
-                            <td style={{ ...celd, color: cPeso }}>{dPeso != null ? `${dPeso > 0 ? "+" : ""}${dPeso.toFixed(1)}%` : "—"}</td>
-                            <td style={{ ...celd, color: cUnif }}>{stP ? `${stP.unif.toFixed(0)}%` : "—"}</td>
+                            <td style={{ ...celd, color: cPost }}>{dPost != null ? `${post.toFixed(1)}% (${dPost > 0 ? "+" : ""}${dPost.toFixed(1)})` : "-"}</td>
+                            <td style={{ ...celd, color: cCons }}>{dCons != null ? `${dCons > 0 ? "+" : ""}${dCons.toFixed(0)}%` : "-"}</td>
+                            <td style={{ ...celd, color: cAgua }}>{ratio != null ? ratio.toFixed(1) : "-"}</td>
+                            <td style={{ ...celd, color: cM7 }}>{pM7 != null ? `${pM7.toFixed(2)}%` : "-"}</td>
+                            <td style={{ ...celd, color: cPeso }}>{dPeso != null ? `${dPeso > 0 ? "+" : ""}${dPeso.toFixed(1)}%` : "-"}</td>
+                            <td style={{ ...celd, color: cUnif }}>{stP ? `${stP.unif.toFixed(0)}%` : "-"}</td>
                           </tr>
                         );
                       })}
@@ -5755,15 +5760,15 @@ export default function App() {
           <>
             {verReporte("kpis") && <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <KPI etiqueta="% Postura" valor={posturaDia.toFixed(1)} unidad="%" tono={posturaDia < 80 ? "alerta" : "ok"} sub={`${huevosDia.toLocaleString()} huevos · Est.: ≥85%`} />
-              <KPI etiqueta="Conversión (7d)" valor={conversion ? conversion.toFixed(2) : "—"} unidad="kg/kg" tono={conversion > 2.2 ? "alerta" : "ok"} sub="Est. industria: ≤2.2" />
-              <KPI etiqueta="Conv. por cartón (7d)" valor={convCarton ? convCarton.toFixed(2) : "—"} unidad="kg" tono={convCarton > 4.6 ? "alerta" : "ok"} sub="Est.: 4.1–4.6 kg/cartón" />
-              <KPI etiqueta="Consumo (7d)" valor={consumoGAve.toFixed(0)} unidad="g/ave" tono={consumoGAve > 120 || (consumoGAve > 0 && consumoGAve < 100) ? "alerta" : "ok"} sub="Est. café adulta: 105–120 g" />
-              <KPI etiqueta="% Quebrado (7d)" valor={pctQueb.toFixed(1)} unidad="%" tono={pctQueb > 3 ? "alerta" : "ok"} sub={`Vendibles: ${(100 - pctQueb).toFixed(1)}% · Est.: <3%`} />
-              <KPI etiqueta="Peso prom. huevo" valor={pesoProm ? pesoProm.toFixed(1) : "—"} unidad="g" tono={pesoProm > 0 && pesoProm < 55 ? "alerta" : "ok"} sub="Est. adultas: 58–66 g" />
+              <KPI etiqueta="% Postura" valor={posturaDia.toFixed(1)} unidad="%" tono={posturaDia < 80 ? "alerta" : "ok"} sub={`${huevosDia.toLocaleString()} huevos � Est.: �85%`} />
+              <KPI etiqueta="Conversi�n (7d)" valor={conversion ? conversion.toFixed(2) : "-"} unidad="kg/kg" tono={conversion > 2.2 ? "alerta" : "ok"} sub="Est. industria: �2.2" />
+              <KPI etiqueta="Conv. por cart�n (7d)" valor={convCarton ? convCarton.toFixed(2) : "-"} unidad="kg" tono={convCarton > 4.6 ? "alerta" : "ok"} sub="Est.: 4.1-4.6 kg/cart�n" />
+              <KPI etiqueta="Consumo (7d)" valor={consumoGAve.toFixed(0)} unidad="g/ave" tono={consumoGAve > 120 || (consumoGAve > 0 && consumoGAve < 100) ? "alerta" : "ok"} sub="Est. caf� adulta: 105-120 g" />
+              <KPI etiqueta="% Quebrado (7d)" valor={pctQueb.toFixed(1)} unidad="%" tono={pctQueb > 3 ? "alerta" : "ok"} sub={`Vendibles: ${(100 - pctQueb).toFixed(1)}% � Est.: <3%`} />
+              <KPI etiqueta="Peso prom. huevo" valor={pesoProm ? pesoProm.toFixed(1) : "-"} unidad="g" tono={pesoProm > 0 && pesoProm < 55 ? "alerta" : "ok"} sub="Est. adultas: 58-66 g" />
             </div>
 
-            <Seccion titulo="Postura — últimos 14 días" sub="Desde los controles diarios">
+            <Seccion titulo="Postura - �ltimos 14 d�as" sub="Desde los controles diarios">
               <div style={{ width: "100%", height: 200 }}>
                 <ResponsiveContainer>
                   <LineChart data={tendencia} margin={{ top: 5, right: 8, bottom: 0, left: -22 }}>
@@ -5777,7 +5782,7 @@ export default function App() {
               </div>
             </Seccion>
 
-            <Seccion titulo="Indicadores por lote — con estándar de industria" sub="HAA: huevos por ave alojada · Pico: máximo % de postura alcanzado (promedio 7d) · Persist.: postura actual vs pico">
+            <Seccion titulo="Indicadores por lote - con est�ndar de industria" sub="HAA: huevos por ave alojada � Pico: m�ximo % de postura alcanzado (promedio 7d) � Persist.: postura actual vs pico">
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 620 }}>
                   <thead>
@@ -5785,10 +5790,10 @@ export default function App() {
                       <th style={{ textAlign: "left", padding: "6px 4px" }}>Lote</th>
                       <th style={{ padding: "6px 4px" }}>HAA</th>
                       <th style={{ padding: "6px 4px" }}>Viabilidad<br /><span style={{ fontWeight: 400 }}>est. &gt;94%</span></th>
-                      <th style={{ padding: "6px 4px" }}>Conv. lote<br /><span style={{ fontWeight: 400 }}>est. ≤2.2</span></th>
-                      <th style={{ padding: "6px 4px" }}>PICO<br /><span style={{ fontWeight: 400 }}>est. 92–96%</span></th>
+                      <th style={{ padding: "6px 4px" }}>Conv. lote<br /><span style={{ fontWeight: 400 }}>est. �2.2</span></th>
+                      <th style={{ padding: "6px 4px" }}>PICO<br /><span style={{ fontWeight: 400 }}>est. 92-96%</span></th>
                       <th style={{ padding: "6px 4px" }}>Persist.<br /><span style={{ fontWeight: 400 }}>vs pico</span></th>
-                      <th style={{ padding: "6px 4px" }}>₡ alim/cartón</th>
+                      <th style={{ padding: "6px 4px" }}>? alim/cart�n</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5814,13 +5819,13 @@ export default function App() {
                       const cPers = persist == null ? C.textoSuave : persist >= -6 ? C.verde : persist >= -12 ? "#9A6605" : C.alerta;
                       return (
                         <tr key={l.id} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
-                          <td style={{ textAlign: "left", padding: "9px 4px", fontWeight: 600 }}>G{l.galpon}<div style={{ fontSize: 11, color: C.textoSuave, fontWeight: 400 }}>{l.raza} · {semanasDe(l.nac).toFixed(0)} sem</div></td>
-                          <td style={{ padding: "9px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{haa.toFixed(1)}<div style={{ fontSize: 10.5, color: C.textoSuave, fontWeight: 400 }}>tabla: {(() => { const v = fichaLote(l)?.haa; return Array.isArray(v) ? `${v[0]}–${v[1]}` : v ?? "—"; })()}</div></td>
+                          <td style={{ textAlign: "left", padding: "9px 4px", fontWeight: 600 }}>G{l.galpon}<div style={{ fontSize: 11, color: C.textoSuave, fontWeight: 400 }}>{l.raza} � {semanasDe(l.nac).toFixed(0)} sem</div></td>
+                          <td style={{ padding: "9px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{haa.toFixed(1)}<div style={{ fontSize: 10.5, color: C.textoSuave, fontWeight: 400 }}>tabla: {(() => { const v = fichaLote(l)?.haa; return Array.isArray(v) ? `${v[0]}-${v[1]}` : v ?? "-"; })()}</div></td>
                           <td style={{ padding: "9px 4px", color: viab < 94 ? (viab < 88 ? C.alerta : "#9A6605") : C.verde, fontWeight: 600 }}>{viab.toFixed(1)}%</td>
-                          <td style={{ padding: "9px 4px", color: !convLote ? C.textoSuave : convLote > 2.2 ? C.alerta : C.verde, fontWeight: 600 }}>{convLote ? convLote.toFixed(2) : "—"}</td>
-                          <td style={{ padding: "9px 4px", color: cPico, fontWeight: 700 }}>{pico != null ? `${pico.toFixed(1)}%` : "—"}</td>
-                          <td style={{ padding: "9px 4px", color: cPers, fontWeight: 600 }}>{persist != null ? `${persist > 0 ? "+" : ""}${persist.toFixed(1)} pts` : "—"}</td>
-                          <td style={{ padding: "9px 4px" }}>{costoCarton ? `₡${costoCarton.toFixed(0)}` : "—"}</td>
+                          <td style={{ padding: "9px 4px", color: !convLote ? C.textoSuave : convLote > 2.2 ? C.alerta : C.verde, fontWeight: 600 }}>{convLote ? convLote.toFixed(2) : "-"}</td>
+                          <td style={{ padding: "9px 4px", color: cPico, fontWeight: 700 }}>{pico != null ? `${pico.toFixed(1)}%` : "-"}</td>
+                          <td style={{ padding: "9px 4px", color: cPers, fontWeight: 600 }}>{persist != null ? `${persist > 0 ? "+" : ""}${persist.toFixed(1)} pts` : "-"}</td>
+                          <td style={{ padding: "9px 4px" }}>{costoCarton ? `?${costoCarton.toFixed(0)}` : "-"}</td>
                         </tr>
                       );
                     })}
@@ -5831,7 +5836,7 @@ export default function App() {
             </>}
 
             {verReporte("economia") && <>
-            <Seccion titulo="Economía — margen sobre alimento (IOFC)" sub="El indicador que une lo técnico con la plata: ingreso del huevo menos costo del alimento">
+            <Seccion titulo="Econom�a - margen sobre alimento (IOFC)" sub="El indicador que une lo t�cnico con la plata: ingreso del huevo menos costo del alimento">
               {(() => {
                 const precioCart = Number(costos._precioVenta || 0);
                 const rsU = ultDia ? registros.filter(r => r.fecha === ultDia) : [];
@@ -5848,28 +5853,28 @@ export default function App() {
                 return (
                   <>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-                      <Campo mitad etiqueta="Precio de venta ₡ por cartón" type="text" inputMode="decimal" placeholder="ej. 1800" value={costos._precioVenta ?? ""}
+                      <Campo mitad etiqueta="Precio de venta ? por cart�n" type="text" inputMode="decimal" placeholder="ej. 1800" value={costos._precioVenta ?? ""}
                         onChange={e => setCostos({ ...costos, _precioVenta: e.target.value })} onBlur={() => guardarCostos(costos)} />
                     </div>
                     {iofc != null ? (
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-                        <KPI etiqueta="Margen s/ alimento (día)" valor={`₡${iofc.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} unidad="" tono={iofc > 0 ? "ok" : "alerta"} sub={`Ingreso ₡${ingreso.toLocaleString(undefined, { maximumFractionDigits: 0 })} − alimento ₡${costoAlimDia.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
-                        <KPI etiqueta="Margen por cartón" valor={`₡${iofcCart.toFixed(0)}`} unidad="" tono={iofcCart > 0 ? "ok" : "alerta"} sub="Sobre costo de alimento" />
+                        <KPI etiqueta="Margen s/ alimento (d�a)" valor={`?${iofc.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} unidad="" tono={iofc > 0 ? "ok" : "alerta"} sub={`Ingreso ?${ingreso.toLocaleString(undefined, { maximumFractionDigits: 0 })} - alimento ?${costoAlimDia.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+                        <KPI etiqueta="Margen por cart�n" valor={`?${iofcCart.toFixed(0)}`} unidad="" tono={iofcCart > 0 ? "ok" : "alerta"} sub="Sobre costo de alimento" />
                       </div>
                     ) : (
-                      <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 12 }}>Llena el precio de venta y los costos ₡/kg de abajo para activar el margen.</div>
+                      <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 12 }}>Llena el precio de venta y los costos ?/kg de abajo para activar el margen.</div>
                     )}
                   </>
                 );
               })()}
             </Seccion>
 
-            <Seccion titulo="Costo del concentrado (₡ por kg)" sub="Llénalo para activar el KPI de ₡ alimento por cartón y el margen">
+            <Seccion titulo="Costo del concentrado (? por kg)" sub="Ll�nalo para activar el KPI de ? alimento por cart�n y el margen">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 {Object.keys(recetas.formulas).map(f => (
                   <label key={f} style={{ flex: "1 1 30%", minWidth: 130 }}>
                     <span style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{f} <span style={{ color: C.textoSuave, fontWeight: 400 }}>({recetas.formulas[f].uso})</span></span>
-                    <input type="text" inputMode="decimal" placeholder="₡/kg" value={costos[f] ?? ""}
+                    <input type="text" inputMode="decimal" placeholder="?/kg" value={costos[f] ?? ""}
                       onChange={e => setCostos({ ...costos, [f]: e.target.value })}
                       onBlur={() => guardarCostos(costos)}
                       style={inputStyle} />
@@ -5880,7 +5885,7 @@ export default function App() {
             </>}
           </>
         )}
-        {/* ══ POR PAGAR ══ */}
+        {/* �� POR PAGAR �� */}
         {vista === "cxp" && (() => {
           const provsConocidos = [...new Set([...mpCat.map(m => m.prov).filter(Boolean), ...insumos.map(i2 => i2.proveedor).filter(Boolean), ...cxp.facturas.map(f => f.proveedor)])];
           const porProv = {};
@@ -5891,14 +5896,14 @@ export default function App() {
           const pagadas = cxp.facturas.filter(f => saldoDe(f) <= 0.005);
           return (
             <>
-              <button onClick={() => setPrintDoc({ tipo: "cxp" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir estado de cuentas por pagar</button>
+              <button onClick={() => setPrintDoc({ tipo: "cxp" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>?? Imprimir estado de cuentas por pagar</button>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
                 <KPI etiqueta="Total por pagar" valor={colones(cxpTotal)} unidad="" tono={cxpVencido > 0 ? "alerta" : "ok"} sub={`${facturasAbiertas.length} factura(s) abierta(s)`} />
                 <KPI etiqueta="Vencido" valor={colones(cxpVencido)} unidad="" tono={cxpVencido > 0 ? "alerta" : "ok"} />
-                <KPI etiqueta="Vence en 7 días" valor={colones(cxpProx7)} unidad="" />
+                <KPI etiqueta="Vence en 7 d�as" valor={colones(cxpProx7)} unidad="" />
               </div>
 
-              <Seccion titulo="Registrar factura recibida" sub="El documento del proveedor entra aquí el día que llega">
+              <Seccion titulo="Registrar factura recibida" sub="El documento del proveedor entra aqu� el d�a que llega">
                 {!fCxpFac && <button onClick={() => setFCxpFac({ tipo: "Factura", refId: "", proveedor: "", numero: "", emision: hoyISO(), vence: hoyISO(), monto: "", categoria: "Materia prima", detalle: "" })} style={btnStyle}>+ Nuevo documento (factura / NC / ND)</button>}
                 {fCxpFac && (
                   <>
@@ -5906,16 +5911,16 @@ export default function App() {
                       <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Tipo de documento</span>
                       <select value={fCxpFac.tipo || "Factura"} onChange={e => setFCxpFac({ ...fCxpFac, tipo: e.target.value })} style={inputStyle}>
                         <option value="Factura">Factura (aumenta la deuda)</option>
-                        <option value="ND">Nota de Débito (aumenta la deuda: intereses, fletes, ajustes)</option>
-                        <option value="NC">Nota de Crédito (disminuye la deuda: devoluciones, descuentos)</option>
+                        <option value="ND">Nota de D�bito (aumenta la deuda: intereses, fletes, ajustes)</option>
+                        <option value="NC">Nota de Cr�dito (disminuye la deuda: devoluciones, descuentos)</option>
                       </select>
                     </label>
                     {(fCxpFac.tipo === "NC" || fCxpFac.tipo === "ND") && (
                       <label style={{ display: "block", marginBottom: 12 }}>
                         <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Aplicar a la factura</span>
                         <select value={fCxpFac.refId} onChange={e => setFCxpFac({ ...fCxpFac, refId: e.target.value })} style={inputStyle}>
-                          <option value="">— Elige la factura afectada —</option>
-                          {facturasAbiertas.map(f2 => <option key={f2.id} value={f2.id}>{f2.proveedor} #{f2.numero || "s/n"} — saldo {colones(saldoDe(f2))}</option>)}
+                          <option value="">- Elige la factura afectada -</option>
+                          {facturasAbiertas.map(f2 => <option key={f2.id} value={f2.id}>{f2.proveedor} #{f2.numero || "s/n"} - saldo {colones(saldoDe(f2))}</option>)}
                         </select>
                       </label>
                     )}
@@ -5927,50 +5932,50 @@ export default function App() {
                       </label>
                       <Campo mitad etiqueta="No. de factura" type="text" placeholder="ej. 00123" value={fCxpFac.numero} onChange={e => setFCxpFac({ ...fCxpFac, numero: e.target.value })} />
                       <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
-                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de emisión</span>
+                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de emisi�n</span>
                         <input type="date" value={fCxpFac.emision} onChange={e => setFCxpFac({ ...fCxpFac, emision: e.target.value })} style={inputStyle} />
                       </label>
                       <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140, ...(fCxpFac.tipo && fCxpFac.tipo !== "Factura" ? { display: "none" } : {}) }}>
                         <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de vencimiento</span>
                         <input type="date" value={fCxpFac.vence} onChange={e => setFCxpFac({ ...fCxpFac, vence: e.target.value })} style={inputStyle} />
                       </label>
-                      <Campo mitad etiqueta="Monto total ₡" type="text" inputMode="decimal" placeholder="ej. 850000" value={fCxpFac.monto} onChange={e => setFCxpFac({ ...fCxpFac, monto: e.target.value })} />
+                      <Campo mitad etiqueta="Monto total ?" type="text" inputMode="decimal" placeholder="ej. 850000" value={fCxpFac.monto} onChange={e => setFCxpFac({ ...fCxpFac, monto: e.target.value })} />
                       <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140, ...(fCxpFac.tipo && fCxpFac.tipo !== "Factura" ? { display: "none" } : {}) }}>
-                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categoría</span>
+                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Categor�a</span>
                         <select value={fCxpFac.categoria} onChange={e => setFCxpFac({ ...fCxpFac, categoria: e.target.value })} style={inputStyle}>
                           {["Materia prima", "Insumos y medicamentos", "Pollonas", "Servicios", "Mantenimiento", "Otros"].map(c2 => <option key={c2}>{c2}</option>)}
                         </select>
                       </label>
                     </div>
-                    <Campo etiqueta="Detalle (opcional)" type="text" placeholder="ej. Maíz 200 qq + soya 80 qq" value={fCxpFac.detalle} onChange={e => setFCxpFac({ ...fCxpFac, detalle: e.target.value })} />
+                    <Campo etiqueta="Detalle (opcional)" type="text" placeholder="ej. Ma�z 200 qq + soya 80 qq" value={fCxpFac.detalle} onChange={e => setFCxpFac({ ...fCxpFac, detalle: e.target.value })} />
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={async () => {
                         const tipo = fCxpFac.tipo || "Factura";
                         if (tipo === "Factura") {
-                          if (!fCxpFac.proveedor || !Number(fCxpFac.monto)) { avisar("⚠ Proveedor y monto son obligatorios"); return; }
+                          if (!fCxpFac.proveedor || !Number(fCxpFac.monto)) { avisar("? Proveedor y monto son obligatorios"); return; }
                           const nueva = { id: Date.now(), proveedor: fCxpFac.proveedor.trim(), numero: fCxpFac.numero.trim(), emision: fCxpFac.emision.split("-").reverse().join("/"), vence: fCxpFac.vence.split("-").reverse().join("/"), monto: Number(fCxpFac.monto), categoria: fCxpFac.categoria, detalle: fCxpFac.detalle, registrada: hoyStr() };
-                          if (await guardarCxp(c3 => ({ ...c3, facturas: [nueva, ...c3.facturas] }))) { setFCxpFac(null); avisar("✓ Factura registrada"); }
+                          if (await guardarCxp(c3 => ({ ...c3, facturas: [nueva, ...c3.facturas] }))) { setFCxpFac(null); avisar("� Factura registrada"); }
                         } else {
                           const fRef = cxp.facturas.find(x => String(x.id) === String(fCxpFac.refId));
-                          if (!fRef) { avisar("⚠ Elige la factura a la que aplica la nota"); return; }
+                          if (!fRef) { avisar("? Elige la factura a la que aplica la nota"); return; }
                           const m2 = Number(fCxpFac.monto || 0);
-                          if (m2 <= 0) { avisar("⚠ Ingresa el monto de la nota"); return; }
-                          if (tipo === "NC" && m2 > saldoDe(fRef) + 0.01) { avisar(`⚠ La NC (${colones(m2)}) supera el saldo de la factura (${colones(saldoDe(fRef))})`); return; }
+                          if (m2 <= 0) { avisar("? Ingresa el monto de la nota"); return; }
+                          if (tipo === "NC" && m2 > saldoDe(fRef) + 0.01) { avisar(`? La NC (${colones(m2)}) supera el saldo de la factura (${colones(saldoDe(fRef))})`); return; }
                           const nota = { id: Date.now(), tipo, facturaId: fRef.id, numero: fCxpFac.numero.trim(), fecha: fCxpFac.emision.split("-").reverse().join("/"), monto: m2, detalle: fCxpFac.detalle, por: completadoPor };
                           if (await guardarCxp(c3 => ({ ...c3, notas: [nota, ...(c3.notas || [])] }))) {
                             setFCxpFac(null);
-                            avisar(`✓ ${tipo === "NC" ? "Nota de Crédito" : "Nota de Débito"} aplicada a ${fRef.proveedor} #${fRef.numero || "s/n"} — nuevo saldo ${colones(saldoDe(fRef) + (tipo === "ND" ? m2 : -m2))}`);
+                            avisar(`� ${tipo === "NC" ? "Nota de Cr�dito" : "Nota de D�bito"} aplicada a ${fRef.proveedor} #${fRef.numero || "s/n"} - nuevo saldo ${colones(saldoDe(fRef) + (tipo === "ND" ? m2 : -m2))}`);
                           }
                         }
-                      }} style={{ ...btnStyle, flex: 1 }}>{(fCxpFac.tipo || "Factura") === "Factura" ? "Guardar factura" : fCxpFac.tipo === "NC" ? "Aplicar Nota de Crédito" : "Aplicar Nota de Débito"}</button>
+                      }} style={{ ...btnStyle, flex: 1 }}>{(fCxpFac.tipo || "Factura") === "Factura" ? "Guardar factura" : fCxpFac.tipo === "NC" ? "Aplicar Nota de Cr�dito" : "Aplicar Nota de D�bito"}</button>
                       <button onClick={() => setFCxpFac(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>Cancelar</button>
                     </div>
                   </>
                 )}
               </Seccion>
 
-              <Seccion titulo="Facturas pendientes — por proveedor" sub="Lista consecutiva con acumulado; el saldo corre factura a factura">
-                {facturasAbiertas.length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>✓ Sin cuentas por pagar — todo al día.</div>}
+              <Seccion titulo="Facturas pendientes - por proveedor" sub="Lista consecutiva con acumulado; el saldo corre factura a factura">
+                {facturasAbiertas.length === 0 && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>� Sin cuentas por pagar - todo al d�a.</div>}
                 {(() => {
                   const grupos = {};
                   facturasAbiertas.forEach(f => { (grupos[f.proveedor] = grupos[f.proveedor] || []).push(f); });
@@ -5981,7 +5986,7 @@ export default function App() {
                       <div key={pv} style={{ background: C.superficie, border: `1px solid ${C.borde}`, borderRadius: 14, padding: "12px 12px 6px", marginBottom: 12 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                           <b style={{ fontSize: 15 }}>{pv}</b>
-                          <span style={{ fontSize: 13 }}>{fs.length} factura(s) · <b style={{ color: C.verde }}>{colones(totalProv)}</b></span>
+                          <span style={{ fontSize: 13 }}>{fs.length} factura(s) � <b style={{ color: C.verde }}>{colones(totalProv)}</b></span>
                         </div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
@@ -5989,7 +5994,7 @@ export default function App() {
                               <tr style={{ color: C.textoSuave, fontSize: 11, textAlign: "right" }}>
                                 <th style={{ textAlign: "left", padding: "4px 4px" }}>No. factura</th>
                                 <th style={{ padding: "4px 4px" }}>Vence</th>
-                                <th style={{ padding: "4px 4px" }}>Últ. pago</th>
+                                <th style={{ padding: "4px 4px" }}>Ult. pago</th>
                                 <th style={{ padding: "4px 4px" }}>Saldo</th>
                                 <th style={{ padding: "4px 4px" }}>Acumulado</th>
                                 <th style={{ padding: "4px 4px" }}></th>
@@ -6001,14 +6006,14 @@ export default function App() {
                                 acum += sal;
                                 const acumFila = acum;
                                 const pagosF = cxp.pagos.filter(pg => pg.facturaId === f.id);
-                                const ultPago = pagosF.length ? pagosF[0].fecha.slice(0, 5) : "—";
+                                const ultPago = pagosF.length ? pagosF[0].fecha.slice(0, 5) : "-";
                                 const cV = d < 0 ? C.alerta : d <= 7 ? "#9A6605" : C.texto;
                                 return (
                                   <React.Fragment key={f.id}>
                                     <tr style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
                                       <td style={{ textAlign: "left", padding: "9px 4px", fontWeight: 600 }}>
                                         #{f.numero || "s/n"}
-                                        <div style={{ fontSize: 10.5, color: C.textoSuave, fontWeight: 400 }}>{f.categoria}{pag > 0 ? ` · abonado ${colones(pag)}` : ""}{notasDe(f.id).map(n2 => ` · ${n2.tipo} #${n2.numero || "s/n"} ${n2.tipo === "ND" ? "+" : "−"}${colones(n2.monto)}`).join("")}</div>
+                                        <div style={{ fontSize: 10.5, color: C.textoSuave, fontWeight: 400 }}>{f.categoria}{pag > 0 ? ` � abonado ${colones(pag)}` : ""}{notasDe(f.id).map(n2 => ` � ${n2.tipo} #${n2.numero || "s/n"} ${n2.tipo === "ND" ? "+" : "-"}${colones(n2.monto)}`).join("")}</div>
                                       </td>
                                       <td style={{ padding: "9px 4px", color: cV, fontWeight: 700, whiteSpace: "nowrap" }}>{f.vence.slice(0, 5)}{d < 0 ? ` (${-d}d)` : ""}</td>
                                       <td style={{ padding: "9px 4px", whiteSpace: "nowrap" }}>{ultPago}</td>
@@ -6016,19 +6021,19 @@ export default function App() {
                                       <td style={{ padding: "9px 4px", fontWeight: 700, color: C.verde, whiteSpace: "nowrap" }}>{colones(acumFila)}</td>
                                       <td style={{ padding: "9px 4px", whiteSpace: "nowrap" }}>
                                         <button onClick={() => { setAbonando(abonando === f.id ? null : f.id); setFAbono({ monto: String(sal), fecha: hoyISO(), medio: "Transferencia", ref: "" }); }}
-                                          style={{ padding: "6px 10px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>💸 Pago</button>
+                                          style={{ padding: "6px 10px", fontSize: 12, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>?? Pago</button>
                                         <button onClick={async () => {
-                                          if (confirmar !== `delfac${f.id}`) { setConfirmar(`delfac${f.id}`); avisar("⚠ Toca otra vez para ELIMINAR la factura y sus pagos"); setTimeout(() => setConfirmar(c2 => c2 === `delfac${f.id}` ? null : c2), 6000); return; }
+                                          if (confirmar !== `delfac${f.id}`) { setConfirmar(`delfac${f.id}`); avisar("? Toca otra vez para ELIMINAR la factura y sus pagos"); setTimeout(() => setConfirmar(c2 => c2 === `delfac${f.id}` ? null : c2), 6000); return; }
                                           setConfirmar(null);
                                           await guardarCxp(c3 => ({ ...c3, facturas: c3.facturas.filter(x => x.id !== f.id), pagos: c3.pagos.filter(x => x.facturaId !== f.id), notas: (c3.notas || []).filter(x => x.facturaId !== f.id) }));
-                                          avisar("✓ Factura eliminada");
-                                        }} style={{ marginLeft: 4, padding: "6px 8px", fontSize: 12, background: confirmar === `delfac${f.id}` ? C.alerta : "#F1F1EA", color: confirmar === `delfac${f.id}` ? "#fff" : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>🗑</button>
+                                          avisar("� Factura eliminada");
+                                        }} style={{ marginLeft: 4, padding: "6px 8px", fontSize: 12, background: confirmar === `delfac${f.id}` ? C.alerta : "#F1F1EA", color: confirmar === `delfac${f.id}` ? "#fff" : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>??</button>
                                       </td>
                                     </tr>
                                     {abonando === f.id && (
                                       <tr><td colSpan={6} style={{ padding: "4px 0 10px" }}>
                                         <div style={{ background: C.fondo, borderRadius: 10, padding: 10, textAlign: "left" }}>
-                                          {f.detalle && <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 6 }}>{f.detalle} · original {colones(f.monto)}</div>}
+                                          {f.detalle && <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 6 }}>{f.detalle} � original {colones(f.monto)}</div>}
                                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                                             <Campo mitad etiqueta={`Monto del pago (saldo: ${colones(sal)})`} type="text" inputMode="decimal" value={fAbono.monto} onChange={e => setFAbono({ ...fAbono, monto: e.target.value })} />
                                             <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 130 }}>
@@ -6038,20 +6043,20 @@ export default function App() {
                                             <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 130 }}>
                                               <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Medio de pago</span>
                                               <select value={fAbono.medio} onChange={e => setFAbono({ ...fAbono, medio: e.target.value })} style={inputStyle}>
-                                                {["Transferencia", "SINPE Móvil", "Efectivo", "Cheque", "Tarjeta", "Otro"].map(m2 => <option key={m2}>{m2}</option>)}
+                                                {["Transferencia", "SINPE M�vil", "Efectivo", "Cheque", "Tarjeta", "Otro"].map(m2 => <option key={m2}>{m2}</option>)}
                                               </select>
                                             </label>
-                                            <Campo mitad etiqueta="Referencia / comprobante" type="text" placeholder="ej. Nº transf. 45821" value={fAbono.ref} onChange={e => setFAbono({ ...fAbono, ref: e.target.value })} />
+                                            <Campo mitad etiqueta="Referencia / comprobante" type="text" placeholder="ej. N� transf. 45821" value={fAbono.ref} onChange={e => setFAbono({ ...fAbono, ref: e.target.value })} />
                                           </div>
                                           <div style={{ display: "flex", gap: 8 }}>
                                             <button onClick={async () => {
                                               const m2 = Number(fAbono.monto || 0);
-                                              if (m2 <= 0) { avisar("⚠ Ingresa el monto del pago"); return; }
-                                              if (m2 > sal + 0.01) { avisar(`⚠ El pago (${colones(m2)}) supera el saldo (${colones(sal)})`); return; }
+                                              if (m2 <= 0) { avisar("? Ingresa el monto del pago"); return; }
+                                              if (m2 > sal + 0.01) { avisar(`? El pago (${colones(m2)}) supera el saldo (${colones(sal)})`); return; }
                                               const pago = { id: Date.now(), facturaId: f.id, fecha: fAbono.fecha.split("-").reverse().join("/"), monto: m2, medio: fAbono.medio, ref: fAbono.ref, por: completadoPor };
                                               if (await guardarCxp(c3 => ({ ...c3, pagos: [pago, ...c3.pagos] }))) {
                                                 setAbonando(null);
-                                                avisar(m2 >= sal - 0.01 ? `✓ Factura de ${f.proveedor} PAGADA por completo` : `✓ Abono registrado — queda saldo de ${colones(sal - m2)}`);
+                                                avisar(m2 >= sal - 0.01 ? `� Factura de ${f.proveedor} PAGADA por completo` : `� Abono registrado - queda saldo de ${colones(sal - m2)}`);
                                               }
                                             }} style={{ ...btnStyle, flex: 1 }}>Confirmar pago</button>
                                             <button onClick={() => setAbonando(null)} style={{ flex: "0 0 auto", padding: "12px 16px", fontSize: 14, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer" }}>Cancelar</button>
@@ -6071,22 +6076,22 @@ export default function App() {
                 })()}
               </Seccion>
 
-              <Seccion titulo="Antigüedad de saldos por proveedor" sub="El clásico aging: corriente · 1–30 · 31–60 · +60 días de vencido">
+              <Seccion titulo="Antig�edad de saldos por proveedor" sub="El cl�sico aging: corriente � 1-30 � 31-60 � +60 d�as de vencido">
                 {Object.keys(porProv).length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin saldos abiertos.</div>}
                 {Object.keys(porProv).length > 0 && (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 480 }}>
                       <thead><tr style={{ color: C.textoSuave, fontSize: 11, textAlign: "right" }}>
-                        <th style={{ textAlign: "left", padding: "5px 4px" }}>Proveedor</th><th style={{ padding: "5px 4px" }}>Corriente</th><th style={{ padding: "5px 4px" }}>1–30</th><th style={{ padding: "5px 4px" }}>31–60</th><th style={{ padding: "5px 4px" }}>+60</th><th style={{ padding: "5px 4px" }}>Total</th>
+                        <th style={{ textAlign: "left", padding: "5px 4px" }}>Proveedor</th><th style={{ padding: "5px 4px" }}>Corriente</th><th style={{ padding: "5px 4px" }}>1-30</th><th style={{ padding: "5px 4px" }}>31-60</th><th style={{ padding: "5px 4px" }}>+60</th><th style={{ padding: "5px 4px" }}>Total</th>
                       </tr></thead>
                       <tbody>
                         {Object.entries(porProv).map(([pv, b]) => (
                           <tr key={pv} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
                             <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>{pv}</td>
-                            <td style={{ padding: "8px 4px" }}>{b[0] ? colones(b[0]) : "—"}</td>
-                            <td style={{ padding: "8px 4px", color: b[1] ? "#9A6605" : undefined }}>{b[1] ? colones(b[1]) : "—"}</td>
-                            <td style={{ padding: "8px 4px", color: b[2] ? C.alerta : undefined }}>{b[2] ? colones(b[2]) : "—"}</td>
-                            <td style={{ padding: "8px 4px", color: b[3] ? C.alerta : undefined, fontWeight: b[3] ? 700 : 400 }}>{b[3] ? colones(b[3]) : "—"}</td>
+                            <td style={{ padding: "8px 4px" }}>{b[0] ? colones(b[0]) : "-"}</td>
+                            <td style={{ padding: "8px 4px", color: b[1] ? "#9A6605" : undefined }}>{b[1] ? colones(b[1]) : "-"}</td>
+                            <td style={{ padding: "8px 4px", color: b[2] ? C.alerta : undefined }}>{b[2] ? colones(b[2]) : "-"}</td>
+                            <td style={{ padding: "8px 4px", color: b[3] ? C.alerta : undefined, fontWeight: b[3] ? 700 : 400 }}>{b[3] ? colones(b[3]) : "-"}</td>
                             <td style={{ padding: "8px 4px", fontWeight: 700 }}>{colones(b[0] + b[1] + b[2] + b[3])}</td>
                           </tr>
                         ))}
@@ -6102,18 +6107,18 @@ export default function App() {
               </Seccion>
 
               {(pagadas.length > 0 || cxp.pagos.length > 0) && (
-                <Seccion titulo="Historial de pagos" sub="Los últimos movimientos — el detalle completo vive en la exportación">
+                <Seccion titulo="Historial de pagos" sub="Los �ltimos movimientos - el detalle completo vive en la exportaci�n">
                   {selectorHistorial("pagos")}
                   {[...cxp.pagos.map(pg => ({ ...pg, _t: "Pago" })), ...(cxp.notas || []).map(n2 => ({ ...n2, _t: n2.tipo }))]
                     .sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))
                     .filter(mv => historialVisible([mv], "pagos").length).map(mv => {
                     const f = cxp.facturas.find(x => x.id === mv.facturaId);
-                    const et = mv._t === "Pago" ? mv.medio : mv._t === "NC" ? "Nota de Crédito" : "Nota de Débito";
+                    const et = mv._t === "Pago" ? mv.medio : mv._t === "NC" ? "Nota de Cr�dito" : "Nota de D�bito";
                     const colM = mv._t === "ND" ? C.alerta : C.verde;
                     return (
                       <div key={mv._t + mv.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12.5, padding: "7px 0", borderBottom: `1px solid ${C.borde}`, flexWrap: "wrap" }}>
-                        <span>{mv.fecha.slice(0, 5)} · <b>{f?.proveedor || "—"}</b> #{f?.numero || "s/n"} · {et}{mv.ref ? ` (${mv.ref})` : ""}</span>
-                        <b style={{ color: colM }}>{mv._t === "ND" ? "+" : "−"}{colones(mv.monto)}</b>
+                        <span>{mv.fecha.slice(0, 5)} � <b>{f?.proveedor || "-"}</b> #{f?.numero || "s/n"} � {et}{mv.ref ? ` (${mv.ref})` : ""}</span>
+                        <b style={{ color: colM }}>{mv._t === "ND" ? "+" : "-"}{colones(mv.monto)}</b>
                       </div>
                     );
                   })}
@@ -6123,7 +6128,7 @@ export default function App() {
           );
         })()}
 
-                {/* ══ HISTORIAL ══ */}
+                {/* �� HISTORIAL �� */}
         {vista === "historial" && (() => {
           const aDMY = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
           const fSel = aDMY(histFecha);
@@ -6161,7 +6166,7 @@ export default function App() {
               const wb = XLSX.utils.book_new();
               const filasProd = (rsMes.length ? rsMes : registros).map(r => ({
                 Fecha: r.fecha, Gallinero: r.lote, Cartones: r.cartones, Huevos: r.cartones * HXC,
-                "Peso (kg)": r.pesoKg, Quebrados: r.quebrados, Muertas: r.muertas, Diagnóstico: r.dx,
+                "Peso (kg)": r.pesoKg, Quebrados: r.quebrados, Muertas: r.muertas, Diagn�stico: r.dx,
                 "Alimento 6am (kg)": r.alimento6am ?? "", "Alimento 1pm (kg)": r.alimento1pm ?? "",
                 "Alimento total (kg)": r.alimentoKg, "Capturado por": mostrarNombre(r.por),
               }));
@@ -6175,41 +6180,41 @@ export default function App() {
                 Fecha: m.fecha, Tipo: m.tipo || "Medicamento", Gallinero: m.galpon, Producto: m.producto, Dosis: m.dosis, "Enfermedad tratada": m.enfermedad || "",
               }));
               if (filasMed.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasMed), "Medicacion");
-              const filasVac = vacunas.map(v => { const lv = lotes.find(x => x.id === v.lote); return { Fecha: v.fecha, Gallinero: lv ? `G${lv.galpon}` : v.lote, Vacuna: v.vacuna, Cepa: v.cepa || "", Vía: v.via || "", Proveedor: v.proveedor || "", "Registrado por": mostrarNombre(v.por) }; });
+              const filasVac = vacunas.map(v => { const lv = lotes.find(x => x.id === v.lote); return { Fecha: v.fecha, Gallinero: lv ? `G${lv.galpon}` : v.lote, Vacuna: v.vacuna, Cepa: v.cepa || "", V�a: v.via || "", Proveedor: v.proveedor || "", "Registrado por": mostrarNombre(v.por) }; });
               if (filasVac.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasVac), "Vacunacion");
               const filasEnf = enfermedades.map(e2 => { const le = lotes.find(x => x.id === e2.lote); return { Fecha: e2.fecha, Gallinero: le ? `G${le.galpon}` : e2.lote, Enfermedad: e2.enfermedad, Tratamiento: e2.tratamiento || "", Estado: e2.estado, "Fecha alta": e2.fechaAlta || "" }; });
               if (filasEnf.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasEnf), "Enfermedades");
               const filasNec = necropsias.map(n2 => { const ln = lotes.find(x => x.id === n2.lote); return { Fecha: n2.fecha, Gallinero: ln ? `G${ln.galpon}` : n2.lote, Tipo: n2.tipo, Laboratorio: n2.laboratorio || "", Hallazgos: n2.hallazgos || "", Fotos: n2.numFotos || 0 }; });
               if (filasNec.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasNec), "Necropsias");
-              const filasIns = insumosMovs.map(m => { const it = insumos.find(x => x.id === m.itemId); return { Fecha: m.fecha, Insumo: it?.nombre || "", Categoría: it?.categoria || "", Tipo: m.tipo, Cantidad: m.cantidad, Unidad: it?.unidad || "", Presentación: it?.presentacion || "", Dosis: it?.dosis || "", Proveedor: it?.proveedor || "", Detalle: m.detalle || "", Automático: m.auto ? "Sí" : "" }; });
+              const filasIns = insumosMovs.map(m => { const it = insumos.find(x => x.id === m.itemId); return { Fecha: m.fecha, Insumo: it?.nombre || "", Categor�a: it?.categoria || "", Tipo: m.tipo, Cantidad: m.cantidad, Unidad: it?.unidad || "", Presentaci�n: it?.presentacion || "", Dosis: it?.dosis || "", Proveedor: it?.proveedor || "", Detalle: m.detalle || "", Autom�tico: m.auto ? "S�" : "" }; });
               if (filasIns.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasIns), "Insumos");
               XLSX.writeFile(wb, `RanchoElSonado_${claveMes.replace("/", "-")}.xlsx`);
-              avisar("✓ Excel exportado");
-            } catch { avisar("⚠ No se pudo exportar"); }
+              avisar("� Excel exportado");
+            } catch { avisar("? No se pudo exportar"); }
           };
 
           return (
             <>
                           <BarraSubmenu
               subsecciones={[
-                { id: "dia", nombre: "Consultar un día", icono: "📅" },
-                { id: "mes", nombre: "Resumen mensual", icono: "📊" },
-                { id: "correcciones", nombre: "Correcciones", icono: "📝" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "dia", nombre: "Consultar un d�a", icono: "??" },
+                { id: "mes", nombre: "Resumen mensual", icono: "??" },
+                { id: "correcciones", nombre: "Correcciones", icono: "??" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ]}
               activo={subHistorial}
               onChange={setSubHistorial}
             />
 
             {(subHistorial === "dia" || subHistorial === "todo") && (
-              <Seccion titulo="Consultar un día" sub="Elige la fecha para ver el día completo">
+              <Seccion titulo="Consultar un d�a" sub="Elige la fecha para ver el d�a completo">
                 <input type="date" value={histFecha} onChange={e => setHistFecha(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
               <button onClick={() => setPrintDoc({ tipo: "controldiario", fecha: aDMY(histFecha) })}
                 style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
-                🖨 Imprimir reporte diario de esta fecha
+                ?? Imprimir reporte diario de esta fecha
               </button>
                 {rsDia.length === 0 && <div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin registros para el {fSel}.</div>}
-                {!!duplicadosDia.length && <div role="alert" style={{ padding: 12, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>⚠ Hay {duplicadosDia.length} registros en conflicto. Compara sus tiquetes y corrige o retira la fila incorrecta; no se puede decidir automáticamente cuál es válida.</div>}
+                {!!duplicadosDia.length && <div role="alert" style={{ padding: 12, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>? Hay {duplicadosDia.length} registros en conflicto. Compara sus tiquetes y corrige o retira la fila incorrecta; no se puede decidir autom�ticamente cu�l es v�lida.</div>}
                 {rsDia.length > 0 && (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -6220,7 +6225,7 @@ export default function App() {
                           <th style={{ padding: "6px 4px" }}>Quebrados</th>
                           <th style={{ padding: "6px 4px" }}>Muertas</th>
                           <th style={{ padding: "6px 4px" }}>Alimento kg</th>
-                          <th style={{ padding: "6px 4px" }}>Acción</th>
+                          <th style={{ padding: "6px 4px" }}>Acci�n</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -6239,44 +6244,44 @@ export default function App() {
                   </div>
                 )}
                 {editarProduccion && editarProduccion.fecha === fSel && <div style={{ background: C.yemaSuave, padding: 14, borderRadius: 12, marginTop: 12 }}>
-                  <b>Corregir G{lotes.find(l => l.id === editarProduccion.lote)?.galpon || editarProduccion.lote} · {fSel}</b>
-                  <div style={{ fontSize: 12, margin: "6px 0 10px" }}>Registro {String(editarProduccion.id).slice(0, 8)} · los cartones y el peso se calculan a partir de los tiquetes. Revisa cuál fila conservar si hay duplicados.</div>
+                  <b>Corregir G{lotes.find(l => l.id === editarProduccion.lote)?.galpon || editarProduccion.lote} � {fSel}</b>
+                  <div style={{ fontSize: 12, margin: "6px 0 10px" }}>Registro {String(editarProduccion.id).slice(0, 8)} � los cartones y el peso se calculan a partir de los tiquetes. Revisa cu�l fila conservar si hay duplicados.</div>
                   {editarProduccion.tiquetes.map((t, j) => <div key={j} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {[["num", "Tiquete"], ["cartones", "Cartones"], ["peso", "Peso kg"]].map(([campo, etiqueta]) => <label key={campo} style={{ flex: "1 1 85px", fontSize: 11 }}>{etiqueta}<input value={t[campo] ?? ""} onChange={e => setEditarProduccion(v => ({ ...v, tiquetes: v.tiquetes.map((x, i) => i === j ? { ...x, [campo]: e.target.value } : x) }))} style={{ ...inputStyle, width: "100%" }} /></label>)}
                     <button onClick={() => setEditarProduccion(v => ({ ...v, tiquetes: v.tiquetes.filter((_, i) => i !== j) }))}>Quitar tiquete</button>
                   </div>)}
-                  <details style={{ margin: "8px 0", fontSize: 12 }}><summary>Pegar varios tiquetes de Excel</summary><p>Una fila por tiquete: número, cartones y peso, separados por tabulación o punto y coma. Reemplaza la lista mostrada; el cambio queda auditado al guardar.</p><textarea rows={4} style={{ ...inputStyle, width: "100%" }} onPaste={e => { const texto = e.clipboardData.getData("text"); const filas = texto.trim().split(/\r?\n/).map(f => f.split(/\t|;/).map(x => x.trim())).filter(x => x.length >= 3).map(([num, cartones, peso]) => ({ num, cartones, peso })); if (filas.length) { e.preventDefault(); setEditarProduccion(v => ({ ...v, tiquetes: filas })); } }} placeholder="Pega aquí las filas de Excel" /></details>
+                  <details style={{ margin: "8px 0", fontSize: 12 }}><summary>Pegar varios tiquetes de Excel</summary><p>Una fila por tiquete: n�mero, cartones y peso, separados por tabulaci�n o punto y coma. Reemplaza la lista mostrada; el cambio queda auditado al guardar.</p><textarea rows={4} style={{ ...inputStyle, width: "100%" }} onPaste={e => { const texto = e.clipboardData.getData("text"); const filas = texto.trim().split(/\r?\n/).map(f => f.split(/\t|;/).map(x => x.trim())).filter(x => x.length >= 3).map(([num, cartones, peso]) => ({ num, cartones, peso })); if (filas.length) { e.preventDefault(); setEditarProduccion(v => ({ ...v, tiquetes: filas })); } }} placeholder="Pega aqu� las filas de Excel" /></details>
                   <button onClick={() => setEditarProduccion(v => ({ ...v, tiquetes: [...v.tiquetes, { num: "", cartones: "", peso: "" }] }))}>+ Tiquete</button>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                     {[["quebrados", "Quebrados"], ["muertas", "Muertas"], ["alimento6am", "Alimento 6 a. m. kg"], ["alimento1pm", "Alimento 1 p. m. kg"]].map(([campo, etiqueta]) => <label key={campo} style={{ flex: "1 1 120px", fontSize: 11 }}>{etiqueta}<input type="number" min="0" step="any" value={editarProduccion[campo] ?? 0} onChange={e => setEditarProduccion(v => ({ ...v, [campo]: e.target.value }))} style={{ ...inputStyle, width: "100%" }} /></label>)}
                   </div>
-                  <label style={{ fontSize: 12 }}>Motivo obligatorio<input value={motivoProduccion} onChange={e => setMotivoProduccion(e.target.value)} placeholder="Qué ocurrió y cuál dato se comprobó" style={{ ...inputStyle, width: "100%" }} /></label>
+                  <label style={{ fontSize: 12 }}>Motivo obligatorio<input value={motivoProduccion} onChange={e => setMotivoProduccion(e.target.value)} placeholder="Qu� ocurri� y cu�l dato se comprob�" style={{ ...inputStyle, width: "100%" }} /></label>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button disabled={guardando} onClick={() => guardarCorreccionProduccion(false)} style={btnStyle}>Guardar corrección</button>
-                    <button disabled={guardando} onClick={() => { if (window.confirm("¿Retirar este registro? Se conservará una copia en la auditoría y se ajustarán los acumulados del lote.")) guardarCorreccionProduccion(true); }} style={{ color: C.alerta }}>Retirar registro</button>
+                    <button disabled={guardando} onClick={() => guardarCorreccionProduccion(false)} style={btnStyle}>Guardar correcci�n</button>
+                    <button disabled={guardando} onClick={() => { if (window.confirm("�Retirar este registro? Se conservar� una copia en la auditor�a y se ajustar�n los acumulados del lote.")) guardarCorreccionProduccion(true); }} style={{ color: C.alerta }}>Retirar registro</button>
                     <button onClick={() => setEditarProduccion(null)}>Cancelar</button>
                   </div>
                 </div>}
                 {movDia && <div style={{ fontSize: 13, marginTop: 10, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}>
-                  <b>Bodega:</b> +{movDia.producido} producido · −{(movDia.rutaNeta || 0).toFixed(1)} ruta · saldo final <b style={{ color: C.verde }}>{movDia.saldoFinal} cart</b>
+                  <b>Bodega:</b> +{movDia.producido} producido � -{(movDia.rutaNeta || 0).toFixed(1)} ruta � saldo final <b style={{ color: C.verde }}>{movDia.saldoFinal} cart</b>
                 </div>}
-                {plantaDia.map((p, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Planta:</b> {p.baches} bache(s) de {p.formula} · {p.kg} kg</div>)}
-                {fumsDia.map((f, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Fumigación G{f.galpon}:</b> {f.producto} · {f.dosis} {f.hora && `· ${f.hora}`}</div>)}
-                {medsDia.map((m, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>{m.tipo || "Medicamento"} G{m.galpon}:</b> {m.producto} · {m.dosis}{m.enfermedad && ` · trata: ${m.enfermedad}`}</div>)}
-                {bitDia.map((b, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.yemaSuave, borderRadius: 10 }}><b>Bitácora:</b> {b.texto}</div>)}
+                {plantaDia.map((p, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Planta:</b> {p.baches} bache(s) de {p.formula} � {p.kg} kg</div>)}
+                {fumsDia.map((f, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>Fumigaci�n G{f.galpon}:</b> {f.producto} � {f.dosis} {f.hora && `� ${f.hora}`}</div>)}
+                {medsDia.map((m, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.fondo, borderRadius: 10 }}><b>{m.tipo || "Medicamento"} G{m.galpon}:</b> {m.producto} � {m.dosis}{m.enfermedad && ` � trata: ${m.enfermedad}`}</div>)}
+                {bitDia.map((b, i) => <div key={i} style={{ fontSize: 13, marginTop: 6, padding: "9px 12px", background: C.yemaSuave, borderRadius: 10 }}><b>Bit�cora:</b> {b.texto}</div>)}
               </Seccion>
             )}
 
               {(subHistorial === "correcciones" || subHistorial === "todo") && (
-              <Seccion titulo="Correcciones de producción" sub="Cambios conservados con responsable, motivo y valores anteriores">
+              <Seccion titulo="Correcciones de producci�n" sub="Cambios conservados con responsable, motivo y valores anteriores">
                 {selectorHistorial("correccionesProduccion")}
                 {historialVisible(correccionesProduccion.map(c => ({ ...c, fecha: c.anterior?.fecha })), "correccionesProduccion").map(c => <details key={c.id} style={{ padding: 9, borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
-                  <summary>{c.anterior?.fecha} · G{lotes.find(l => l.id === c.anterior?.lote)?.galpon || c.anterior?.lote} · {c.accion === "eliminar" ? "Registro retirado" : "Editado"} · {mostrarNombre(c.por)} {c.estado !== "aplicado" && `· ${c.estado}`}</summary>
-                  <div>{new Date(c.instante).toLocaleString()} · Motivo: {c.motivo}</div>
-                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados · {c.anterior?.alimentoKg} kg alimento</div>
-                  {c.nuevo && <div>Después: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados · {c.nuevo.alimentoKg} kg alimento</div>}
-                  <div>Tiquetes anteriores: {(c.anterior?.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ") || "Ninguno"}</div>
-                  {c.nuevo && <div>Tiquetes corregidos: {(c.nuevo.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ")}</div>}
+                  <summary>{c.anterior?.fecha} � G{lotes.find(l => l.id === c.anterior?.lote)?.galpon || c.anterior?.lote} � {c.accion === "eliminar" ? "Registro retirado" : "Editado"} � {mostrarNombre(c.por)} {c.estado !== "aplicado" && `� ${c.estado}`}</summary>
+                  <div>{new Date(c.instante).toLocaleString()} � Motivo: {c.motivo}</div>
+                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados � {c.anterior?.alimentoKg} kg alimento</div>
+                  {c.nuevo && <div>Despu�s: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados � {c.nuevo.alimentoKg} kg alimento</div>}
+                  <div>Tiquetes anteriores: {(c.anterior?.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" � ") || "Ninguno"}</div>
+                  {c.nuevo && <div>Tiquetes corregidos: {(c.nuevo.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" � ")}</div>}
                 </details>)}
               </Seccion>
             )}
@@ -6287,7 +6292,7 @@ export default function App() {
                 {fechasMes.length === 0 && <div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin registros en {nombreMes} {anioM}.</div>}
                 {fechasMes.length > 0 && (
                   <>
-                    <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 8 }}>{nombreMes} {anioM} · {fechasMes.length} días con registro</div>
+                    <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 8 }}>{nombreMes} {anioM} � {fechasMes.length} d�as con registro</div>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                         <thead>
@@ -6305,19 +6310,19 @@ export default function App() {
                             <tr key={i} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
                               <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>G{x.l.galpon}</td>
                               <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{x.cart.toFixed(1)}</td>
-                              <td style={{ padding: "8px 4px" }}>{x.postura ? `${x.postura.toFixed(1)}%` : "—"}</td>
+                              <td style={{ padding: "8px 4px" }}>{x.postura ? `${x.postura.toFixed(1)}%` : "-"}</td>
                               <td style={{ padding: "8px 4px" }}>{x.muertas}</td>
                               <td style={{ padding: "8px 4px" }}>{x.alim.toFixed(0)}</td>
-                              <td style={{ padding: "8px 4px" }}>{x.conv ? x.conv.toFixed(2) : "—"}</td>
+                              <td style={{ padding: "8px 4px" }}>{x.conv ? x.conv.toFixed(2) : "-"}</td>
                             </tr>
                           ))}
                           <tr style={{ borderTop: `2px solid ${C.verde}`, textAlign: "right", fontWeight: 700 }}>
                             <td style={{ textAlign: "left", padding: "8px 4px" }}>TOTAL</td>
                             <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif" }}>{totMes.cart.toFixed(1)}</td>
-                            <td style={{ padding: "8px 4px" }}>—</td>
+                            <td style={{ padding: "8px 4px" }}>-</td>
                             <td style={{ padding: "8px 4px" }}>{totMes.muertas}</td>
                             <td style={{ padding: "8px 4px" }}>{totMes.alim.toFixed(0)}</td>
-                            <td style={{ padding: "8px 4px" }}>—</td>
+                            <td style={{ padding: "8px 4px" }}>-</td>
                           </tr>
                         </tbody>
                       </table>
@@ -6328,54 +6333,54 @@ export default function App() {
                   Exportar {fechasMes.length ? `${nombreMes} ${anioM}` : "todo"} a Excel
                 </button>
                 <button onClick={exportarTodoJSON} disabled={guardando} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>
-                  💾 Exportar TODOS los datos (respaldo / migración)
+                  ?? Exportar TODOS los datos (respaldo / migraci�n)
                 </button>
                 <label style={{ display: "block", marginTop: 8 }}>
-                  <span style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, display: "block", textAlign: "center", cursor: "pointer" }}>📥 Importar respaldo JSON</span>
+                  <span style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, display: "block", textAlign: "center", cursor: "pointer" }}>?? Importar respaldo JSON</span>
                   <small style={{ color: C.textoSuave }}>Solo agrega registros faltantes; conserva los registros y ajustes que ya existen. Selecciona dos veces el mismo archivo para confirmar.</small>
                   <input type="file" accept="application/json" style={{ display: "none" }}
                     onChange={async e => {
                       const file = e.target.files?.[0]; e.target.value = "";
                       if (!file) return;
-                      if (cargandoFondo || guardando) { avisar("⏳ Espera a que termine la operación actual"); return; }
-                      if (preferencias.confirmaciones.reemplazos && confirmar !== "importar") { setConfirmar("importar"); avisar("Revisa el archivo: se agregarán solo registros faltantes. Los existentes conservarán sus valores. Selecciona el archivo otra vez para confirmar."); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
-                      setConfirmar(null); setGuardando(true); avisar("⏳ Leyendo el respaldo…");
+                      if (cargandoFondo || guardando) { avisar("? Espera a que termine la operaci�n actual"); return; }
+                      if (preferencias.confirmaciones.reemplazos && confirmar !== "importar") { setConfirmar("importar"); avisar("Revisa el archivo: se agregar�n solo registros faltantes. Los existentes conservar�n sus valores. Selecciona el archivo otra vez para confirmar."); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
+                      setConfirmar(null); setGuardando(true); avisar("? Leyendo el respaldo.");
                       try {
                         const doc = JSON.parse(await file.text());
                         const datos = doc.datos || doc;
-                        if (!datos || typeof datos !== "object" || Array.isArray(datos)) throw new Error("Formato de respaldo inválido");
+                        if (!datos || typeof datos !== "object" || Array.isArray(datos)) throw new Error("Formato de respaldo inv�lido");
                         const respaldo = Object.fromEntries(Object.entries(datos).filter(([, v]) => v !== null && v !== undefined));
                         const conflictos = await detectarFechasRespaldo(respaldo);
                         const r = await agregarRespaldoFaltante(respaldo);
                         if (conflictos.length) setConflictosRespaldo({ items: conflictos, elegidos: [] });
-                        avisar(`✓ ${r.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar${r.futuros ? `; ${r.futuros} fechas futuras excluidas` : ""}.`);
+                        avisar(`� ${r.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar${r.futuros ? `; ${r.futuros} fechas futuras excluidas` : ""}.`);
                         if (!conflictos.length) setTimeout(() => { try { location.reload(); } catch {} }, 1600);
-                      } catch (error) { console.error(error); avisar(`⚠ Importación interrumpida: ${error.message}. Lo ya agregado permanece; al reintentar se omite.`); }
+                      } catch (error) { console.error(error); avisar(`? Importaci�n interrumpida: ${error.message}. Lo ya agregado permanece; al reintentar se omite.`); }
                       setGuardando(false);
                     }} />
                 </label>
 
                 {false && esAdmin && <div className="v10-user-admin">
                   <h3>Usuarios y acceso</h3>
-                  {miRol !== "admin" ? <p>La administración segura de usuarios se activa al aplicar MIGRACION-V10-USUARIOS.sql y desplegar la función invite-user. Hasta entonces, los accesos existentes siguen como antes.</p> : <>
-                    <p>Invita a una persona con un rol. El enlace llega a su correo; no se comparte una contraseña.</p>
+                  {miRol !== "admin" ? <p>La administraci�n segura de usuarios se activa al aplicar MIGRACION-V10-USUARIOS.sql y desplegar la funci�n invite-user. Hasta entonces, los accesos existentes siguen como antes.</p> : <>
+                    <p>Invita a una persona con un rol. El enlace llega a su correo; no se comparte una contrase�a.</p>
                     <div className="v10-user-form"><input type="email" aria-label="Correo para invitar" placeholder="persona@correo.com" value={correoInvitacion} onChange={e => setCorreoInvitacion(e.target.value)} /><select aria-label="Rol del nuevo usuario" value={rolInvitacion} onChange={e => setRolInvitacion(e.target.value)}>{["encargado", "bodega", "planta", "bienestar", "consulta", "admin"].map(r => <option key={r} value={r}>{r}</option>)}</select><button disabled={gestionUsuarios} onClick={async () => {
-                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoInvitacion.trim())) { avisar("⚠ Escribe un correo válido"); return; }
+                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoInvitacion.trim())) { avisar("? Escribe un correo v�lido"); return; }
                       setGestionUsuarios(true);
                       const { error } = await supabase.functions.invoke("invite-user", { body: { email: correoInvitacion.trim().toLowerCase(), role: rolInvitacion } });
                       setGestionUsuarios(false);
-                      if (error) avisar(`⚠ No se pudo invitar: ${error.message}`);
-                      else { setCorreoInvitacion(""); avisar("✓ Invitación enviada"); const { data } = await supabase.from("user_roles").select("user_id,email,role,active").order("email"); if (data) setUsuariosRoles(data); }
-                    }}>Enviar invitación</button></div>
-                    {usuariosRoles.map(u => <div key={u.user_id} className="v10-user-row"><span>{nombresUsuarios[u.email] || u.email}<small>{u.email}</small></span><select aria-label={`Rol de ${u.email}`} value={u.role} disabled={gestionUsuarios} onChange={async e => { const role = e.target.value; setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ role }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, role } : x)); avisar("✓ Rol actualizado"); } }}>{["admin", "encargado", "bodega", "planta", "bienestar", "consulta"].map(r => <option key={r}>{r}</option>)}</select><button disabled={gestionUsuarios || u.email === window.__usuarioEmail?.toLowerCase()} onClick={async () => { setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ active: !u.active }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`⚠ ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, active: !x.active } : x)); avisar("✓ Acceso actualizado"); } }}>{u.active ? "Suspender" : "Reactivar"}</button></div>)}
+                      if (error) avisar(`? No se pudo invitar: ${error.message}`);
+                      else { setCorreoInvitacion(""); avisar("� Invitaci�n enviada"); const { data } = await supabase.from("user_roles").select("user_id,email,role,active").order("email"); if (data) setUsuariosRoles(data); }
+                    }}>Enviar invitaci�n</button></div>
+                    {usuariosRoles.map(u => <div key={u.user_id} className="v10-user-row"><span>{nombresUsuarios[u.email] || u.email}<small>{u.email}</small></span><select aria-label={`Rol de ${u.email}`} value={u.role} disabled={gestionUsuarios} onChange={async e => { const role = e.target.value; setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ role }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`? ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, role } : x)); avisar("� Rol actualizado"); } }}>{["admin", "encargado", "bodega", "planta", "bienestar", "consulta"].map(r => <option key={r}>{r}</option>)}</select><button disabled={gestionUsuarios || u.email === window.__usuarioEmail?.toLowerCase()} onClick={async () => { setGestionUsuarios(true); const { error } = await supabase.from("user_roles").update({ active: !u.active }).eq("user_id", u.user_id); setGestionUsuarios(false); if (error) avisar(`? ${error.message}`); else { setUsuariosRoles(v => v.map(x => x.user_id === u.user_id ? { ...x, active: !x.active } : x)); avisar("� Acceso actualizado"); } }}>{u.active ? "Suspender" : "Reactivar"}</button></div>)}
                   </>}
                 </div>}
                 {false && esAdmin && (
                   <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Nombres visibles de usuarios</div>
-                    <p style={{ fontSize: 11.5, color: C.textoSuave, margin: "0 0 10px" }}>El correo se conserva para identificar cada cambio, pero en la app y los reportes se muestra el nombre que asignes aquí.</p>
+                    <p style={{ fontSize: 11.5, color: C.textoSuave, margin: "0 0 10px" }}>El correo se conserva para identificar cada cambio, pero en la app y los reportes se muestra el nombre que asignes aqu�.</p>
                     {Object.entries(nombresUsuarios).sort(([a], [b]) => a.localeCompare(b)).map(([correo, nombre]) => <div key={correo} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
-                      <span><b>{nombre}</b> · {correo}</span>
+                      <span><b>{nombre}</b> � {correo}</span>
                       <span style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => { setCorreoNombre(correo); setNombreNuevo(nombre); }} style={{ fontSize: 11, padding: "4px 8px" }}>Editar</button>
                         <button onClick={() => borrarNombreVisible(correo)} style={{ fontSize: 11, padding: "4px 8px", color: C.alerta }}>Quitar</button>
@@ -6391,12 +6396,12 @@ export default function App() {
                 )}
                 {false && esAdmin && miRol !== "admin" && (
                   <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>👑 Administradores</div>
-                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>Solo los correos de esta lista ven la parte económica (Por Pagar). Lista vacía = todos son administradores.</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>?? Administradores</div>
+                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 8 }}>Solo los correos de esta lista ven la parte econ�mica (Por Pagar). Lista vac�a = todos son administradores.</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                       {cfgAdmins.map(a2 => (
                         <span key={a2} style={{ fontSize: 12, padding: "5px 10px", borderRadius: 16, background: C.verdeSuave, color: C.verde, fontWeight: 600 }}>
-                          {a2} <span onClick={async () => { const l2 = cfgAdmins.filter(x => x !== a2); if (await escribir(K.admins, l2)) { setCfgAdmins(l2); avisar("✓ Administrador quitado"); } else avisar("⚠ No se pudo guardar"); }} style={{ cursor: "pointer", marginLeft: 4 }}>×</span>
+                          {a2} <span onClick={async () => { const l2 = cfgAdmins.filter(x => x !== a2); if (await escribir(K.admins, l2)) { setCfgAdmins(l2); avisar("� Administrador quitado"); } else avisar("? No se pudo guardar"); }} style={{ cursor: "pointer", marginLeft: 4 }}>x</span>
                         </span>
                       ))}
                     </div>
@@ -6404,33 +6409,33 @@ export default function App() {
                       <input type="email" placeholder="correo@ejemplo.com" value={nuevoAdmin} onChange={e => setNuevoAdmin(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }} />
                       <button onClick={async () => {
                         const em = nuevoAdmin.trim().toLowerCase();
-                        if (!em || !em.includes("@")) { avisar("⚠ Escribe un correo válido"); return; }
-                        if (cfgAdmins.includes(em)) { avisar("— Ya está en la lista"); return; }
+                        if (!em || !em.includes("@")) { avisar("? Escribe un correo v�lido"); return; }
+                        if (cfgAdmins.includes(em)) { avisar("- Ya est� en la lista"); return; }
                         const l2 = [...cfgAdmins, em];
-                        if (await escribir(K.admins, l2)) { setCfgAdmins(l2); setNuevoAdmin(""); avisar("✓ Administrador agregado"); } else avisar("⚠ No se pudo guardar — revisa la conexión con la base de datos");
+                        if (await escribir(K.admins, l2)) { setCfgAdmins(l2); setNuevoAdmin(""); avisar("� Administrador agregado"); } else avisar("? No se pudo guardar - revisa la conexi�n con la base de datos");
                       }} style={{ padding: "10px 14px", fontSize: 13, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>+ Agregar</button>
                     </div>
                   </div>
                 )}
                 <button onClick={async () => {
-                  if (confirmar !== "undoimport") { setConfirmar("undoimport"); avisar("⚠ Restaura TODO al estado previo a la última importación — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undoimport" ? null : c2), 8000); return; }
+                  if (confirmar !== "undoimport") { setConfirmar("undoimport"); avisar("? Restaura TODO al estado previo a la �ltima importaci�n - toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undoimport" ? null : c2), 8000); return; }
                   setConfirmar(null); setGuardando(true);
                   const bak = await leer("granja2:preImport", null);
-                  if (!bak?.datos) { avisar("— No hay respaldo de importación previa"); setGuardando(false); return; }
+                  if (!bak?.datos) { avisar("- No hay respaldo de importaci�n previa"); setGuardando(false); return; }
                   let n = 0;
                   for (const [k, v] of Object.entries(bak.datos)) { if (v !== null && v !== undefined) { await escribir(k, v); n++; } }
-                  avisar(`✓ Restaurado el estado previo a la importación (${n} conjuntos) — recarga la app`);
+                  avisar(`� Restaurado el estado previo a la importaci�n (${n} conjuntos) - recarga la app`);
                   setGuardando(false);
-                }} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>↩ Deshacer la última importación</button>
+                }} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>? Deshacer la �ltima importaci�n</button>
                 <button onClick={async () => {
-                  if (confirmar !== "undocxp") { setConfirmar("undocxp"); avisar("⚠ Restaura Por Pagar al estado ANTERIOR al último cambio — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undocxp" ? null : c2), 8000); return; }
+                  if (confirmar !== "undocxp") { setConfirmar("undocxp"); avisar("? Restaura Por Pagar al estado ANTERIOR al �ltimo cambio - toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undocxp" ? null : c2), 8000); return; }
                   setConfirmar(null);
                   const bak = await leer("granja2:cxpBak", null);
-                  if (!bak) { avisar("— No hay respaldo de Por Pagar todavía"); return; }
-                  if (await escribir(K.cxp, bak)) { setCxp({ facturas: [], pagos: [], notas: [], ...bak }); avisar("✓ Por Pagar restaurado al estado anterior"); }
-                }} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>↩ Deshacer último cambio en Por Pagar</button>
+                  if (!bak) { avisar("- No hay respaldo de Por Pagar todav�a"); return; }
+                  if (await escribir(K.cxp, bak)) { setCxp({ facturas: [], pagos: [], notas: [], ...bak }); avisar("� Por Pagar restaurado al estado anterior"); }
+                }} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>? Deshacer �ltimo cambio en Por Pagar</button>
                 <div style={{ fontSize: 12, color: C.textoSuave, textAlign: "center", marginTop: 8 }}>
-                  Genera un .xlsx con producción, bodega y medicación — útil para tu contador o respaldo
+                  Genera un .xlsx con producci�n, bodega y medicaci�n - �til para tu contador o respaldo
                 </div>
               </Seccion>
             )}
@@ -6438,68 +6443,68 @@ export default function App() {
           );
         })()}
 
-        {/* ══ LOTES ══ */}
+        {/* �� LOTES �� */}
         {vista === "lotes" && (
           <>
-            <button onClick={() => setPrintDoc({ tipo: "lotes" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir estado de lotes</button>
+            <button onClick={() => setPrintDoc({ tipo: "lotes" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>?? Imprimir estado de lotes</button>
             {!formLote && (
               <button onClick={() => setFormLote({ galpon: "", lote: "", raza: "", nac: "", avesIniciales: "", formula: Object.keys(costos)[0] || "", racionGAve: "", posturaIdeal: "", pesoMeta: "", proveedor: "" })}
                 style={{ ...btnStyle, marginBottom: 14 }}>+ Crear lote nuevo</button>
             )}
 
             {formLote && (
-              <Seccion titulo={formLote.id ? "Editar lote" : "Nuevo lote"} sub="Galpón, raza y fecha de nacimiento son obligatorios">
+              <Seccion titulo={formLote.id ? "Editar lote" : "Nuevo lote"} sub="Galp�n, raza y fecha de nacimiento son obligatorios">
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <Campo tercio etiqueta="Gallinero #" type="text" inputMode="numeric" placeholder="ej. 1" value={formLote.galpon} onChange={e => setFormLote({ ...formLote, galpon: e.target.value })} />
                   <Campo tercio etiqueta="Lote #" type="text" placeholder="ej. 03" value={formLote.lote} onChange={e => setFormLote({ ...formLote, lote: e.target.value })} />
                   <div style={{ flex: "1 1 30%", minWidth: 150 }}>
-                    <Campo etiqueta="Raza / línea" type="text" list="razasConManual" placeholder="ej. ISA Brown" value={formLote.raza} onChange={e => setFormLote({ ...formLote, raza: e.target.value })} />
+                    <Campo etiqueta="Raza / l�nea" type="text" list="razasConManual" placeholder="ej. ISA Brown" value={formLote.raza} onChange={e => setFormLote({ ...formLote, raza: e.target.value })} />
                     <datalist id="razasConManual">{Object.values(REFERENCIAS_RAZAS).map(x => <option key={x.nombre} value={x.nombre} />)}</datalist>
                   </div>
                   <Campo mitad etiqueta="Fecha de nacimiento" type="date" value={formLote.nac} onChange={e => setFormLote({ ...formLote, nac: e.target.value })} />
                   <Campo mitad etiqueta="Aves alojadas (iniciales)" type="text" inputMode="numeric" placeholder="ej. 2400" value={formLote.avesIniciales} onChange={e => setFormLote({ ...formLote, avesIniciales: e.target.value })} />
-                  {formLote.id && <Campo mitad etiqueta="Aves actuales (corrección)" type="text" inputMode="numeric" value={formLote.aves} onChange={e => setFormLote({ ...formLote, aves: e.target.value })} />}
+                  {formLote.id && <Campo mitad etiqueta="Aves actuales (correcci�n)" type="text" inputMode="numeric" value={formLote.aves} onChange={e => setFormLote({ ...formLote, aves: e.target.value })} />}
                   <Campo mitad etiqueta="Proveedor de pollonas" type="text" placeholder="opcional" value={formLote.proveedor} onChange={e => setFormLote({ ...formLote, proveedor: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 150 }}>
                     <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Estado productivo</span>
-                    <select value={formLote.estadoProd || "Producción normal"} onChange={e => setFormLote({ ...formLote, estadoProd: e.target.value })} style={inputStyle}>
-                      <option>Producción normal</option>
+                    <select value={formLote.estadoProd || "Producci�n normal"} onChange={e => setFormLote({ ...formLote, estadoProd: e.target.value })} style={inputStyle}>
+                      <option>Producci�n normal</option>
                       <option>Pelecha (muda)</option>
                       <option>En tratamiento</option>
                       <option>Levante / pre-postura</option>
-                      <option>Estrés (calor, manejo, susto)</option>
+                      <option>Estr�s (calor, manejo, susto)</option>
                     </select>
                   </label>
                 </div>
                 {formLote.nac && <div style={{ fontSize: 13, color: C.verde, fontWeight: 600, marginBottom: 10 }}>Edad actual: {semanasDe(formLote.nac).toFixed(1)} semanas</div>}
 
-                <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Alimentación</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Alimentaci�n</div>
                 <label style={{ display: "block", marginBottom: 12 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Tipo de concentrado a servir</span>
                   <select value={formLote.formula} onChange={e => setFormLote({ ...formLote, formula: e.target.value })} style={inputStyle}>
-                    <option value="">— elegir fórmula —</option>
+                    <option value="">- elegir f�rmula -</option>
                     {formulasAves.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                   <datalist id="formulas">{Object.keys(costos).map(f => <option key={f} value={f} />)}</datalist>
                 </label>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Campo mitad etiqueta="Ración a servir (g/ave/día)" type="text" inputMode="decimal" placeholder="ej. 115" value={formLote.racionGAve} onChange={e => setFormLote({ ...formLote, racionGAve: e.target.value })} />
+                  <Campo mitad etiqueta="Raci�n a servir (g/ave/d�a)" type="text" inputMode="decimal" placeholder="ej. 115" value={formLote.racionGAve} onChange={e => setFormLote({ ...formLote, racionGAve: e.target.value })} />
                 </div>
                 {Number(formLote.racionGAve) > 0 && Number(formLote.aves || formLote.avesIniciales) > 0 && (() => {
                   const avesN = Number(formLote.aves || formLote.avesIniciales);
                   const kgDia = (Number(formLote.racionGAve) * avesN) / 1000;
                   return <div style={{ fontSize: 13, color: C.textoSuave, marginBottom: 10, marginTop: -6 }}>
-                    Con {avesN.toLocaleString()} aves ≈ <b>{kgDia.toFixed(1)} kg/día</b> · 6 am (40%): {(kgDia * 0.4).toFixed(1)} kg · 1 pm (60%): {(kgDia * 0.6).toFixed(1)} kg
+                    Con {avesN.toLocaleString()} aves � <b>{kgDia.toFixed(1)} kg/d�a</b> � 6 am (40%): {(kgDia * 0.4).toFixed(1)} kg � 1 pm (60%): {(kgDia * 0.6).toFixed(1)} kg
                   </div>;
                 })()}
 
-                <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Metas de la tabla genética</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Metas de la tabla gen�tica</div>
                 {claveRaza(formLote.raza) ? (() => {
                   const ficha = formLote.nac ? fichaLote(formLote) : null;
                   return <div style={{ background: C.verdeSuave, padding: 12, borderRadius: 10, fontSize: 13, marginBottom: 12 }}>
-                    <b>{REFERENCIAS_RAZAS[claveRaza(formLote.raza)].nombre}</b> · {ficha ? `semana ${ficha.semana}` : "elige la fecha de nacimiento"}<br />
-                    Postura: {ficha?.postura ? `${ficha.postura.join("–")}%` : "sin dato para esta semana"} · Peso: {ficha?.peso ? `${ficha.peso.join("–")} g` : "sin dato"} · Alimento de referencia: {ficha?.feed ? `${ficha.feed.join("–")} g/ave/día` : "sin dato semanal"}
-                    <div style={{ color: C.textoSuave, marginTop: 4 }}>Las comparaciones se actualizan con la edad del lote; la ración a servir sigue siendo la indicada arriba.</div>
+                    <b>{REFERENCIAS_RAZAS[claveRaza(formLote.raza)].nombre}</b> � {ficha ? `semana ${ficha.semana}` : "elige la fecha de nacimiento"}<br />
+                    Postura: {ficha?.postura ? `${ficha.postura.join("-")}%` : "sin dato para esta semana"} � Peso: {ficha?.peso ? `${ficha.peso.join("-")} g` : "sin dato"} � Alimento de referencia: {ficha?.feed ? `${ficha.feed.join("-")} g/ave/d�a` : "sin dato semanal"}
+                    <div style={{ color: C.textoSuave, marginTop: 4 }}>Las comparaciones se actualizan con la edad del lote; la raci�n a servir sigue siendo la indicada arriba.</div>
                   </div>;
                 })() : <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <Campo mitad etiqueta="% postura ideal (sin manual)" type="text" inputMode="decimal" placeholder="ej. 92" value={formLote.posturaIdeal} onChange={e => setFormLote({ ...formLote, posturaIdeal: e.target.value })} />
@@ -6513,9 +6518,9 @@ export default function App() {
               </Seccion>
             )}
 
-            <div id="tablasRazas"><Seccion titulo="Tablas genéticas por raza" sub="Selecciona una línea y una semana. Los indicadores del lote usan automáticamente la fila de su edad; los rangos se muestran tal como aparecen en la guía.">
+            <div id="tablasRazas"><Seccion titulo="Tablas gen�ticas por raza" sub="Selecciona una l�nea y una semana. Los indicadores del lote usan autom�ticamente la fila de su edad; los rangos se muestran tal como aparecen en la gu�a.">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-                <label style={{ flex: "2 1 220px", fontSize: 13 }}>Raza / línea
+                <label style={{ flex: "2 1 220px", fontSize: 13 }}>Raza / l�nea
                   <select value={razaReferencia} onChange={e => { setRazaReferencia(e.target.value); setSemanaReferencia(26); }} style={inputStyle}>
                     {Object.entries(REFERENCIAS_RAZAS).map(([id, ficha]) => <option key={id} value={id}>{ficha.nombre}</option>)}
                   </select>
@@ -6527,22 +6532,22 @@ export default function App() {
               {(() => {
                 const ficha = REFERENCIAS_RAZAS[razaReferencia];
                 const fila = ficha.semanas[Number(semanaReferencia)];
-                const rango = (r, unidad) => r ? `${r[0]}${r[0] === r[1] ? "" : `–${r[1]}`} ${unidad}` : "—";
+                const rango = (r, unidad) => r ? `${r[0]}${r[0] === r[1] ? "" : `-${r[1]}`} ${unidad}` : "-";
                 return <>
-                  <div style={{ color: C.textoSuave, fontSize: 12, marginBottom: 10 }}>{ficha.tipo} · Fuente: {ficha.fuente}</div>
-                  {razaReferencia === "w36" && <div style={{ background: C.yemaSuave, padding: 10, borderRadius: 9, fontSize: 12.5, marginBottom: 10 }}>Esta guía es de reproductoras W-36. El lote Hy-Line Brown utiliza su propia guía comercial.</div>}
+                  <div style={{ color: C.textoSuave, fontSize: 12, marginBottom: 10 }}>{ficha.tipo} � Fuente: {ficha.fuente}</div>
+                  {razaReferencia === "w36" && <div style={{ background: C.yemaSuave, padding: 10, borderRadius: 9, fontSize: 12.5, marginBottom: 10 }}>Esta gu�a es de reproductoras W-36. El lote Hy-Line Brown utiliza su propia gu�a comercial.</div>}
                   {fila ? <div style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 12 }}>
-                    <KPI etiqueta={`Postura · sem. ${semanaReferencia}`} valor={rango(fila.postura, "%")} />
+                    <KPI etiqueta={`Postura � sem. ${semanaReferencia}`} valor={rango(fila.postura, "%")} />
                     <KPI etiqueta="Peso corporal" valor={rango(fila.peso, "g")} />
-                    <KPI etiqueta="Alimento de referencia" valor={rango(fila.feed, "g/ave/día")} />
-                  </div> : <div style={{ color: C.textoSuave, marginBottom: 12 }}>Esta guía no incluye la semana indicada.</div>}
-                  <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 8 }}>La postura y el peso se comparan con el punto medio cuando la guía da un rango. La ración real se programa por lote y no cambia automáticamente.</div>
+                    <KPI etiqueta="Alimento de referencia" valor={rango(fila.feed, "g/ave/d�a")} />
+                  </div> : <div style={{ color: C.textoSuave, marginBottom: 12 }}>Esta gu�a no incluye la semana indicada.</div>}
+                  <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 8 }}>La postura y el peso se comparan con el punto medio cuando la gu�a da un rango. La raci�n real se programa por lote y no cambia autom�ticamente.</div>
                   <div style={{ maxHeight: 340, overflow: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 500 }}>
-                      <thead><tr style={{ textAlign: "right", color: C.textoSuave }}><th style={{ textAlign: "left" }}>Semana</th><th>Postura ave/día</th><th>Peso corporal</th><th>Alimento / día</th><th>Peso del huevo</th><th>HAA acum.</th></tr></thead>
+                      <thead><tr style={{ textAlign: "right", color: C.textoSuave }}><th style={{ textAlign: "left" }}>Semana</th><th>Postura ave/d�a</th><th>Peso corporal</th><th>Alimento / d�a</th><th>Peso del huevo</th><th>HAA acum.</th></tr></thead>
                       <tbody>{Object.entries(ficha.semanas).map(([sem, datos]) => <tr key={sem} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right", background: Number(sem) === Number(semanaReferencia) ? C.verdeSuave : "transparent" }}>
                         <td style={{ textAlign: "left", padding: "6px 4px" }}><button onClick={() => setSemanaReferencia(Number(sem))} style={{ border: 0, background: "transparent", color: C.verde, fontWeight: 700, cursor: "pointer" }}>{sem}</button></td>
-                        <td>{rango(datos.postura, "%")}</td><td>{rango(datos.peso, "g")}</td><td>{rango(datos.feed, "g")}</td><td>{datos.huevo != null ? `${datos.huevo} g` : "—"}</td><td>{Array.isArray(datos.haa) ? rango(datos.haa, "") : datos.haa ?? "—"}</td>
+                        <td>{rango(datos.postura, "%")}</td><td>{rango(datos.peso, "g")}</td><td>{rango(datos.feed, "g")}</td><td>{datos.huevo != null ? `${datos.huevo} g` : "-"}</td><td>{Array.isArray(datos.haa) ? rango(datos.haa, "") : datos.haa ?? "-"}</td>
                       </tr>)}</tbody>
                     </table>
                   </div>
@@ -6559,10 +6564,10 @@ export default function App() {
                   <div key={l.id} style={{ background: C.superficie, border: `1px solid ${C.borde}`, borderRadius: 16, padding: 17 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                       <div>
-                        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>Gallinero {l.galpon} · Lote {l.lote || ""}</div>
-                        <div style={{ fontSize: 12, color: C.textoSuave }}>{l.raza} · nac. {l.nac.split("-").reverse().join("/")} · <b>{semanasDe(l.nac).toFixed(1)} sem</b></div>
-                        {claveRaza(l.raza) && <button onClick={() => { setRazaReferencia(claveRaza(l.raza)); setSemanaReferencia(fichaLote(l)?.semana || 1); document.getElementById("tablasRazas")?.scrollIntoView({ behavior: "smooth" }); }} style={{ fontSize: 11, border: 0, background: "transparent", color: C.verde, padding: "4px 0", textDecoration: "underline", cursor: "pointer" }}>Ver tabla de {REFERENCIAS_RAZAS[claveRaza(l.raza)].nombre} · semana {fichaLote(l)?.semana || "—"}</button>}
-                        {l.estadoProd && l.estadoProd !== "Producción normal" && <div style={{ display: "inline-block", marginTop: 4, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 12, background: C.yemaSuave, color: "#9A6605" }}>⚠ {l.estadoProd}</div>}
+                        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>Gallinero {l.galpon} � Lote {l.lote || ""}</div>
+                        <div style={{ fontSize: 12, color: C.textoSuave }}>{l.raza} � nac. {l.nac.split("-").reverse().join("/")} � <b>{semanasDe(l.nac).toFixed(1)} sem</b></div>
+                        {claveRaza(l.raza) && <button onClick={() => { setRazaReferencia(claveRaza(l.raza)); setSemanaReferencia(fichaLote(l)?.semana || 1); document.getElementById("tablasRazas")?.scrollIntoView({ behavior: "smooth" }); }} style={{ fontSize: 11, border: 0, background: "transparent", color: C.verde, padding: "4px 0", textDecoration: "underline", cursor: "pointer" }}>Ver tabla de {REFERENCIAS_RAZAS[claveRaza(l.raza)].nombre} � semana {fichaLote(l)?.semana || "-"}</button>}
+                        {l.estadoProd && l.estadoProd !== "Producci�n normal" && <div style={{ display: "inline-block", marginTop: 4, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 12, background: C.yemaSuave, color: "#9A6605" }}>? {l.estadoProd}</div>}
                         {l.proveedor && <div style={{ fontSize: 11.5, color: C.textoSuave }}>Pollonas: {l.proveedor}</div>}
                       </div>
                       <div style={{ textAlign: "right" }}>
@@ -6573,7 +6578,7 @@ export default function App() {
                     <BarraPostura actual={postura} meta={metaPosturaLote(l, ult?.fecha)} />
                     <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 20, background: C.yemaSuave, color: "#9A6605", fontWeight: 500 }}>
-                        {l.formula || "sin fórmula"}{l.racionGAve ? ` · ${l.racionGAve} g/ave` : ""}
+                        {l.formula || "sin f�rmula"}{l.racionGAve ? ` � ${l.racionGAve} g/ave` : ""}
                       </span>
                       {(() => {
                         const rUlt = registros.find(r => r.lote === l.id && Number(r.alimentoKg || 0) > 0);
@@ -6584,7 +6589,7 @@ export default function App() {
                         const fondo = desv == null || Math.abs(desv) <= 5 ? C.verdeSuave : desv < 0 ? C.alertaSuave : C.yemaSuave;
                         return (
                           <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 20, background: fondo, color, fontWeight: 600 }}>
-                            Consumo real: {gAveReal.toFixed(0)} g/ave{desv != null ? ` (${desv > 0 ? "+" : ""}${desv.toFixed(0)}% vs ración)` : ""}
+                            Consumo real: {gAveReal.toFixed(0)} g/ave{desv != null ? ` (${desv > 0 ? "+" : ""}${desv.toFixed(0)}% vs raci�n)` : ""}
                           </span>
                         );
                       })()}
@@ -6604,10 +6609,10 @@ export default function App() {
                         return (
                           <>
                             <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 20, background: "#F1F1EA", color: cDia, fontWeight: 600 }}>
-                              Mort. día: {pDia != null ? `${mDia} (${pDia.toFixed(2)}%)` : "—"}
+                              Mort. d�a: {pDia != null ? `${mDia} (${pDia.toFixed(2)}%)` : "-"}
                             </span>
                             <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 20, background: "#F1F1EA", color: cSem, fontWeight: 600 }}>
-                              Mort. 7d: {pSem != null ? `${mSem} (${pSem.toFixed(2)}%)` : "—"}
+                              Mort. 7d: {pSem != null ? `${mSem} (${pSem.toFixed(2)}%)` : "-"}
                             </span>
                           </>
                         );
@@ -6627,7 +6632,7 @@ export default function App() {
               <Seccion titulo="Lotes cerrados" sub="Su historial se conserva en Historial y en los registros">
                 {lotes.filter(l => l.estado === "cerrado").map(l => (
                   <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13.5, flexWrap: "wrap", gap: 8 }}>
-                    <span><b>Gallinero {l.galpon} · Lote {l.lote || ""}</b> · {l.raza} · cerrado {l.cerradoFecha || ""} · HAA final {(l.acumHuevos / (l.avesIniciales || 1)).toFixed(0)}</span>
+                    <span><b>Gallinero {l.galpon} � Lote {l.lote || ""}</b> � {l.raza} � cerrado {l.cerradoFecha || ""} � HAA final {(l.acumHuevos / (l.avesIniciales || 1)).toFixed(0)}</span>
                     <span style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => reabrirLote(l.id)} style={{ padding: "7px 12px", fontSize: 12.5, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Reabrir</button>
                       <button onClick={() => eliminarLote(l.id)} style={{ padding: "7px 12px", fontSize: 12.5, fontWeight: 600, background: C.alertaSuave, color: C.alerta, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Eliminar</button>
@@ -6639,18 +6644,18 @@ export default function App() {
           </>
         )}
 
-        {/* ══ BIENESTAR ANIMAL ══ */}
+        {/* �� BIENESTAR ANIMAL �� */}
         {vista === "pesaje" && (
           <>
                         <BarraSubmenu
               subsecciones={[
-                { id: "resumen", nombre: "Uniformidad y peso corporal", icono: "📊" },
-                { id: "pesajes", nombre: "Registrar pesaje", icono: "⚖️" },
-                { id: "histpesajes", nombre: "Buscar y corregir pesajes", icono: "🔍" },
-                { id: "vacunas", nombre: "Vacunación", icono: "💉" },
-                { id: "enfermedades", nombre: "Expediente médico", icono: "🩺" },
-                { id: "necropsias", nombre: "Necropsias y laboratorio", icono: "🔬" },
-                { id: "todo", nombre: "Ver todo", icono: "☰" },
+                { id: "resumen", nombre: "Uniformidad y peso corporal", icono: "??" },
+                { id: "pesajes", nombre: "Registrar pesaje", icono: "??" },
+                { id: "histpesajes", nombre: "Buscar y corregir pesajes", icono: "??" },
+                { id: "vacunas", nombre: "Vacunaci�n", icono: "??" },
+                { id: "enfermedades", nombre: "Expediente m�dico", icono: "??" },
+                { id: "necropsias", nombre: "Necropsias y laboratorio", icono: "??" },
+                { id: "todo", nombre: "Ver todo", icono: "?" },
               ]}
               activo={subPesaje}
               onChange={setSubPesaje}
@@ -6677,18 +6682,18 @@ export default function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                     <div>
                       <h2 style={{ margin: 0, fontSize: 18, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.verde }}>
-                        Evaluación técnica por gallinero
+                        Evaluaci�n t�cnica por gallinero
                       </h2>
                       <div style={{ fontSize: 12.5, color: C.textoSuave }}>
-                          Estadísticas zootécnicas independientes para cada parvada activa: peso promedio, uniformidad (&gt;85%), CV y ganancia.
+                          Estad�sticas zoot�cnicas independientes para cada parvada activa: peso promedio, uniformidad (&gt;85%), CV y ganancia.
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => setSubPesaje("pesajes")} style={{ ...btnStyle, width: "auto", padding: "8px 14px", fontSize: 13 }}>
-                        ➕ Registrar pesaje
+                        ? Registrar pesaje
                       </button>
                       <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                        🖨 Imprimir informe
+                        ?? Imprimir informe
                       </button>
                     </div>
                   </div>
@@ -6714,28 +6719,28 @@ export default function App() {
                               </span>
                             </div>
                             <div style={{ fontSize: 12.5, color: C.textoSuave, marginTop: 4 }}>
-                              Edad actual: <b>{semanasDe(l.nac).toFixed(1)} semanas</b> ({Math.floor(semanasDe(l.nac) * 7)} días) · Población activa: <b>{l.aves.toLocaleString()} aves</b> · Nacimiento: {l.nac.split("-").reverse().join("/")}
+                              Edad actual: <b>{semanasDe(l.nac).toFixed(1)} semanas</b> ({Math.floor(semanasDe(l.nac) * 7)} d�as) � Poblaci�n activa: <b>{l.aves.toLocaleString()} aves</b> � Nacimiento: {l.nac.split("-").reverse().join("/")}
                             </div>
                           </div>
                           <div style={{ textAlign: "right" }}>
                             {ult ? (
                               <div>
                                 <div style={{ fontSize: 12.5, fontWeight: 600, color: C.texto }}>
-                                  Último pesaje: <b>{ult.fecha}</b> ({ult.pesos.length} aves)
+                                  Ultimo pesaje: <b>{ult.fecha}</b> ({ult.pesos.length} aves)
                                 </div>
                                 <div style={{ fontSize: 11.5, color: diasPesaje > 21 ? C.alerta : C.verde, fontWeight: 700, marginTop: 2 }}>
-                                  {diasPesaje === 0 ? "✓ Pesado hoy" : `Hace ${diasPesaje} día(s)`} {diasPesaje > 21 ? "⚠ Control atrasado (>21 días)" : "✓ Al día"}
+                                  {diasPesaje === 0 ? "� Pesado hoy" : `Hace ${diasPesaje} d�a(s)`} {diasPesaje > 21 ? "? Control atrasado (>21 d�as)" : "� Al d�a"}
                                 </div>
                               </div>
                             ) : (
                               <div style={{ fontSize: 12.5, color: C.alerta, fontWeight: 600, background: C.alertaSuave, padding: "3px 9px", borderRadius: 8 }}>
-                                ⚠ Sin pesajes registrados
+                                ? Sin pesajes registrados
                               </div>
                             )}
                           </div>
                         </div>
 
-                        {/* Estadísticas zootécnicas en grande de este Gallinero */}
+                        {/* Estad�sticas zoot�cnicas en grande de este Gallinero */}
                         {st ? (
                           <>
                             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
@@ -6744,32 +6749,32 @@ export default function App() {
                                 valor={`${f2Dec(st.prom)}`}
                                 unidad="g"
                                 tono={tonoBrecha}
-                                sub={meta ? `Meta tabla: ${f2Dec(meta)} g (${brechaG >= 0 ? "+" : ""}${f2Dec(brechaG)} g · ${brechaP >= 0 ? "+" : ""}${f2Dec(brechaP)}%)` : "Sin meta configurada"}
+                                sub={meta ? `Meta tabla: ${f2Dec(meta)} g (${brechaG >= 0 ? "+" : ""}${f2Dec(brechaG)} g � ${brechaP >= 0 ? "+" : ""}${f2Dec(brechaP)}%)` : "Sin meta configurada"}
                               />
                               <KPI
                                 etiqueta="Uniformidad"
                                 valor={`${f2Dec(st.unif)}%`}
                                 unidad=""
                                 tono={tonoUnif}
-                                sub={st.unif >= 85 ? "✓ Excelente (meta >85%)" : st.unif >= 80 ? "Aceptable (meta >85%)" : "⚠ Desuniforme (<80%)"}
+                                sub={st.unif >= 85 ? "� Excelente (meta >85%)" : st.unif >= 80 ? "Aceptable (meta >85%)" : "? Desuniforme (<80%)"}
                               />
                               <KPI
-                                etiqueta="Variación (CV)"
+                                etiqueta="Variaci�n (CV)"
                                 valor={`${f2Dec(st.cv)}%`}
                                 unidad=""
                                 tono={tonoCV}
-                                sub={st.cv <= 8 ? "✓ Homogénea (<8%)" : st.cv <= 10 ? "Variabilidad normal" : "⚠ Alta dispersión"}
+                                sub={st.cv <= 8 ? "� Homog�nea (<8%)" : st.cv <= 10 ? "Variabilidad normal" : "? Alta dispersi�n"}
                               />
                               <KPI
                                 etiqueta="Ganancia vs anterior"
-                                valor={ganancia != null ? `${ganancia >= 0 ? "+" : ""}${f2Dec(ganancia)}` : "—"}
+                                valor={ganancia != null ? `${ganancia >= 0 ? "+" : ""}${f2Dec(ganancia)}` : "-"}
                                 unidad="g"
                                 tono={ganancia >= 0 ? "ok" : "alerta"}
                                 sub={ant ? `vs ${ant.fecha.slice(0, 5)} (${f2Dec(stAnt?.prom)} g)` : "Primer pesaje del lote"}
                               />
                               <KPI
                                 etiqueta="Rango de pesos"
-                                valor={`${f2Dec(st.min)} – ${f2Dec(st.max)}`}
+                                valor={`${f2Dec(st.min)} - ${f2Dec(st.max)}`}
                                 unidad="g"
                                 sub={`Muestra de ${st.n || ult?.pesos?.length || 0} aves`}
                               />
@@ -6779,12 +6784,12 @@ export default function App() {
                             {meta > 0 && (
                               <div style={{ background: C.fondo, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
-                                  <span>Curva de peso vs estándar genético ({l.raza})</span>
+                                  <span>Curva de peso vs est�ndar gen�tico ({l.raza})</span>
                                   <b>{f2Dec(st.prom)} g de {f2Dec(meta)} g ({f2Dec((st.prom / meta) * 100)}%)</b>
                                 </div>
                                 <div style={{ position: "relative", height: 10, background: C.borde, borderRadius: 5, overflow: "hidden" }}>
                                   <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, (st.prom / (meta * 1.2)) * 100)}%`, background: colBrecha, borderRadius: 5 }} />
-                                  <div style={{ position: "absolute", left: `${(meta / (meta * 1.2)) * 100}%`, top: 0, height: "100%", width: 2.5, background: C.texto, zIndex: 2 }} title="Meta genética" />
+                                  <div style={{ position: "absolute", left: `${(meta / (meta * 1.2)) * 100}%`, top: 0, height: "100%", width: 2.5, background: C.texto, zIndex: 2 }} title="Meta gen�tica" />
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textoSuave, marginTop: 4 }}>
                                   <span>0.00 g</span>
@@ -6796,7 +6801,7 @@ export default function App() {
                           </>
                         ) : (
                           <div style={{ padding: "12px 14px", background: C.fondo, borderRadius: 10, marginBottom: 12, fontSize: 13, color: C.textoSuave }}>
-                            Este gallinero aún no tiene pesajes guardados. Ingresa una muestra de 100 a 200 aves para ver su peso promedio, uniformidad y variabilidad.
+                            Este gallinero a�n no tiene pesajes guardados. Ingresa una muestra de 100 a 200 aves para ver su peso promedio, uniformidad y variabilidad.
                           </div>
                         )}
 
@@ -6806,7 +6811,7 @@ export default function App() {
                             onClick={() => { setFPeso(prev => ({ ...prev, lote: l.id })); setSubPesaje("pesajes"); }}
                             style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: `1.5px solid ${C.verde}`, borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
                           >
-                            ➕ Pesar Gallinero {l.galpon}
+                            ? Pesar Gallinero {l.galpon}
                           </button>
                         </div>
                       </div>
@@ -6819,15 +6824,15 @@ export default function App() {
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
                         <thead>
                           <tr style={{ color: C.textoSuave, fontSize: 11.5, textAlign: "right", borderBottom: `2px solid ${C.borde}` }}>
-                            <th style={{ textAlign: "left", padding: "8px 6px" }}>Gallinero / Genética</th>
-                            <th style={{ padding: "8px 6px" }}>Último control</th>
+                            <th style={{ textAlign: "left", padding: "8px 6px" }}>Gallinero / Gen�tica</th>
+                            <th style={{ padding: "8px 6px" }}>Ultimo control</th>
                             <th style={{ padding: "8px 6px" }}>Peso prom.</th>
                             <th style={{ padding: "8px 6px" }}>Meta tabla</th>
                             <th style={{ padding: "8px 6px" }}>Brecha vs tabla</th>
                             <th style={{ padding: "8px 6px" }}>Uniformidad</th>
                             <th style={{ padding: "8px 6px" }}>CV</th>
                             <th style={{ padding: "8px 6px" }}>Ganancia</th>
-                            <th style={{ padding: "8px 6px" }}>Acción</th>
+                            <th style={{ padding: "8px 6px" }}>Acci�n</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -6837,41 +6842,41 @@ export default function App() {
                             return (
                               <tr key={l.id} style={{ borderBottom: `1px solid ${C.borde}`, textAlign: "right" }}>
                                 <td style={{ textAlign: "left", padding: "10px 6px" }}>
-                                  <b>Gallinero {l.galpon}</b> <span style={{ fontSize: 11.5, color: C.textoSuave }}>({l.raza} · {semanasDe(l.nac).toFixed(0)} sem)</span>
+                                  <b>Gallinero {l.galpon}</b> <span style={{ fontSize: 11.5, color: C.textoSuave }}>({l.raza} � {semanasDe(l.nac).toFixed(0)} sem)</span>
                                 </td>
                                 <td style={{ padding: "10px 6px" }}>
                                   {ult ? (
                                     <div>
                                       <b>{ult.fecha.slice(0, 5)}</b> <span style={{ fontSize: 11, color: C.textoSuave }}>({ult.pesos.length} aves)</span>
-                                      {diasPesaje > 21 && <div style={{ fontSize: 10.5, color: C.alerta, fontWeight: 600 }}>⚠ {diasPesaje} d</div>}
+                                      {diasPesaje > 21 && <div style={{ fontSize: 10.5, color: C.alerta, fontWeight: 600 }}>? {diasPesaje} d</div>}
                                     </div>
                                   ) : <span style={{ color: C.textoSuave }}>Sin pesaje</span>}
                                 </td>
                                 <td style={{ padding: "10px 6px", fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, fontWeight: 700 }}>
-                                  {st ? `${f2Dec(st.prom)} g` : "—"}
+                                  {st ? `${f2Dec(st.prom)} g` : "-"}
                                 </td>
                                 <td style={{ padding: "10px 6px", color: C.textoSuave }}>
-                                  {meta ? `${f2Dec(meta)} g` : "—"}
+                                  {meta ? `${f2Dec(meta)} g` : "-"}
                                 </td>
                                 <td style={{ padding: "10px 6px", fontWeight: 700, color: colBrecha }}>
-                                  {brechaG != null ? `${brechaG >= 0 ? "+" : ""}${f2Dec(brechaG)} g (${brechaP >= 0 ? "+" : ""}${f2Dec(brechaP)}%)` : "—"}
+                                  {brechaG != null ? `${brechaG >= 0 ? "+" : ""}${f2Dec(brechaG)} g (${brechaP >= 0 ? "+" : ""}${f2Dec(brechaP)}%)` : "-"}
                                 </td>
                                 <td style={{ padding: "10px 6px" }}>
                                   {st ? (
                                     <span style={{ padding: "3px 8px", borderRadius: 10, background: st.unif >= 85 ? C.verdeSuave : st.unif >= 80 ? C.yemaSuave : C.alertaSuave, color: colUnif, fontWeight: 700 }}>
                                       {f2Dec(st.unif)}%
                                     </span>
-                                  ) : "—"}
+                                  ) : "-"}
                                 </td>
                                 <td style={{ padding: "10px 6px", color: st && st.cv <= 8 ? C.verde : st && st.cv <= 10 ? "#9A6605" : C.alerta, fontWeight: 600 }}>
-                                  {st ? `${f2Dec(st.cv)}%` : "—"}
+                                  {st ? `${f2Dec(st.cv)}%` : "-"}
                                 </td>
                                 <td style={{ padding: "10px 6px", fontSize: 12 }}>
                                   {ganancia != null ? (
                                     <span style={{ color: ganancia >= 0 ? C.verde : C.alerta, fontWeight: 600 }}>
                                       {ganancia >= 0 ? "+" : ""}{Number(ganancia).toFixed(2)} g
                                     </span>
-                                  ) : ant ? "—" : <span style={{ color: C.textoSuave, fontSize: 11 }}>1er pesaje</span>}
+                                  ) : ant ? "-" : <span style={{ color: C.textoSuave, fontSize: 11 }}>1er pesaje</span>}
                                 </td>
                                 <td style={{ padding: "10px 6px" }}>
                                   <button type="button" onClick={() => { setFPeso(prev => ({ ...prev, lote: l.id })); setSubPesaje("pesajes"); }} style={{ padding: "5px 9px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, cursor: "pointer" }}>
@@ -6890,9 +6895,9 @@ export default function App() {
             })()}
 
             {(subPesaje === "pesajes" || subPesaje === "todo") && (
-              <Seccion titulo="Pesaje de la parvada" sub="Usualmente 200 aves por gallinero — pega o escribe los pesos en gramos, separados por coma, espacio o salto de línea">
+              <Seccion titulo="Pesaje de la parvada" sub="Usualmente 200 aves por gallinero - pega o escribe los pesos en gramos, separados por coma, espacio o salto de l�nea">
               <select value={fPeso.lote} onChange={e => setFPeso({ ...fPeso, lote: e.target.value })} style={selectStyle}>
-                {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza} ({semanasDe(l.nac).toFixed(0)} sem)</option>)}
+                {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} - {l.raza} ({semanasDe(l.nac).toFixed(0)} sem)</option>)}
               </select>
               <label style={{ display: "block", marginBottom: 12 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del pesaje</span>
@@ -6900,9 +6905,9 @@ export default function App() {
               </label>
               <label style={{ display: "block", marginBottom: 12 }}>
                 <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>
-                  Pesos de la muestra (g) — llevas {fPeso.pesos.split(/[\s,]+/).filter(x => Number(x) > 0).length} aves
+                  Pesos de la muestra (g) - llevas {fPeso.pesos.split(/[\s,]+/).filter(x => Number(x) > 0).length} aves
                 </span>
-                <textarea rows={4} placeholder="En gramos (1880 1920 1850…) o en kilos (1.88 1.92 1.85…)" value={fPeso.pesos}
+                <textarea rows={4} placeholder="En gramos (1880 1920 1850.) o en kilos (1.88 1.92 1.85.)" value={fPeso.pesos}
                   onChange={e => setFPeso({ ...fPeso, pesos: e.target.value })}
                   style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
               </label>
@@ -6920,12 +6925,12 @@ export default function App() {
                 const brechaLive = metaLive ? promLive - metaLive : null;
                 return (
                   <div style={{ margin: "6px 0 14px", padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, border: `1px solid #ECD7A0` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#9A6605", marginBottom: 6 }}>Cálculo preliminar en vivo ({nLive} aves digitadas):</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#9A6605", marginBottom: 6 }}>C�lculo preliminar en vivo ({nLive} aves digitadas):</div>
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
-                      <div><b>Promedio:</b> <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{f2Dec(promLive)} g</span> {metaLive ? `(meta: ${f2Dec(metaLive)} g · ${brechaLive >= 0 ? "+" : ""}${f2Dec(brechaLive)} g)` : ""}</div>
-                      <div><b>Uniformidad:</b> <span style={{ fontWeight: 700, color: unifLive >= 85 ? C.verde : unifLive >= 80 ? "#9A6605" : C.alerta }}>{f2Dec(unifLive)}%</span> {unifLive >= 85 ? "✓ Buena" : "(meta >85%)"}</div>
+                      <div><b>Promedio:</b> <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{f2Dec(promLive)} g</span> {metaLive ? `(meta: ${f2Dec(metaLive)} g � ${brechaLive >= 0 ? "+" : ""}${f2Dec(brechaLive)} g)` : ""}</div>
+                      <div><b>Uniformidad:</b> <span style={{ fontWeight: 700, color: unifLive >= 85 ? C.verde : unifLive >= 80 ? "#9A6605" : C.alerta }}>{f2Dec(unifLive)}%</span> {unifLive >= 85 ? "� Buena" : "(meta >85%)"}</div>
                       <div><b>CV:</b> {f2Dec(cvLive)}%</div>
-                      <div><b>Rango:</b> {f2Dec(Math.min(...pesosArr))} g – {f2Dec(Math.max(...pesosArr))} g</div>
+                      <div><b>Rango:</b> {f2Dec(Math.min(...pesosArr))} g - {f2Dec(Math.max(...pesosArr))} g</div>
                     </div>
                   </div>
                 );
@@ -6936,7 +6941,7 @@ export default function App() {
                 <input type="file" accept=".xlsx,.xls" onChange={e => { abrirExcelPesajes(e.target.files?.[0]); e.target.value = ""; }} style={{ display: "block", marginTop: 7, maxWidth: "100%" }} />
               </label>
               {!!excelPesajes.length && <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 10 }}>
-                <b>Vista previa · {excelPesajes.length} fechas detectadas · {excelPesajes.filter(p => p.incluir).length} seleccionadas</b>
+                <b>Vista previa � {excelPesajes.length} fechas detectadas � {excelPesajes.filter(p => p.incluir).length} seleccionadas</b>
                 <p style={{ fontSize: 12.5, color: C.textoSuave }}>Selecciona los pesajes y usa Revisar / editar para corregir la galera, fecha o pesos. Las fechas futuras quedan excluidas hasta que las corrijas. Las existentes se revisan antes de reemplazar.</p>
                 <FiltrosLista filtro={filtroExcel} setFiltro={setFiltroExcel} lotes={lotes} estados={["Nuevo", "Ya existe", "Sin lote", "Fecha futura", "Excluido"]} total={excelPesajes.length} visibles={filasExcelVisibles.length} />
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -6951,10 +6956,10 @@ export default function App() {
                     return <div key={`${p.hoja}-${p.columna}-${i}`} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12.5 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                         <label><input type="checkbox" disabled={p.fecha > hoyISO()} checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
-                        <span>{p.hoja} · {p.columna} · <b>{p.fecha || "Sin fecha"}</b> · {p.lote ? `Galera ${lotes.find(l => l.id === p.lote)?.galpon || "?"}` : "Sin galera"} · {p.pesos.length} aves</span>
-                        <span style={{ color: p.fecha > hoyISO() || duplicado || invalidos ? C.alerta : C.verde }}>{p.fecha > hoyISO() ? "Fecha futura: corregir" : !p.incluir ? "Excluido" : duplicado ? "Ya existe: revisar" : invalidos ? `${invalidos} inválido(s)` : "Nuevo"}</span>
-                        {p.nacimiento && p.lote && p.nacimiento !== lotes.find(l => l.id === p.lote)?.nac && <span style={{ color: C.alerta }}>⚠ Excel: nacimiento {p.nacimiento}; lote: {lotes.find(l => l.id === p.lote)?.nac}. Revisa la galera y la fecha.</span>}
-                        {p.lote && p.fecha < (lotes.find(l => l.id === p.lote)?.nac || "") && <span style={{ color: C.alerta }}>⚠ Pesaje anterior al nacimiento del lote: corrige la fecha o elige el lote histórico.</span>}
+                        <span>{p.hoja} � {p.columna} � <b>{p.fecha || "Sin fecha"}</b> � {p.lote ? `Galera ${lotes.find(l => l.id === p.lote)?.galpon || "?"}` : "Sin galera"} � {p.pesos.length} aves</span>
+                        <span style={{ color: p.fecha > hoyISO() || duplicado || invalidos ? C.alerta : C.verde }}>{p.fecha > hoyISO() ? "Fecha futura: corregir" : !p.incluir ? "Excluido" : duplicado ? "Ya existe: revisar" : invalidos ? `${invalidos} inv�lido(s)` : "Nuevo"}</span>
+                        {p.nacimiento && p.lote && p.nacimiento !== lotes.find(l => l.id === p.lote)?.nac && <span style={{ color: C.alerta }}>? Excel: nacimiento {p.nacimiento}; lote: {lotes.find(l => l.id === p.lote)?.nac}. Revisa la galera y la fecha.</span>}
+                        {p.lote && p.fecha < (lotes.find(l => l.id === p.lote)?.nac || "") && <span style={{ color: C.alerta }}>? Pesaje anterior al nacimiento del lote: corrige la fecha o elige el lote hist�rico.</span>}
                         {p.incluir && !duplicado && !invalidos && <span style={{ color: C.textoSuave }}>Prom. {(p.pesos.reduce((a, v) => a + pesoEnGramos(v), 0) / p.pesos.length).toFixed(0)} g</span>}
                         <button type="button" onClick={() => setExcelAbierto(excelAbierto === i ? -1 : i)} style={{ cursor: "pointer" }}>{excelAbierto === i ? "Cerrar" : "Revisar / editar"}</button>
                       </div>
@@ -6963,7 +6968,7 @@ export default function App() {
                           <label style={{ minWidth: 190, flex: 1 }}>Galera
                             <select value={p.lote} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, lote: e.target.value, incluir: !!e.target.value && x.fecha <= hoyISO() } : x))} style={{ ...selectStyle, width: "100%", marginTop: 4 }}>
                               <option value="">Elegir galera y lote</option>
-                              {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · lote {l.lote || l.id} · nac. {l.nac}</option>)}
+                              {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} � lote {l.lote || l.id} � nac. {l.nac}</option>)}
                             </select>
                           </label>
                           <label style={{ minWidth: 160, flex: 1 }}>Fecha
@@ -6978,16 +6983,16 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button disabled={importandoPesajes || guardando || cargandoFondo} onClick={confirmarExcelPesajes} style={btnStyle}>{importandoPesajes ? "Guardando…" : "Confirmar y agregar faltantes"}</button>
+                  <button disabled={importandoPesajes || guardando || cargandoFondo} onClick={confirmarExcelPesajes} style={btnStyle}>{importandoPesajes ? "Guardando." : "Confirmar y agregar faltantes"}</button>
                   <button disabled={importandoPesajes} onClick={() => setExcelPesajes([])}>Cancelar</button>
                 </div>
               </div>}
-              <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de pesajes (Dr. / nutricionista)</button>
+              <button onClick={() => setPrintDoc({ tipo: "pesajes" })} style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>?? Imprimir reporte de pesajes (Dr. / nutricionista)</button>
             </Seccion>
             )}
 
             {(subPesaje === "histpesajes" || subPesaje === "todo") && (
-              <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, también los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
+              <Seccion titulo="Buscar y corregir pesajes" sub="Consulta todos los lotes, tambi�n los cerrados. Filtra por palabra, galera y fechas; corrige o elimina un registro individual.">
               {selectorHistorial("pesajes")}
               {(() => {
                 const filas = historialVisible(pesajes, "pesajes").map(p => {
@@ -7003,7 +7008,7 @@ export default function App() {
                       const l = lotes.find(x => x.id === p.lote);
                       const prom = p.pesos?.length ? Math.round(p.pesos.reduce((s, v) => s + Number(v), 0) / p.pesos.length) : 0;
                       return <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
-                        <span style={{ flex: "1 1 230px" }}><b>{p.fecha} · G{l?.galpon ?? p.lote}</b> · {p.pesos?.length || 0} aves · {prom} g {p.estado === "Fecha futura" && <b style={{ color: C.alerta }}>⚠ Fecha futura</b>}</span>
+                        <span style={{ flex: "1 1 230px" }}><b>{p.fecha} � G{l?.galpon ?? p.lote}</b> � {p.pesos?.length || 0} aves � {prom} g {p.estado === "Fecha futura" && <b style={{ color: C.alerta }}>? Fecha futura</b>}</span>
                         <button onClick={() => abrirEdicionPesaje(p)}>Revisar / corregir</button>
                         <button onClick={() => setPesajeEliminar(p)} style={{ color: C.alerta }}>Eliminar</button>
                       </div>;
@@ -7016,16 +7021,16 @@ export default function App() {
             )}
 
             {(subPesaje === "vacunas" || subPesaje === "todo") && (
-              <Seccion titulo="Vacunación — programa y aplicación" sub="Plan del Dr. Heiner Hernández Ávila (C.M.V #666) por día de edad. Marca cada vacuna aplicada con su fecha.">
-              <button onClick={() => setPrintDoc({ tipo: "vacunas", lote: fVac.lote })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir reporte de vacunación</button>
+              <Seccion titulo="Vacunaci�n - programa y aplicaci�n" sub="Plan del Dr. Heiner Hern�ndez Avila (C.M.V #666) por d�a de edad. Marca cada vacuna aplicada con su fecha.">
+              <button onClick={() => setPrintDoc({ tipo: "vacunas", lote: fVac.lote })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>?? Imprimir reporte de vacunaci�n</button>
               <select value={fVac.lote} onChange={e => setFVac({ ...fVac, lote: e.target.value })} style={selectStyle}>
-                {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza} ({semanasDe(l.nac).toFixed(0)} sem · {Math.floor(semanasDe(l.nac) * 7)} días)</option>)}
+                {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} - {l.raza} ({semanasDe(l.nac).toFixed(0)} sem � {Math.floor(semanasDe(l.nac) * 7)} d�as)</option>)}
               </select>
               {(() => {
                 const l = lotes.find(x => x.id === fVac.lote);
                 if (!l) return null;
-                const colores = { aplicada: C.verde, atrasada: C.alerta, próxima: "#9A6605", pendiente: C.textoSuave, cubierta: C.textoSuave };
-                const etiquetas = { aplicada: "✓ APLICADA", atrasada: "ATRASADA", próxima: "PRÓXIMA", pendiente: "PENDIENTE", cubierta: "LEVANTE" };
+                const colores = { aplicada: C.verde, atrasada: C.alerta, pr�xima: "#9A6605", pendiente: C.textoSuave, cubierta: C.textoSuave };
+                const etiquetas = { aplicada: "� APLICADA", atrasada: "ATRASADA", pr�xima: "PROXIMA", pendiente: "PENDIENTE", cubierta: "LEVANTE" };
                 return planVac.map(p2 => {
                   const ev = estadoVacunaLote(l, p2);
                   const clave = `${l.id}-${p2.id}`;
@@ -7033,11 +7038,11 @@ export default function App() {
                   return (
                     <div key={p2.id} style={{ borderTop: `1px solid ${C.borde}`, padding: "10px 0" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 600 }}>Día {p2.dia} — {p2.vacuna}{p2.cepa ? ` · ${p2.cepa}` : ""}</span>
+                        <span style={{ fontSize: 13.5, fontWeight: 600 }}>D�a {p2.dia} - {p2.vacuna}{p2.cepa ? ` � ${p2.cepa}` : ""}</span>
                         <b style={{ fontSize: 12, color: colores[ev.estado] }}>{etiquetas[ev.estado]}{ev.estado === "aplicada" && ev.fechaAplicada ? ` ${ev.fechaAplicada.slice(0, 5)}` : ""}</b>
                       </div>
                       <div style={{ fontSize: 12, color: C.textoSuave, marginBottom: 6 }}>
-                        Vía: {p2.via || "—"} · Proveedor: {p2.proveedor || "—"} · Programada: {ev.fecha}
+                        V�a: {p2.via || "-"} � Proveedor: {p2.proveedor || "-"} � Programada: {ev.fecha}
                       </div>
                       {ev.estado === "aplicada" ? (
                         <button onClick={() => desaplicarVacuna(l.id, p2.id)} style={{ padding: "6px 11px", fontSize: 12, fontWeight: 600, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Deshacer</button>
@@ -7059,32 +7064,32 @@ export default function App() {
 
               <div style={{ fontSize: 13.5, fontWeight: 700, margin: "16px 0 8px", color: C.verde }}>Agregar vacuna al programa</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Campo tercio etiqueta="Día de edad" type="text" inputMode="numeric" placeholder="ej. 120" value={fPlan.dia} onChange={e => setFPlan({ ...fPlan, dia: e.target.value })} />
+                <Campo tercio etiqueta="D�a de edad" type="text" inputMode="numeric" placeholder="ej. 120" value={fPlan.dia} onChange={e => setFPlan({ ...fPlan, dia: e.target.value })} />
                 <Campo tercio etiqueta="Vacuna" type="text" placeholder="ej. Newcastle refuerzo" value={fPlan.vacuna} onChange={e => setFPlan({ ...fPlan, vacuna: e.target.value })} />
                 <Campo tercio etiqueta="Cepa" type="text" placeholder="opcional" value={fPlan.cepa} onChange={e => setFPlan({ ...fPlan, cepa: e.target.value })} />
-                <Campo mitad etiqueta="Vía de aplicación" type="text" placeholder="ej. al agua" value={fPlan.via} onChange={e => setFPlan({ ...fPlan, via: e.target.value })} />
+                <Campo mitad etiqueta="V�a de aplicaci�n" type="text" placeholder="ej. al agua" value={fPlan.via} onChange={e => setFPlan({ ...fPlan, via: e.target.value })} />
                 <Campo mitad etiqueta="Proveedor" type="text" placeholder="opcional" value={fPlan.proveedor} onChange={e => setFPlan({ ...fPlan, proveedor: e.target.value })} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={guardarPlanVac} style={{ ...btnStyle, flex: 1 }}>Agregar al programa</button>
               </div>
               <div style={{ fontSize: 12, color: C.textoSuave, marginTop: 8 }}>
-                Para quitar una vacuna del programa del doctor, avísame y la removemos — así evitamos borrados accidentales del plan oficial.
+                Para quitar una vacuna del programa del doctor, av�same y la removemos - as� evitamos borrados accidentales del plan oficial.
               </div>
             </Seccion>
             )}
 
             {(subPesaje === "enfermedades" || subPesaje === "todo") && (
-              <Seccion titulo="Expediente médico — Enfermedades y tratamientos" sub="Diagnósticos por gallinero con su tratamiento y estado">
-              <button onClick={() => setPrintDoc({ tipo: "enfermedades" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir expediente</button>
+              <Seccion titulo="Expediente m�dico - Enfermedades y tratamientos" sub="Diagn�sticos por gallinero con su tratamiento y estado">
+              <button onClick={() => setPrintDoc({ tipo: "enfermedades" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>?? Imprimir expediente</button>
               <select value={fEnf.lote} onChange={e => setFEnf({ ...fEnf, lote: e.target.value })} style={selectStyle}>
-                {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} — {l.raza}</option>)}
+                {activos.map(l => <option key={l.id} value={l.id}>Gallinero {l.galpon} - {l.raza}</option>)}
               </select>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta="Enfermedad diagnosticada" type="text" placeholder="ej. coriza infecciosa" value={fEnf.enfermedad} onChange={e => setFEnf({ ...fEnf, enfermedad: e.target.value })} />
-                <Campo mitad etiqueta="Tratamiento brindado" type="text" placeholder="ej. Interflox 200 ml, 5 días" value={fEnf.tratamiento} onChange={e => setFEnf({ ...fEnf, tratamiento: e.target.value })} />
+                <Campo mitad etiqueta="Tratamiento brindado" type="text" placeholder="ej. Interflox 200 ml, 5 d�as" value={fEnf.tratamiento} onChange={e => setFEnf({ ...fEnf, tratamiento: e.target.value })} />
               </div>
-              <button onClick={guardarEnfermedad} style={btnStyle}>Registrar diagnóstico</button>
+              <button onClick={guardarEnfermedad} style={btnStyle}>Registrar diagn�stico</button>
               <div style={{ marginTop: 12 }}>
                 {selectorHistorial("enfermedades")}
                 {historialVisible(enfermedades, "enfermedades").map((e2, i) => {
@@ -7093,29 +7098,29 @@ export default function App() {
                   return (
                     <div key={i} style={{ fontSize: 13, padding: "10px 12px", background: activoTx ? C.alertaSuave : C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
-                        <span><b>{e2.fecha.slice(0, 5)} · G{l?.galpon ?? "?"}</b> — {e2.enfermedad}{e2.tratamiento && ` · Tx: ${e2.tratamiento}`}</span>
+                        <span><b>{e2.fecha.slice(0, 5)} � G{l?.galpon ?? "?"}</b> - {e2.enfermedad}{e2.tratamiento && ` � Tx: ${e2.tratamiento}`}</span>
                         {activoTx
                           ? <button onClick={() => marcarRecuperado(e2.id)} style={{ padding: "5px 10px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Marcar recuperado</button>
-                          : <span style={{ color: C.verde, fontWeight: 600, fontSize: 12.5 }}>✓ Recuperado {e2.fechaAlta ? e2.fechaAlta.slice(0, 5) : ""}</span>}
+                          : <span style={{ color: C.verde, fontWeight: 600, fontSize: 12.5 }}>� Recuperado {e2.fechaAlta ? e2.fechaAlta.slice(0, 5) : ""}</span>}
                       </div>
                     </div>
                   );
                 })}
-                {enfermedades.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin diagnósticos registrados.</div>}
+                {enfermedades.length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Sin diagn�sticos registrados.</div>}
               </div>
             </Seccion>
             )}
 
             {(subPesaje === "necropsias" || subPesaje === "todo") && (
-              <Seccion titulo="Necropsias y laboratorio" sub="Resultados de necropsias, coprológicos, bromatológicos y otros análisis">
-              <button onClick={() => setPrintDoc({ tipo: "necropsias" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir registro</button>
+              <Seccion titulo="Necropsias y laboratorio" sub="Resultados de necropsias, coprol�gicos, bromatol�gicos y otros an�lisis">
+              <button onClick={() => setPrintDoc({ tipo: "necropsias" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>?? Imprimir registro</button>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <select value={fNec.lote} onChange={e => setFNec({ ...fNec, lote: e.target.value })} style={{ ...inputStyle, flex: "1 1 45%", marginBottom: 12 }}>
-                  {activos.map(l => <option key={l.id} value={l.id}>G{l.galpon} — {l.raza}</option>)}
+                  {activos.map(l => <option key={l.id} value={l.id}>G{l.galpon} - {l.raza}</option>)}
                 </select>
                 <select value={fNec.tipo} onChange={e => setFNec({ ...fNec, tipo: e.target.value })} style={{ ...inputStyle, flex: "1 1 45%", marginBottom: 12 }}>
-                  <option>Necropsia</option><option>Coprológico</option><option>Bromatológico (alimento)</option>
-                  <option>Serología</option><option>Bacteriología</option><option>Otro análisis</option>
+                  <option>Necropsia</option><option>Coprol�gico</option><option>Bromatol�gico (alimento)</option>
+                  <option>Serolog�a</option><option>Bacteriolog�a</option><option>Otro an�lisis</option>
                 </select>
               </div>
               <Campo etiqueta="Laboratorio / veterinario" type="text" placeholder="ej. LANASEVE, Dr. ..." value={fNec.laboratorio} onChange={e => setFNec({ ...fNec, laboratorio: e.target.value })} />
@@ -7125,14 +7130,14 @@ export default function App() {
                   style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
               </label>
               <label style={{ display: "block", marginBottom: 12 }}>
-                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fotos (hasta 3 — se comprimen automáticamente)</span>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fotos (hasta 3 - se comprimen autom�ticamente)</span>
                 <input type="file" accept="image/*" multiple onChange={e => { agregarFotoNec(e.target.files); e.target.value = ""; }} style={{ fontSize: 14 }} />
                 {fNecFotos.length > 0 && (
                   <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                     {fNecFotos.map((f, i) => (
                       <div key={i} style={{ position: "relative" }}>
                         <img src={f} alt={`foto ${i + 1}`} style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.borde}` }} />
-                        <button onClick={() => setFNecFotos(fNecFotos.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 11, background: C.alerta, color: "#fff", border: "none", fontSize: 12, cursor: "pointer" }}>×</button>
+                        <button onClick={() => setFNecFotos(fNecFotos.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 11, background: C.alerta, color: "#fff", border: "none", fontSize: 12, cursor: "pointer" }}>x</button>
                       </div>
                     ))}
                   </div>
@@ -7145,14 +7150,14 @@ export default function App() {
                   const l = lotes.find(x => x.id === n2.lote);
                   return (
                     <div key={i} style={{ fontSize: 13, padding: "10px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
-                      <b>{n2.fecha.slice(0, 5)} · G{l?.galpon ?? "?"} · {n2.tipo}</b>{n2.laboratorio && ` · ${n2.laboratorio}`}
+                      <b>{n2.fecha.slice(0, 5)} � G{l?.galpon ?? "?"} � {n2.tipo}</b>{n2.laboratorio && ` � ${n2.laboratorio}`}
                       <div style={{ color: C.textoSuave }}>{n2.hallazgos}</div>
                       {n2.numFotos > 0 && (
                         <button onClick={() => verFotosNec(n2)} style={{ marginTop: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                          {fotosVista[n2.id] ? "Ocultar fotos" : `📷 Ver ${n2.numFotos} foto(s)`}
+                          {fotosVista[n2.id] ? "Ocultar fotos" : `?? Ver ${n2.numFotos} foto(s)`}
                         </button>
                       )}
-                      {fotosVista[n2.id] === "cargando" && <div style={{ fontSize: 12, color: C.textoSuave, marginTop: 6 }}>Cargando fotos…</div>}
+                      {fotosVista[n2.id] === "cargando" && <div style={{ fontSize: 12, color: C.textoSuave, marginTop: 6 }}>Cargando fotos.</div>}
                       {Array.isArray(fotosVista[n2.id]) && (
                         <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                           {fotosVista[n2.id].map((f, j) => <img key={j} src={f} alt={`foto ${j + 1}`} style={{ width: 140, height: 140, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.borde}` }} />)}
@@ -7167,10 +7172,10 @@ export default function App() {
             )}
           </>
         )}
-        {vista === "preferencias" && <Suspense fallback={<div className="v10-loading-view">Cargando preferencias…</div>}><PreferenciasView preferencias={preferencias} tabs={tabsVisibles} onGuardar={guardarMisPreferencias} guardando={guardandoPreferencias} /></Suspense>}
-        {vista === "administracion" && <Suspense fallback={<div className="v10-loading-view">Cargando administración…</div>}><AdministracionView nombresUsuarios={nombresUsuarios} onGuardarNombre={guardarNombreVisible} onBorrarNombre={borrarNombreVisible} avisar={avisar} /></Suspense>}
+        {vista === "preferencias" && <Suspense fallback={<div className="v10-loading-view">Cargando preferencias.</div>}><PreferenciasView preferencias={preferencias} tabs={tabsVisibles} onGuardar={guardarMisPreferencias} guardando={guardandoPreferencias} /></Suspense>}
+        {vista === "administracion" && <Suspense fallback={<div className="v10-loading-view">Cargando administraci�n.</div>}><AdministracionView nombresUsuarios={nombresUsuarios} onGuardarNombre={guardarNombreVisible} onBorrarNombre={borrarNombreVisible} avisar={avisar} /></Suspense>}
       </main>
-      <nav className="v10-mobile-nav" aria-label="Navegación móvil" style={{
+      <nav className="v10-mobile-nav" aria-label="Navegaci�n m�vil" style={{
         position: "fixed",
         bottom: 0,
         left: 0,
@@ -7207,7 +7212,7 @@ export default function App() {
             fontFamily: "inherit"
           }}
         >
-          <span>☰</span>
+          <span>?</span>
           <span>{menuMovil ? "Cerrar" : "Todos"}</span>
         </button>
         {tabsMovil.map(t => {
@@ -7275,7 +7280,7 @@ export default function App() {
             className="v10-mobile-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label="Menú completo de la granja"
+            aria-label="Men� completo de la granja"
             onClick={e => e.stopPropagation()}
             style={{
               width: "100%",
@@ -7293,16 +7298,16 @@ export default function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, borderBottom: `1px solid ${C.borde}`, paddingBottom: 10 }}>
               <div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: C.verde }}>
-                  {configOrganizacion.nombre || "Rancho El Soñado"}
+                  {configOrganizacion.nombre || "Rancho El So�ado"}
                 </div>
                 <div style={{ fontSize: 11.5, color: C.textoSuave }}>
-                  Módulos de la granja · {mostrarNombre(window.__usuarioEmail)}
+                  M�dulos de la granja � {mostrarNombre(window.__usuarioEmail)}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setMenuMovil(false)}
-                aria-label="Cerrar menú"
+                aria-label="Cerrar men�"
                 style={{
                   background: "#F1F1EA",
                   border: "none",
@@ -7314,7 +7319,7 @@ export default function App() {
                   color: C.texto
                 }}
               >
-                ✕ Cerrar
+                ? Cerrar
               </button>
             </div>
             {gruposMenu.map(g => {
@@ -7388,8 +7393,8 @@ export default function App() {
                 gap: 6
               }}
             >
-              <span>⌕</span>
-              <span>Buscar fecha, galpón, tiquete o actividad…</span>
+              <span>?</span>
+              <span>Buscar fecha, galp�n, tiquete o actividad.</span>
             </button>
           </div>
         </div>
@@ -7398,7 +7403,7 @@ export default function App() {
       <ModalDialog
         abierto={!!conflictosPesaje}
         titulo="Fechas con pesajes existentes"
-        subtitulo="Los pesajes nuevos ya se agregaron. Los actuales se conservarán, salvo los que selecciones para reemplazar. Revisa cantidad de aves y promedio antes de decidir."
+        subtitulo="Los pesajes nuevos ya se agregaron. Los actuales se conservar�n, salvo los que selecciones para reemplazar. Revisa cantidad de aves y promedio antes de decidir."
         onClose={() => { setConflictosPesaje(null); setExcelPesajes([]); }}
         ancho={680}
         pie={
@@ -7424,7 +7429,7 @@ export default function App() {
               return (
                 <label key={x.clave} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}`, alignItems: "flex-start", cursor: "pointer" }}>
                   <input type="checkbox" checked={conflictosPesaje.elegidos.includes(x.clave)} onChange={e => setConflictosPesaje(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.clave] : c.elegidos.filter(k => k !== x.clave) }))} />
-                  <span><b>G{x.galpon} · {x.nuevo.fecha}</b><br /><small>Actual: {x.actual.pesos?.length || 0} aves · {promedio(x.actual)} g. Excel: {x.nuevo.pesos.length} aves · {promedio(x.nuevo)} g.</small><br /><small>Marcar para reemplazar el pesaje actual.</small></span>
+                  <span><b>G{x.galpon} � {x.nuevo.fecha}</b><br /><small>Actual: {x.actual.pesos?.length || 0} aves � {promedio(x.actual)} g. Excel: {x.nuevo.pesos.length} aves � {promedio(x.nuevo)} g.</small><br /><small>Marcar para reemplazar el pesaje actual.</small></span>
                 </label>
               );
             })}
@@ -7459,9 +7464,9 @@ export default function App() {
             {filasConfRespaldo.map(x => (
               <label key={x.token} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.borde}`, cursor: "pointer" }}>
                 <input type="checkbox" disabled={x.duplicados !== 1} checked={conflictosRespaldo.elegidos.includes(x.token)} onChange={e => setConflictosRespaldo(c => ({ ...c, elegidos: e.target.checked ? [...c.elegidos, x.token] : c.elegidos.filter(k => k !== x.token) }))} />
-                <span style={{ fontSize: 13 }}><b>{x.tabla === "pesajes" ? "Pesaje" : "Control diario"} · {x.lote} · {x.fecha}</b><br />
-                  {x.tabla === "pesajes" ? `Actual: ${x.actual.data.pesos?.length || 0} aves · Respaldo: ${x.nuevo.pesos?.length || 0} aves` : `Actual: ${x.actual.data.cartones ?? "—"} cartones · Respaldo: ${x.nuevo.cartones ?? "—"} cartones`}
-                  {x.duplicados !== 1 && <span style={{ color: C.alerta }}> · Hay {x.duplicados} registros actuales: revisar manualmente</span>}
+                <span style={{ fontSize: 13 }}><b>{x.tabla === "pesajes" ? "Pesaje" : "Control diario"} � {x.lote} � {x.fecha}</b><br />
+                  {x.tabla === "pesajes" ? `Actual: ${x.actual.data.pesos?.length || 0} aves � Respaldo: ${x.nuevo.pesos?.length || 0} aves` : `Actual: ${x.actual.data.cartones ?? "-"} cartones � Respaldo: ${x.nuevo.cartones ?? "-"} cartones`}
+                  {x.duplicados !== 1 && <span style={{ color: C.alerta }}> � Hay {x.duplicados} registros actuales: revisar manualmente</span>}
                 </span>
               </label>
             ))}
@@ -7472,7 +7477,7 @@ export default function App() {
       <ModalDialog
         abierto={!!editarPesaje}
         titulo="Corregir pesaje"
-        subtitulo="Se modificará solo este registro. Una fecha existente del mismo lote no se puede duplicar."
+        subtitulo="Se modificar� solo este registro. Una fecha existente del mismo lote no se puede duplicar."
         onClose={() => setEditarPesaje(null)}
         ancho={620}
         pie={
@@ -7481,7 +7486,7 @@ export default function App() {
               Cancelar
             </button>
             <button type="button" disabled={guardando} onClick={guardarEdicionPesaje} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>
-              Guardar corrección
+              Guardar correcci�n
             </button>
           </>
         }
@@ -7490,13 +7495,13 @@ export default function App() {
           <>
             <label style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>Galera / lote
               <select value={editarPesaje.lote} onChange={e => setEditarPesaje(p => ({ ...p, lote: e.target.value }))} style={{ ...inputStyle, marginTop: 4, width: "100%" }}>
-                {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} · {l.lote || l.id} · nac. {l.nac}</option>)}
+                {lotes.map(l => <option key={l.id} value={l.id}>Galera {l.galpon} � {l.lote || l.id} � nac. {l.nac}</option>)}
               </select>
             </label>
             <label style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>Fecha
               <input type="date" max={hoyISO()} value={editarPesaje.fechaISO} onChange={e => setEditarPesaje(p => ({ ...p, fechaISO: e.target.value }))} style={{ ...inputStyle, marginTop: 4, width: "100%" }} />
             </label>
-            <label style={{ display: "block", marginBottom: 12, fontSize: 12.5, fontWeight: 600 }}>Pesos (gramos o kg; uno por línea)
+            <label style={{ display: "block", marginBottom: 12, fontSize: 12.5, fontWeight: 600 }}>Pesos (gramos o kg; uno por l�nea)
               <textarea rows={8} value={editarPesaje.pesosTexto} onChange={e => setEditarPesaje(p => ({ ...p, pesosTexto: e.target.value }))} style={{ ...inputStyle, marginTop: 4, width: "100%", resize: "vertical" }} />
             </label>
           </>
@@ -7506,7 +7511,7 @@ export default function App() {
       <ModalDialog
         abierto={!!pesajeEliminar}
         titulo="Eliminar pesaje"
-        subtitulo="Se borrará solo este registro y no podrá recuperarse automáticamente."
+        subtitulo="Se borrar� solo este registro y no podr� recuperarse autom�ticamente."
         onClose={() => setPesajeEliminar(null)}
         ancho={460}
         tono="alerta"
@@ -7516,12 +7521,22 @@ export default function App() {
               Cancelar
             </button>
             <button type="button" disabled={guardando} onClick={confirmarEliminarPesaje} style={{ ...btnStyle, width: "auto", background: C.alerta, padding: "10px 20px", margin: 0 }}>
-              {guardando ? "Eliminando…" : "Eliminar este pesaje"}
+              {guardando ? "Eliminando." : "Eliminar este pesaje"}
             </button>
           </>
         }
       >
         {pesajeEliminar && (
           <p style={{ margin: 0, fontSize: 13.5 }}>
-            ¿Eliminar definitivamente el pesaje del <b>{pesajeEliminar.fecha}</b> de la galera <b>{lotes.find(l => l.id === pesajeEliminar.lote)?.galpon ?? pesajeEliminar.lote}</b> ({pesajeEliminar.pesos?.length || 0} aves)?
+            �Eliminar definitivamente el pesaje del <b>{pesajeEliminar.fecha}</b> de la galera <b>{lotes.find(l => l.id === pesajeEliminar.lote)?.galpon ?? pesajeEliminar.lote}</b> ({pesajeEliminar.pesos?.length || 0} aves)?
           </p>
+        )}
+      </ModalDialog>
+
+      <footer style={{ textAlign: "center", padding: "8px 16px 22px", fontSize: 11.5, color: C.textoSuave, lineHeight: 1.5 }}>
+        Formato: Reporte Diario de Operaci�n � Datos compartidos - todo el equipo ve y edita la misma informaci�n.<br />
+        Usa ? para traer lo �ltimo guardado. � Versi�n {VERSION_APP} - 29/09/2026
+      </footer>
+    </div>
+  );
+}
