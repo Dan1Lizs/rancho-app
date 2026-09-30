@@ -1193,7 +1193,12 @@ export default function App({ onCerrarSesion }) {
     const nuevosRegistros = [...nuevos, ...vigentes.filter(r => !idsReemplazados.has(String(r.id)))]
       .sort((a, b) => aDate(b.fecha) - aDate(a.fecha));
     let nBitacora = bitacora;
-    if (notaDia.trim()) nBitacora = [{ fecha, texto: notaDia.trim(), por: completadoPor }, ...bitacora];
+    const notaNueva = notaDia.trim();
+    const notaPendiente = Boolean(notaNueva && notaSuciaRef.current);
+    const notaDuplicada = notaPendiente && bitacora.some(b => b.fecha === fecha
+      && String(b.texto || "").trim() === notaNueva
+      && String(b.por || "").trim() === String(completadoPor || "").trim());
+    if (notaPendiente && !notaDuplicada) nBitacora = [{ fecha, texto: notaNueva, por: completadoPor }, ...bitacora];
 
     setEstadoSync("Guardando…");
     const ok1 = await escribir(K.registros, nuevosRegistros);
