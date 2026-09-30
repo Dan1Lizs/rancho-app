@@ -49,13 +49,7 @@ function Raiz() {
 
   return (
     <>
-      <Capturador><App /></Capturador>
-      <button
-        onClick={() => supabase.auth.signOut()}
-        title={sesion.user?.email}
-        style={{ position: "fixed", bottom: 12, right: 12, zIndex: 60, padding: "8px 13px", fontSize: 12, fontWeight: 600, background: "rgba(20,67,42,0.9)", color: "#fff", border: "none", borderRadius: 20, cursor: "pointer", fontFamily: "sans-serif" }}>
-        Salir
-      </button>
+      <Capturador><App onCerrarSesion={() => supabase.auth.signOut()} /></Capturador>
     </>
   );
 }
