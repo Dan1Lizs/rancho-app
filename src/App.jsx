@@ -24,6 +24,7 @@ import { baseDeRegistro, registroCambioDesdeBase } from "./concurrencia";
 import { resolverVistaSegura, vistasPermitidas } from "./permisos";
 import { DEFAULT_PREFERENCES, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
+import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAlertas } from "./alertasRevision";
 import "./v10.css";
 
 const PreferenciasView = lazy(() => import("./views/PreferenciasView"));
@@ -558,7 +559,7 @@ export default function App() {
   const [subPedidoMP, setSubPedidoMP] = useState("kardex");
   const [subFormulas, setSubFormulas] = useState("recetas");
   const [subInsumos, setSubInsumos] = useState("catalogo");
-  const [subRevision, setSubRevision] = useState("excepciones");
+  const [subRevision, setSubRevision] = useState("alertas");
   const [subPesaje, setSubPesaje] = useState("resumen");
   const [subHistorial, setSubHistorial] = useState("dia");
   const [subReporte, setSubReporte] = useState("todo");
@@ -2651,8 +2652,8 @@ export default function App() {
 
   // ── Gestión de advertencias (eliminar / modificar con trazabilidad) ──
   const abrirModalAjusteAdv = (item, seccion, accion) => {
-    const advId = `${seccion}:${(item.texto || "").slice(0, 70)}`;
-    const ajExistente = advAjustes.find(a => a.advId === advId);
+    const advId = claveAlerta(item, seccion);
+    const ajExistente = ultimoEventoAlerta(advAjustes, item, seccion);
     setModalAdv({
       advId,
       seccion,
@@ -2660,8 +2661,8 @@ export default function App() {
       item,
       nuevoTexto: ajExistente?.nuevoTexto || item.texto,
       responsable: completadoPor || nombreResponsableSesion(window.__usuarioEmail, nombresUsuarios, window.__usuarioNombre) || ajExistente?.responsable || "",
-      fecha: ajExistente?.fechaISO || hoyISO(),
-      razon: ajExistente?.razon || "",
+      fecha: hoyISO(),
+      razon: "",
     });
   };
 
@@ -2682,8 +2683,11 @@ export default function App() {
       fecha: dmy,
       fechaISO: modalAdv.fecha,
       razon: modalAdv.razon.trim(),
+      registradoEl: new Date().toISOString(),
     };
-    const nuevos = [nuevoAjuste, ...advAjustes.filter(a => a.advId !== modalAdv.advId)];
+    // Se conserva cada acción. La alerta se oculta por su último evento,
+    // pero la bitácora nunca pierde quién la desactivó o modificó.
+    const nuevos = [nuevoAjuste, ...advAjustes];
     if (await escribir(K.advAjustes, nuevos)) {
       setAdvAjustes(nuevos);
       setModalAdv(null);
@@ -2693,8 +2697,22 @@ export default function App() {
     }
   };
 
-  const revertirAjusteAdv = async (ajusteId) => {
-    const nuevos = advAjustes.filter(a => a.id !== ajusteId);
+  const revertirAjusteAdv = async (advId) => {
+    const ultimo = advAjustes.find(a => a.advId === advId);
+    const ahora = new Date().toISOString();
+    const nuevos = [{
+      id: `reactivar-${Date.now()}`,
+      advId,
+      seccion: ultimo?.seccion || "auditoria",
+      accion: "reactivar",
+      textoOriginal: ultimo?.textoOriginal || "Alerta reactivada manualmente",
+      nuevoTexto: null,
+      responsable: completadoPor || nombreResponsableSesion(window.__usuarioEmail, nombresUsuarios, window.__usuarioNombre) || "",
+      fecha: ahora.slice(0, 10).split("-").reverse().join("/"),
+      fechaISO: ahora.slice(0, 10),
+      razon: "Reactivación manual desde el historial de alertas",
+      registradoEl: ahora,
+    }, ...advAjustes];
     if (await escribir(K.advAjustes, nuevos)) {
       setAdvAjustes(nuevos);
       avisar("✓ Advertencia reactivada");
@@ -2703,36 +2721,41 @@ export default function App() {
     }
   };
 
-  const borrarAdvertenciaDescartada = async (ajuste) => {
-    if (ajuste.accion !== "eliminar") return;
-    if (!window.confirm("¿Borrar definitivamente esta entrada del historial? La advertencia seguirá descartada y no se podrá reactivar desde aquí.")) return;
-    const nuevos = advAjustes.filter(a => a.id !== ajuste.id);
-    nuevos.push({ advId: ajuste.advId, seccion: ajuste.seccion, accion: "eliminar_definitivo" });
-    if (await escribir(K.advAjustes, nuevos)) {
-      setAdvAjustes(nuevos);
-      avisar("✓ Entrada borrada del historial; la advertencia permanece descartada");
-    } else {
-      avisar("⚠ No se pudo borrar la entrada");
-    }
-  };
-
   const procesarAdvertencias = (lista, seccion) => {
     return lista.map(item => {
-      const advId = `${seccion}:${(item.texto || "").slice(0, 70)}`;
-      const aj = advAjustes.find(a => a.advId === advId);
-      if (aj && (aj.accion === "eliminar" || aj.accion === "eliminar_definitivo")) return null;
+      const advId = claveAlerta(item, seccion);
+      const evento = ultimoEventoAlerta(advAjustes, item, seccion);
+      if (alertaEstaSuprimida(evento)) return null;
       return {
         ...item,
         advId,
-        textoAjustado: aj?.accion === "modificar" && aj.nuevoTexto ? aj.nuevoTexto : item.texto,
-        ajuste: aj,
+        textoAjustado: evento?.accion === "modificar" && evento.nuevoTexto ? evento.nuevoTexto : item.texto,
+        ajuste: evento,
       };
     }).filter(Boolean);
   };
 
   const decisionesVisibles = procesarAdvertencias(decisiones, "decisiones");
   const auditoriaVisibles = procesarAdvertencias(auditoria, "auditoria");
-  const ajustesAuditoria = advAjustes.filter(a => a.accion !== "eliminar_definitivo");
+  const ajustesAuditoria = ordenarEventosAlertas(advAjustes);
+  const consumoCobertura = (categoria, formula) => categoria === "Aves"
+    ? registros.filter(r => r.formulaConcentrado === formula && fechas.slice(0, 7).includes(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0) / Math.max(1, fechas.slice(0, 7).length)
+    : plantaMovs.filter(m => m.tipo === "servido" && m.formula === formula && [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].sort().reverse().slice(0, 7).includes(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0) / Math.max(1, [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].slice(0, 7).length);
+  const coberturaAlertas = [["Aves", saldosAvesFormula], ["Ganado", saldosGanadoFormula]]
+    .flatMap(([categoria, saldos]) => Object.entries(saldos || {}).flatMap(([formula, kg]) => {
+      if (kg == null || consumoCobertura(categoria, formula) > 0) return [];
+      return [{
+        alertaId: `cobertura:${categoria.toLowerCase()}:${formula.toLowerCase()}:sin-consumo`,
+        nivel: "amarillo",
+        texto: `${categoria} · ${formula}: sin consumo suficiente para estimar la cobertura del inventario.`,
+      }];
+    }));
+  const coberturaVisibles = procesarAdvertencias(coberturaAlertas, "cobertura");
+  const alertasRevision = [
+    ...auditoriaVisibles.map(a => ({ ...a, seccion: "auditoria" })),
+    ...decisionesVisibles.map(a => ({ ...a, seccion: "decisiones" })),
+    ...coberturaVisibles.map(a => ({ ...a, seccion: "cobertura" })),
+  ];
   const mostrarNombre = (valor) => nombreVisible(valor, nombresUsuarios);
   const guardarNombreVisible = async (correo, nombre) => {
     const email = correo.trim().toLowerCase();
@@ -2785,7 +2808,7 @@ export default function App() {
   </label>;
 
   const faltantesCapturaHoy = activos.filter(l => !registros.some(r => r.fecha === hoyStr() && r.lote === l.id)).length;
-  const numAdvertencias = auditoriaVisibles.length;
+  const numAdvertencias = alertasRevision.length;
   const bodegaHoyRegistrada = bodegaMovs.some(m => m.fecha === hoyStr());
   const bodegaHoyCerrada = bodegaMovs.some(m => m.fecha === hoyStr() && m.cierreVerificado);
   const facVencidas = facturasAbiertas.filter(f => diasVence(f) < 0).length;
@@ -2793,7 +2816,7 @@ export default function App() {
 
   const badgePorTab = {
     captura: preferencias.notificaciones.faltantesDiarios ? (faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" }) : null,
-    revision: preferencias.notificaciones.faltantesDiarios && numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: auditoriaVisibles.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} advertencia(s) en auditoría` } : null,
+    revision: preferencias.notificaciones.faltantesDiarios && numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: alertasRevision.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} alerta(s) de gestión` } : null,
     bodega: preferencias.notificaciones.inventarioBajo ? (!bodegaHoyRegistrada ? { texto: "!", tipo: "alerta", titulo: "Bodega sin movimiento de hoy" } : !bodegaHoyCerrada ? { texto: "●", tipo: "aviso", titulo: "Bodega de hoy abierta (sin cierre verificado)" } : { texto: "✓", tipo: "ok", titulo: "Cierre de bodega verificado" }) : null,
     cxp: preferencias.notificaciones.cuentasPorPagar && facVencidas > 0 ? { texto: String(facVencidas), tipo: "alerta", titulo: `${facVencidas} factura(s) vencida(s)` } : null,
     pesaje: preferencias.notificaciones.bienestar && vacsAtrasadas > 0 ? { texto: String(vacsAtrasadas), tipo: "alerta", titulo: `${vacsAtrasadas} vacuna(s) atrasada(s)` } : null,
@@ -3905,6 +3928,7 @@ export default function App() {
           <>
             <BarraSubmenu
               subsecciones={[
+                { id: "alertas", nombre: `Alertas de gestión${numAdvertencias ? ` (${numAdvertencias})` : ""}`, icono: "🚨" },
                 { id: "excepciones", nombre: "Excepciones y alertas", icono: "⚠️" },
                 { id: "cobertura", nombre: "Cobertura concentrado", icono: "⏳" },
                 { id: "conciliacion", nombre: "Conciliación de planta", icono: "⚖️" },
@@ -3914,6 +3938,40 @@ export default function App() {
               activo={subRevision}
               onChange={setSubRevision}
             />
+
+            {(subRevision === "alertas" || subRevision === "todo") && (
+              <Seccion titulo={`Alertas de gestión (${numAdvertencias})`} sub="Aquí aparecen las mismas alertas que explican el número del menú. La X las desactiva con una razón y cada cambio queda en el historial.">
+                {alertasRevision.map((a, i) => (
+                  <div key={`${a.advId}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: a.nivel === "rojo" ? C.alertaSuave : C.yemaSuave, borderRadius: 10, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5 }}>
+                    <div style={{ display: "flex", gap: 8, flex: 1 }}>
+                      <span>{a.nivel === "rojo" ? "🔴" : "🟡"}</span>
+                      <div><b style={{ fontSize: 11, color: C.textoSuave }}>{a.seccion === "cobertura" ? "Cobertura" : a.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}</b><br />{a.textoAjustado || a.texto}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "modificar")} title="Modificar alerta" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
+                      <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "eliminar")} title="Desactivar alerta; quedará en el historial" aria-label="Desactivar alerta" style={{ padding: "4px 8px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
+                    </div>
+                  </div>
+                ))}
+                {!alertasRevision.length && <div style={{ fontSize: 13.5, color: C.verde, fontWeight: 600 }}>✓ No hay alertas activas. Puedes consultar el historial debajo.</div>}
+                {ajustesAuditoria.length > 0 && (
+                  <details style={{ marginTop: 14, padding: "8px 10px", background: C.fondo, borderRadius: 10 }}>
+                    <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: C.texto }}>📋 Historial de alertas activadas, desactivadas y modificadas ({ajustesAuditoria.length})</summary>
+                    <div style={{ marginTop: 8 }}>
+                      {selectorHistorial("advertencias")}
+                      {historialVisible(ajustesAuditoria, "advertencias").map((aj, idx) => {
+                        const ultimo = advAjustes.find(a2 => a2.advId === aj.advId);
+                        const etiqueta = aj.accion === "eliminar" ? "Desactivada" : aj.accion === "reactivar" ? "Reactivada" : aj.accion === "modificar" ? "Modificada" : "Desactivación conservada";
+                        return <div key={aj.id || idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
+                          <div><div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : aj.seccion === "cobertura" ? "Cobertura" : "Auditoría"}:</b> {aj.textoOriginal}</div><div style={{ color: C.textoSuave, marginTop: 2 }}><span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : aj.accion === "reactivar" ? C.verde : C.yema }}>{etiqueta}</span> por <b>{mostrarNombre(aj.responsable)}</b> el {aj.fecha}{aj.razon ? ` — Razón: "${aj.razon}"` : ""}</div>{aj.accion === "modificar" && aj.nuevoTexto && <div style={{ color: C.verde, marginTop: 2 }}><b>Texto ajustado:</b> {aj.nuevoTexto}</div>}</div>
+                          {ultimo?.id === aj.id && alertaEstaSuprimida(aj) && <button onClick={() => revertirAjusteAdv(aj.advId)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.verde, fontWeight: 600, whiteSpace: "nowrap" }}>Reactivar</button>}
+                        </div>;
+                      })}
+                    </div>
+                  </details>
+                )}
+              </Seccion>
+            )}
 
             {(subRevision === "excepciones" || subRevision === "todo") && (
               <Seccion titulo="Excepciones por revisar" sub="Duplicados, controles pendientes, saldos y retiros activos; se actualiza con los datos cargados">
@@ -3936,10 +3994,12 @@ export default function App() {
                   <div key={categoria} style={{ marginBottom: 12 }}>
                     <b>{categoria}</b>
                     {saldos ? Object.entries(saldos).map(([formula, kg]) => {
-                      const consumo = categoria === "Aves" ? registros.filter(r => r.formulaConcentrado === formula && fechas.slice(0, 7).includes(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0) / Math.max(1, fechas.slice(0, 7).length) : plantaMovs.filter(m => m.tipo === "servido" && m.formula === formula && [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].sort().reverse().slice(0, 7).includes(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0) / Math.max(1, [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].slice(0, 7).length);
+                      const consumo = consumoCobertura(categoria, formula);
+                      const alerta = coberturaVisibles.find(a => a.alertaId === `cobertura:${categoria.toLowerCase()}:${formula.toLowerCase()}:sin-consumo`);
                       return (
                         <div key={formula} style={{ padding: 7, borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
-                          {formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : "sin consumo suficiente para estimar"}`}
+                          <div>{formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : alerta ? "sin consumo suficiente para estimar" : "cobertura no estimada"}`}</div>
+                          {alerta && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 5, color: C.yema, fontSize: 12 }}><span>⚠ {alerta.texto}</span><button onClick={() => abrirModalAjusteAdv(alerta, "cobertura", "eliminar")} title="Desactivar esta alerta" aria-label={`Desactivar alerta de ${formula}`} style={{ padding: "2px 7px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button></div>}
                         </div>
                       );
                     }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por fórmula.</p>}
@@ -5698,30 +5758,23 @@ export default function App() {
                 {idsPermitidos.includes("historial") && ajustesAuditoria.length > 0 && (
                   <details style={{ marginTop: 12, padding: "8px 10px", background: C.fondo, borderRadius: 10 }}>
                     <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: C.texto }}>
-                      📋 Historial de advertencias gestionadas / descartadas ({ajustesAuditoria.length})
+                      📋 Historial de alertas activadas, desactivadas y modificadas ({ajustesAuditoria.length})
                     </summary>
                     <div style={{ marginTop: 8 }}>
                       {selectorHistorial("advertencias")}
                       {historialVisible(ajustesAuditoria, "advertencias").map((aj, idx) => (
                         <div key={aj.id || idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
                           <div>
-                            <div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}:</b> {aj.textoOriginal}</div>
+                            <div><b>{aj.seccion === "decisiones" ? "Para decidir hoy" : aj.seccion === "cobertura" ? "Cobertura" : "Auditoría"}:</b> {aj.textoOriginal}</div>
                             <div style={{ color: C.textoSuave, marginTop: 2 }}>
-                              <span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : "#9A6605" }}>{aj.accion === "eliminar" ? "Descartada" : "Modificada"}</span> por <b>{mostrarNombre(aj.responsable)}</b> el {aj.fecha}
+                              <span style={{ fontWeight: 600, color: aj.accion === "eliminar" ? C.alerta : aj.accion === "reactivar" ? C.verde : C.yema }}>{aj.accion === "eliminar" ? "Desactivada" : aj.accion === "reactivar" ? "Reactivada" : aj.accion === "modificar" ? "Modificada" : "Desactivación conservada"}</span> por <b>{mostrarNombre(aj.responsable)}</b> el {aj.fecha}
                               {aj.razon ? ` — Razón: "${aj.razon}"` : ""}
                             </div>
                             {aj.accion === "modificar" && aj.nuevoTexto && (
                               <div style={{ color: C.verde, marginTop: 2 }}><b>Texto ajustado:</b> {aj.nuevoTexto}</div>
                             )}
                           </div>
-                          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                            <button onClick={() => revertirAjusteAdv(aj.id)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.verde, fontWeight: 600, whiteSpace: "nowrap" }}>
-                              Reactivar
-                            </button>
-                            {aj.accion === "eliminar" && <button onClick={() => borrarAdvertenciaDescartada(aj)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.alerta, fontWeight: 600, whiteSpace: "nowrap" }}>
-                              Borrar
-                            </button>}
-                          </div>
+                          {advAjustes.find(a2 => a2.advId === aj.advId)?.id === aj.id && alertaEstaSuprimida(aj) && <button onClick={() => revertirAjusteAdv(aj.advId)} style={{ padding: "4px 8px", fontSize: 11, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", color: C.verde, fontWeight: 600, whiteSpace: "nowrap" }}>Reactivar</button>}
                         </div>
                       ))}
                     </div>
@@ -7578,3 +7631,4 @@ export default function App() {
     </div>
   );
 }
+
