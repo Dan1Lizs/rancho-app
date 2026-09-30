@@ -748,6 +748,8 @@ export default function App() {
   const [mpHistorialAbierto, setMpHistorialAbierto] = useState(false);
   const [mpHistorialDetalle, setMpHistorialDetalle] = useState(null);
   const [mpHistorialEdicion, setMpHistorialEdicion] = useState({});
+  const [mpHistorialFechaEditada, setMpHistorialFechaEditada] = useState("");
+  const [mpHistorialResponsableEditado, setMpHistorialResponsableEditado] = useState("");
   const [mpHistorialEditando, setMpHistorialEditando] = useState(false);
   const [mpLimpiarPendiente, setMpLimpiarPendiente] = useState(false);
   const [mpBorradorConsulta, setMpBorradorConsulta] = useState(null);
@@ -2164,12 +2166,16 @@ export default function App() {
     const items = Object.fromEntries(Object.entries(registro?.items || {}).map(([codigo, valores]) => [codigo, { ...valores }]));
     setMpHistorialDetalle(registro);
     setMpHistorialEdicion(items);
+    setMpHistorialFechaEditada(registro?.fecha || "");
+    setMpHistorialResponsableEditado(registro?.responsable || "");
     setMpHistorialEditando(false);
   };
 
   const cerrarDetalleHistorialMP = () => {
     setMpHistorialDetalle(null);
     setMpHistorialEdicion({});
+    setMpHistorialFechaEditada("");
+    setMpHistorialResponsableEditado("");
     setMpHistorialEditando(false);
   };
 
@@ -2177,8 +2183,10 @@ export default function App() {
     if (!mpHistorialDetalle) return;
     const items = Object.fromEntries(Object.entries(mpHistorialEdicion || {}).filter(([, v]) => (v?.sacos ?? "") !== "" || (v?.kg ?? "") !== ""));
     if (!Object.keys(items).length) { avisar("⚠ El conteo debe conservar al menos un dato"); return; }
+    const fecha = String(mpHistorialFechaEditada || mpHistorialDetalle.fecha || "").trim();
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) { avisar("⚠ La fecha debe tener el formato dd/mm/aaaa"); return; }
     setGuardando(true);
-    const actualizado = { ...mpHistorialDetalle, items, editadoEl: new Date().toISOString(), editadoPor: window.__usuarioEmail || completadoPor || "Sin indicar" };
+    const actualizado = { ...mpHistorialDetalle, fecha, responsable: String(mpHistorialResponsableEditado || "").trim(), items, editadoEl: new Date().toISOString(), editadoPor: window.__usuarioEmail || completadoPor || "Sin indicar" };
     const nuevoHist = ordenarPorFecha(mpInvHist.map(x => String(x.id) === String(mpHistorialDetalle.id) ? actualizado : x));
     const okHist = await escribir(K.mpInvHist, nuevoHist);
     if (okHist) {
@@ -3938,7 +3946,7 @@ export default function App() {
         pie={
           mpHistorialEditando ? (
             <>
-              <button type="button" disabled={guardando} onClick={() => { setMpHistorialEditando(false); setMpHistorialEdicion(Object.fromEntries(Object.entries(mpHistorialDetalle?.items || {}).map(([codigo, valores]) => [codigo, { ...valores }]))); }} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Cancelar edición</button>
+              <button type="button" disabled={guardando} onClick={() => { setMpHistorialEditando(false); setMpHistorialEdicion(Object.fromEntries(Object.entries(mpHistorialDetalle?.items || {}).map(([codigo, valores]) => [codigo, { ...valores }]))); setMpHistorialFechaEditada(mpHistorialDetalle?.fecha || ""); setMpHistorialResponsableEditado(mpHistorialDetalle?.responsable || ""); }} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Cancelar edición</button>
               <button type="button" disabled={guardando} onClick={guardarEdicionHistorialMP} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>{guardando ? "Guardando…" : "Guardar corrección"}</button>
             </>
           ) : (
@@ -3959,8 +3967,13 @@ export default function App() {
                 <div style={{ fontWeight: 700, fontSize: 13, marginTop: 5 }}>TOMA DE INVENTARIO FÍSICO — MATERIA PRIMA</div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12, fontSize: 13 }}>
-                <div><b>Fecha del conteo:</b> {mpHistorialDetalle.fecha || "—"}</div>
-                <div><b>Responsable del conteo:</b> {mpHistorialDetalle.responsable || "—"}</div>
+                {mpHistorialEditando ? <>
+                  <label style={{ display: "block" }}><b>Fecha del conteo:</b><input type="date" value={mpHistorialFechaEditada ? fechaHistorialISO(mpHistorialFechaEditada) : ""} onChange={e => setMpHistorialFechaEditada(e.target.value ? e.target.value.split("-").reverse().join("/") : "")} style={{ ...inputStyle, marginTop: 4, padding: "7px 9px", fontSize: 13 }} /></label>
+                  <label style={{ display: "block" }}><b>Responsable del conteo:</b><input type="text" value={mpHistorialResponsableEditado} onChange={e => setMpHistorialResponsableEditado(e.target.value)} style={{ ...inputStyle, marginTop: 4, padding: "7px 9px", fontSize: 13 }} /></label>
+                </> : <>
+                  <div><b>Fecha del conteo:</b> {mpHistorialDetalle.fecha || "—"}</div>
+                  <div><b>Responsable del conteo:</b> {mpHistorialDetalle.responsable || "—"}</div>
+                </>}
               </div>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", minWidth: 690, borderCollapse: "collapse", fontSize: 12.5 }}>
