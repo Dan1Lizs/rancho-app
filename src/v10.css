@@ -259,7 +259,7 @@
   color: #fff !important;
   border-color: #b9f5c8 !important;
 }
-.app-v10.v10-theme-contraste [style*="background: var(--v10-green"] {
+.app-v10.v10-theme-contraste [style*="background: var(--v10-green,"] {
   background: #43d66b !important;
   color: #000 !important;
   border-color: #43d66b !important;
