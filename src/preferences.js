@@ -61,4 +61,8 @@ export function ordenarPorPreferencia(items, orden = []) {
   });
 }
 
+export function completarOrdenNavegacion(items, orden = []) {
+  const ids = new Set(items.map(item => item.id));
+  return [...new Set([...(Array.isArray(orden) ? orden : []).filter(id => ids.has(id)), ...items.map(item => item.id)])];
+}
 
