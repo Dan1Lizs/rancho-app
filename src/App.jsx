@@ -533,6 +533,9 @@ export default function App({ onCerrarSesion }) {
   const [necropsias, setNecropsias] = useState([]);
   const [planVac, setPlanVac] = useState([]);
   const [bitacora, setBitacora] = useState([]);
+  const [filtroFechaBitacora, setFiltroFechaBitacora] = useState("");
+  const [modalBitacora, setModalBitacora] = useState(null);
+  const [guardandoBitacora, setGuardandoBitacora] = useState(false);
   const [costos, setCostos] = useState(SEED_COSTOS);
   const [guardado, setGuardado] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -3078,6 +3081,94 @@ export default function App({ onCerrarSesion }) {
   const facVencidas = facturasAbiertas.filter(f => diasVence(f) < 0).length;
   const vacsAtrasadas = activos.reduce((acc, l) => acc + planVac.filter(p => estadoVacunaLote(l, p).estado === "atrasada").length, 0);
 
+  const puedeGestionarBitacora = esAdmin || miRol === "admin" || miRol === "encargado";
+  const fechaBitacoraISO = (fecha) => {
+    const valor = String(fecha || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(valor)) return valor.slice(0, 10);
+    const partes = valor.split("/");
+    if (partes.length === 3 && partes.every(Boolean)) return partes[2] + "-" + partes[1].padStart(2, "0") + "-" + partes[0].padStart(2, "0");
+    return "";
+  };
+  const fechaBitacoraDMY = (fecha) => {
+    const iso = fechaBitacoraISO(fecha);
+    return iso ? iso.split("-").reverse().join("/") : String(fecha || "");
+  };
+  const prepararModalBitacora = (nota, accion) => {
+    if (!puedeGestionarBitacora) { avisar("⚠ Solo administradores y encargados pueden corregir la bitácora"); return; }
+    if (!nota || nota.id == null || String(nota.id).trim() === "") { avisar("⚠ No se pudo identificar esta nota. Recarga la bitácora e inténtalo otra vez"); return; }
+    setModalBitacora({ accion, id: String(nota.id), fecha: fechaBitacoraISO(nota.fecha), texto: String(nota.texto || ""), por: String(nota.por || ""), motivo: "" });
+  };
+  const guardarModalBitacora = async () => {
+    if (!modalBitacora || guardandoBitacora) return;
+    if (!puedeGestionarBitacora) { avisar("⚠ No tienes permiso para cambiar la bitácora"); setModalBitacora(null); return; }
+    const nota = bitacora.find(n => String(n.id) === String(modalBitacora.id));
+    if (!nota) { avisar("⚠ La nota ya no está disponible; actualizando la bitácora"); setModalBitacora(null); return; }
+    if (nota.eliminada) { avisar("⚠ Esta nota ya está anulada. Puedes restaurarla desde el historial"); setModalBitacora(null); return; }
+    const motivo = String(modalBitacora.motivo || "").trim();
+    if (!motivo) { avisar("⚠ Indica el motivo del cambio"); return; }
+    const esEdicion = modalBitacora.accion === "editar";
+    const fechaISO = esEdicion ? fechaBitacoraISO(modalBitacora.fecha) : fechaBitacoraISO(nota.fecha);
+    const texto = esEdicion ? String(modalBitacora.texto || "").trim() : String(nota.texto || "");
+    const por = esEdicion ? String(modalBitacora.por || "").trim() : String(nota.por || "");
+    if (esEdicion && (!fechaISO || !texto)) { avisar("⚠ La fecha y el texto de la nota son obligatorios"); return; }
+    const fecha = fechaBitacoraDMY(fechaISO);
+    const momento = new Date().toISOString();
+    const actor = window.__usuarioEmail || window.__usuarioNombre || completadoPor || "Sin identificar";
+    const anterior = { fecha: nota.fecha, texto: nota.texto || "", por: nota.por || "" };
+    const nuevo = esEdicion ? { fecha, texto, por } : null;
+    const evento = { accion: esEdicion ? "edicion" : "eliminacion", fechaHora: momento, por: actor, motivo, anterior, ...(nuevo ? { nuevo } : {}) };
+    const actualizada = esEdicion
+      ? { ...nota, fecha, texto, por, ultimaEdicion: momento, editadaPor: actor, historialCambios: [...(Array.isArray(nota.historialCambios) ? nota.historialCambios : []), evento] }
+      : { ...nota, eliminada: true, eliminadaEl: momento, eliminadaPor: actor, motivoEliminacion: motivo, historialCambios: [...(Array.isArray(nota.historialCambios) ? nota.historialCambios : []), evento] };
+    const nuevos = bitacora.map(n => String(n.id) === String(nota.id) ? actualizada : n);
+    setGuardandoBitacora(true);
+    try {
+      if (await escribir(K.bitacora, nuevos)) {
+        setBitacora(ordenarPorFecha(nuevos));
+        if (esEdicion) setFiltroFechaBitacora(fechaISO);
+        setModalBitacora(null);
+        avisar(esEdicion ? "✓ Corrección guardada; el cambio quedó en el historial" : "✓ Nota retirada del reporte; se conservó en el historial");
+      } else {
+        const remoto = await leer(K.bitacora, null);
+        if (Array.isArray(remoto)) setBitacora(ordenarPorFecha(remoto));
+        avisar("⚠ La nota cambió en otro dispositivo o no hubo conexión. Se actualizó la bitácora; revisa e inténtalo otra vez");
+      }
+    } catch (error) {
+      console.error("Guardar cambio de bitácora:", error);
+      avisar("⚠ No se pudo guardar el cambio de bitácora");
+    } finally {
+      setGuardandoBitacora(false);
+    }
+  };
+  const restaurarNotaBitacora = async (nota) => {
+    if (!puedeGestionarBitacora || guardandoBitacora || !nota?.eliminada) return;
+    if (!window.confirm("¿Restaurar esta nota? Volverá a aparecer en el reporte y se registrará la restauración.")) return;
+    const actual = bitacora.find(n => String(n.id) === String(nota.id));
+    if (!actual) { avisar("⚠ La nota ya no está disponible; actualizando la bitácora"); return; }
+    const momento = new Date().toISOString();
+    const actor = window.__usuarioEmail || window.__usuarioNombre || completadoPor || "Sin identificar";
+    const evento = { accion: "restauracion", fechaHora: momento, por: actor, motivo: "Restaurada desde el reporte de bitácora", anterior: { eliminada: true }, nuevo: { eliminada: false } };
+    const restaurada = { ...actual, eliminada: false, eliminadaEl: null, eliminadaPor: null, motivoEliminacion: null, historialCambios: [...(Array.isArray(actual.historialCambios) ? actual.historialCambios : []), evento] };
+    const nuevos = bitacora.map(n => String(n.id) === String(actual.id) ? restaurada : n);
+    setGuardandoBitacora(true);
+    try {
+      if (await escribir(K.bitacora, nuevos)) {
+        setBitacora(ordenarPorFecha(nuevos));
+        setFiltroFechaBitacora(fechaBitacoraISO(actual.fecha));
+        avisar("✓ Nota restaurada; la acción quedó en el historial");
+      } else {
+        const remoto = await leer(K.bitacora, null);
+        if (Array.isArray(remoto)) setBitacora(ordenarPorFecha(remoto));
+        avisar("⚠ La nota cambió en otro dispositivo o no hubo conexión. Se actualizó la bitácora");
+      }
+    } catch (error) {
+      console.error("Restaurar nota de bitácora:", error);
+      avisar("⚠ No se pudo restaurar la nota");
+    } finally {
+      setGuardandoBitacora(false);
+    }
+  };
+
   const badgePorTab = {
     captura: preferencias.notificaciones.faltantesDiarios ? (faltantesCapturaHoy > 0 ? { texto: String(faltantesCapturaHoy), tipo: "alerta", titulo: `${faltantesCapturaHoy} gallinero(s) sin registro hoy` } : { texto: "✓", tipo: "ok", titulo: "Control de hoy completo" }) : null,
     revision: preferencias.notificaciones.faltantesDiarios && numAdvertencias > 0 ? { texto: String(numAdvertencias), tipo: alertasRevision.some(a => a.nivel === "rojo") ? "alerta" : "aviso", titulo: `${numAdvertencias} alerta(s) de gestión` } : null,
@@ -3120,7 +3211,7 @@ export default function App({ onCerrarSesion }) {
           {printDoc.tipo === "pesajes" && "Reporte de pesaje corporal — todos los gallineros"}
           {printDoc.tipo === "lotes" && "Estado de lotes — inventario y desempeño de parvadas"}
           {printDoc.tipo === "bodega" && (printDoc.movimientoId ? "Historial de bodega de huevo" : "Movimiento de bodega de huevo")}
-          {printDoc.tipo === "reporte" && `${({ todo: "Reporte gerencial completo", resumen: "Resumen del día", comparativo: "Comparativo y genética", decisiones: "Decisiones", bitacora: "Bitácora", auditoria: "Auditoría de gestión", kpis: "KPIs técnicos", economia: "Economía" })[printDoc.seccion || "todo"] || "Reporte gerencial"} — ${hoyStr()}`}
+          {printDoc.tipo === "reporte" && (({ todo: "Reporte gerencial completo", resumen: "Resumen del día", comparativo: "Comparativo y genética", decisiones: "Decisiones", bitacora: "Bitácora", auditoria: "Auditoría de gestión", kpis: "KPIs técnicos", economia: "Economía" })[printDoc.seccion || "todo"] || "Reporte gerencial") + " — " + (printDoc.seccion === "bitacora" ? fechaBitacoraDMY(printDoc.fechaBitacora || (fHoy ? fechaBitacoraISO(fHoy) : hoyISO())) : (fHoy || hoyStr()))}
           {printDoc.tipo === "bache" && `Checklist de producción de concentrado — ${printDoc.formula}`}
           {printDoc.tipo === "controldiario" && `Reporte diario de operación — ${printDoc.fecha}`}
           {printDoc.tipo === "cxp" && `Estado de Cuentas por Pagar — al ${hoyStr()}`}
@@ -3365,7 +3456,9 @@ export default function App({ onCerrarSesion }) {
           const colorNivel = { rojo: "#B3402A", amarillo: "#9A6605" };
           const seccion = printDoc.seccion || "todo";
           const incluye = (...ids) => seccion === "todo" || ids.includes(seccion);
-          const notasHoy = bitacora.filter(b => b.fecha === fHoy);
+          const fechaISOBitacoraImpresion = seccion === "bitacora" ? (printDoc.fechaBitacora || (fHoy ? fechaBitacoraISO(fHoy) : hoyISO())) : (fHoy ? fechaBitacoraISO(fHoy) : hoyISO());
+          const fechaDMYBitacoraImpresion = fechaBitacoraDMY(fechaISOBitacoraImpresion);
+          const notasHoy = bitacora.filter(b => !b.eliminada && fechaBitacoraDMY(b.fecha) === fechaDMYBitacoraImpresion);
           const filasComparativo = dHoy ? [
             ["Producción", dHoy.cartones, dAyer?.cartones, dFechaCercana?.cartones, " cart"],
             ["% Postura", dHoy.postura, dAyer?.postura, dFechaCercana?.postura, "%"],
@@ -3452,7 +3545,7 @@ export default function App({ onCerrarSesion }) {
                   {d.ajuste && <span style={{ fontSize: 10.5, color: "#666", marginLeft: 6 }}>[Modificado por {mostrarNombre(d.ajuste.responsable)}: {d.ajuste.razon}]</span>}
                 </div>
               ))}</>}
-              {incluye("bitacora") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Bitácora del día</div>{notasHoy.length ? notasHoy.map((n, i) => <div key={i} style={{ fontSize: 12.5, padding: "7px 0", borderBottom: "1px solid #ddd" }}>{n.texto}{n.por ? ` — ${mostrarNombre(n.por)}` : ""}</div>) : <div style={{ fontSize: 12.5 }}>Sin novedades registradas.</div>}</>}
+              {incluye("bitacora") && <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Bitácora del día ({fechaDMYBitacoraImpresion})</div>{notasHoy.length ? notasHoy.map((n, i) => <div key={n.id || i} style={{ fontSize: 12.5, padding: "7px 0", borderBottom: "1px solid #ddd" }}>{n.texto}{n.por ? ` — ${mostrarNombre(n.por)}` : ""}</div>) : <div style={{ fontSize: 12.5 }}>Sin novedades registradas.</div>}</>}
               {incluye("economia") && (() => {
                 const precioCarton = Number(costos._precioVenta || 0);
                 const registrosDia = ultDia ? registros.filter(r => r.fecha === ultDia) : [];
@@ -4095,6 +4188,43 @@ export default function App({ onCerrarSesion }) {
         {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => (
           <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>⚠ {a}</div>
         ))}
+      </ModalDialog>
+      <ModalDialog
+        abierto={!!modalBitacora}
+        titulo={modalBitacora?.accion === "eliminar" ? "Eliminar nota de bitácora" : "Corregir nota de bitácora"}
+        subtitulo="Los cambios quedan registrados para revisar quién corrigió o retiró la nota."
+        onClose={() => { if (!guardandoBitacora) setModalBitacora(null); }}
+        ancho={560}
+        tono={modalBitacora?.accion === "eliminar" ? "alerta" : undefined}
+        pie={
+          <>
+            <button type="button" disabled={guardandoBitacora} onClick={() => setModalBitacora(null)} style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid " + C.borde, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>
+              Cancelar
+            </button>
+            <button type="button" disabled={guardandoBitacora || !String(modalBitacora?.motivo || "").trim() || (modalBitacora?.accion === "editar" && !String(modalBitacora?.texto || "").trim())} onClick={guardarModalBitacora} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0, background: modalBitacora?.accion === "eliminar" ? C.alerta : C.verde }}>
+              {guardandoBitacora ? "Guardando…" : modalBitacora?.accion === "eliminar" ? "Eliminar nota" : "Guardar corrección"}
+            </button>
+          </>
+        }
+      >
+        {modalBitacora && <>
+          <div style={{ fontSize: 12.5, color: C.textoSuave, whiteSpace: "pre-wrap", marginBottom: 12, padding: "9px 11px", borderRadius: 8, background: C.fondo }}>{modalBitacora.texto}</div>
+          {modalBitacora.accion === "editar" && <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+            <label style={{ flex: "1 1 150px", fontSize: 12.5, fontWeight: 600 }}>Fecha
+              <input type="date" value={modalBitacora.fecha} onChange={e => setModalBitacora(v => ({ ...v, fecha: e.target.value }))} style={{ ...inputStyle, display: "block", marginTop: 5 }} />
+            </label>
+            <label style={{ flex: "1 1 180px", fontSize: 12.5, fontWeight: 600 }}>Responsable
+              <input type="text" value={modalBitacora.por} onChange={e => setModalBitacora(v => ({ ...v, por: e.target.value }))} style={{ ...inputStyle, display: "block", marginTop: 5 }} />
+            </label>
+            <label style={{ flex: "1 1 100%", fontSize: 12.5, fontWeight: 600 }}>Texto de la nota
+              <textarea rows={4} value={modalBitacora.texto} onChange={e => setModalBitacora(v => ({ ...v, texto: e.target.value }))} style={{ ...inputStyle, display: "block", marginTop: 5, resize: "vertical" }} />
+            </label>
+          </div>}
+          <label style={{ display: "block", marginTop: 12, fontSize: 12.5, fontWeight: 600 }}>Motivo obligatorio
+            <textarea rows={2} value={modalBitacora.motivo} onChange={e => setModalBitacora(v => ({ ...v, motivo: e.target.value }))} placeholder="Por ejemplo: corregir duplicado del mismo día" style={{ ...inputStyle, display: "block", marginTop: 5, resize: "vertical" }} />
+          </label>
+          {modalBitacora.accion === "eliminar" && <p style={{ fontSize: 11.5, color: C.textoSuave, marginBottom: 0 }}>La nota dejará de aparecer en el reporte, pero quedará en “Notas retiradas” para consultarla o restaurarla.</p>}
+        </>}
       </ModalDialog>
       {modalAdv && (
         <div onClick={() => setModalAdv(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 99, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -4915,7 +5045,7 @@ export default function App({ onCerrarSesion }) {
               activo={subReporte}
               onChange={setSubReporte}
             />
-            <button onClick={() => setPrintDoc({ tipo: "reporte", seccion: subReporte })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir: {nombreSeccionReporte}</button>
+            <button onClick={() => setPrintDoc({ tipo: "reporte", seccion: subReporte, ...(subReporte === "bitacora" ? { fechaBitacora: filtroFechaBitacora || (fHoy ? fechaBitacoraISO(fHoy) : hoyISO()) } : {}) })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir: {nombreSeccionReporte}</button>
           </>
         )}
         {vista === "reporte" && dHoy && (() => {
@@ -4937,7 +5067,6 @@ export default function App({ onCerrarSesion }) {
             { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dFechaCercana?.pesoH, hoy: dHoy.pesoH, u: " g" },
           ];
           const brechaGen = metaGenetica == null ? null : metaGenetica - dHoy.postura;
-          const notasHoy = bitacora.filter(b => b.fecha === fHoy);
           return (
             <>
               {verReporte("resumen") && <div style={{ background: C.verde, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 14 }}>
@@ -5046,17 +5175,67 @@ export default function App({ onCerrarSesion }) {
                 ))}
               </Seccion>}
 
-              {verReporte("bitacora") && notasHoy.length > 0 && (
-                <Seccion titulo="Bitácora del día">
-                  {notasHoy.map((n, i) => (
-                    <div key={i} style={{ fontSize: 13.5, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, lineHeight: 1.5 }}>
-                      {n.texto}{n.por && <span style={{ color: C.textoSuave }}> — {mostrarNombre(n.por)}</span>}
-                    </div>
-                  ))}
-                </Seccion>
-              )}
-              {verReporte("bitacora") && notasHoy.length === 0 && <Seccion titulo="Bitácora del día"><div style={{ fontSize: 13.5, color: C.textoSuave }}>Sin novedades registradas para esta fecha.</div></Seccion>}
             </>
+          );
+        })()}
+        {vista === "reporte" && verReporte("bitacora") && (() => {
+          const fechaISO = filtroFechaBitacora || (fHoy ? fechaBitacoraISO(fHoy) : hoyISO());
+          const fechaDMY = fechaBitacoraDMY(fechaISO);
+          const mismaFecha = n => fechaBitacoraISO(n.fecha) === fechaISO;
+          const notasDia = bitacora.filter(n => mismaFecha(n) && !n.eliminada);
+          const notasAnuladasDia = bitacora.filter(n => mismaFecha(n) && n.eliminada);
+          const normalizarTextoBitacora = n => String(n.texto || "").trim().replace(/\s+/g, " ").toLowerCase();
+          const frecuenciasTextoBitacora = notasDia.reduce((acum, n) => {
+            const texto = normalizarTextoBitacora(n);
+            if (texto) acum.set(texto, (acum.get(texto) || 0) + 1);
+            return acum;
+          }, new Map());
+          const cantidadTextoRepetido = notasDia.filter(n => frecuenciasTextoBitacora.get(normalizarTextoBitacora(n)) > 1).length;
+          return (
+            <Seccion titulo={"Bitácora · " + fechaDMY} sub={puedeGestionarBitacora ? "Corrige notas o retira duplicados. Las correcciones quedan auditadas y las eliminaciones se pueden restaurar." : "Consulta de novedades registradas para esta fecha."}>
+              <label style={{ display: "block", maxWidth: 240, marginBottom: 12, fontSize: 12.5, fontWeight: 600 }}>
+                Fecha de la bitácora
+                <input type="date" value={fechaISO} onChange={e => setFiltroFechaBitacora(e.target.value)} style={{ ...inputStyle, display: "block", marginTop: 5 }} />
+              </label>
+              {cantidadTextoRepetido > 0 && <div role="status" style={{ padding: "9px 11px", marginBottom: 10, borderRadius: 9, background: C.yemaSuave, color: C.texto, border: "1px solid " + C.yema, fontSize: 12.5 }}>
+                ⚠️ Hay <b>{cantidadTextoRepetido}</b> entradas con texto repetido en esta fecha. Revisa cada registro antes de eliminarlo; se gestionan de forma individual.
+              </div>}
+              {notasDia.length === 0 && <div style={{ fontSize: 13.5, color: C.textoSuave }}>No hay novedades activas para esta fecha.</div>}
+              {notasDia.map((n, i) => (
+                <div key={n.id || i} style={{ padding: "10px 12px", background: C.fondo, border: "1px solid " + C.borde, borderRadius: 10, marginBottom: 8, lineHeight: 1.5 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap" }}>{n.texto}</div>
+                      <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 4 }}>{mostrarNombre(n.por || "Sin responsable")} · {fechaBitacoraDMY(n.fecha)}</div>
+                    </div>
+                    {puedeGestionarBitacora && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button type="button" disabled={guardandoBitacora} onClick={() => prepararModalBitacora(n, "editar")} aria-label={"Editar nota " + (i + 1)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid " + C.borde, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>✏️ Editar</button>
+                      <button type="button" disabled={guardandoBitacora} onClick={() => prepararModalBitacora(n, "eliminar")} aria-label={"Eliminar nota " + (i + 1)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid " + C.alerta, background: C.alertaSuave, color: C.alerta, cursor: "pointer", fontWeight: 700 }}>Eliminar</button>
+                    </div>}
+                  </div>
+                  {Array.isArray(n.historialCambios) && n.historialCambios.length > 0 && <details style={{ marginTop: 8, fontSize: 11.5, color: C.textoSuave }}>
+                    <summary>Historial de cambios ({n.historialCambios.length})</summary>
+                    {n.historialCambios.map((c, j) => <div key={j} style={{ padding: "6px 0", borderTop: "1px solid " + C.borde }}>
+                      <b>{c.accion === "edicion" ? "Corregida" : c.accion === "eliminacion" ? "Retirada" : "Restaurada"}</b>
+                      {c.fechaHora ? " · " + new Date(c.fechaHora).toLocaleString() : ""}
+                      {c.por ? " · " + mostrarNombre(c.por) : ""}
+                      {c.motivo ? <div>Motivo: {c.motivo}</div> : null}
+                      {c.anterior && <div>Antes: {c.anterior.fecha} · {c.anterior.texto}</div>}
+                      {c.nuevo && <div>Después: {c.nuevo.fecha} · {c.nuevo.texto}</div>}
+                    </div>)}
+                  </details>}
+                </div>
+              ))}
+              {puedeGestionarBitacora && <details style={{ marginTop: 8, borderTop: "1px solid " + C.borde, paddingTop: 9 }}>
+                <summary style={{ cursor: "pointer", fontWeight: 600 }}>Notas retiradas / anuladas ({notasAnuladasDia.length})</summary>
+                {notasAnuladasDia.length === 0 && <div style={{ padding: "8px 0", fontSize: 12, color: C.textoSuave }}>No hay notas anuladas para esta fecha.</div>}
+                {notasAnuladasDia.map((n, i) => <div key={n.id || i} style={{ padding: "9px 0", borderBottom: "1px solid " + C.borde, fontSize: 12.5 }}>
+                  <div style={{ whiteSpace: "pre-wrap" }}><s>{n.texto}</s></div>
+                  <div style={{ color: C.textoSuave, margin: "4px 0" }}>Eliminada por {mostrarNombre(n.eliminadaPor || "Sin identificar")}{n.motivoEliminacion ? " · Motivo: " + n.motivoEliminacion : ""}</div>
+                  <button type="button" disabled={guardandoBitacora} onClick={() => restaurarNotaBitacora(n)} style={{ padding: "6px 9px", borderRadius: 8, border: "1px solid " + C.borde, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Restaurar</button>
+                </div>)}
+              </details>}
+            </Seccion>
           );
         })()}
         {vista === "reporte" && !dHoy && verReporte("resumen", "comparativo", "decisiones", "bitacora") && (
