@@ -10,6 +10,7 @@ const C = {
 export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 560, pie = null, tono = "normal" }) {
   const dialogoRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const inicioEnFondoRef = useRef(false);
   onCloseRef.current = onClose;
 
   useEffect(() => {
@@ -32,7 +33,19 @@ export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, anc
   if (!abierto) return null;
 
   return (
-    <div className="v10-modal-backdrop" role="presentation" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(20, 30, 24, 0.65)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)", display: "grid", placeItems: "center", padding: 16, overflowY: "auto" }}>
+    <div
+      className="v10-modal-backdrop"
+      role="presentation"
+      onPointerDown={(evento) => {
+        inicioEnFondoRef.current = evento.button === 0 && evento.target === evento.currentTarget;
+      }}
+      onPointerCancel={() => { inicioEnFondoRef.current = false; }}
+      onClick={(evento) => {
+        const inicioEnFondo = inicioEnFondoRef.current;
+        inicioEnFondoRef.current = false;
+        if (inicioEnFondo && evento.target === evento.currentTarget) onClose?.();
+      }}
+      style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(20, 30, 24, 0.65)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)", display: "grid", placeItems: "center", padding: 16, overflowY: "auto" }}>
       <div ref={dialogoRef} tabIndex={-1} className="v10-modal-box" role="dialog" aria-modal="true" aria-label={titulo || "Diálogo"} onClick={(evento) => evento.stopPropagation()} style={{ background: C.superficie, borderRadius: 18, border: `1px solid ${tono === "alerta" ? C.alerta : C.borde}`, boxShadow: "0 14px 38px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.12)", width: "100%", maxWidth: ancho, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "18px 20px 14px", borderBottom: `1px solid ${C.borde}`, background: tono === "alerta" ? C.alertaSuave : C.superficie }}>
           <div>
