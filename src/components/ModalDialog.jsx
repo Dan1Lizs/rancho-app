@@ -9,6 +9,8 @@ const C = {
 
 export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, ancho = 560, pie = null, tono = "normal" }) {
   const dialogoRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!abierto) return undefined;
@@ -17,7 +19,7 @@ export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, anc
     const alTeclear = (evento) => {
       if (evento.key === "Escape") {
         evento.stopPropagation();
-        onClose?.();
+        onCloseRef.current?.();
       }
     };
     window.addEventListener("keydown", alTeclear);
@@ -25,7 +27,7 @@ export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, anc
       window.removeEventListener("keydown", alTeclear);
       focoPrevio?.focus?.();
     };
-  }, [abierto, onClose]);
+  }, [abierto]);
 
   if (!abierto) return null;
 
