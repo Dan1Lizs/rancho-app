@@ -165,7 +165,7 @@ export function ControlDiarioOperaciones({
   });
   const bachesDia = movimientosPlanta.filter((m) => m.tipo === "bache" && isoDe(m.fecha) === fechaISO);
   const facturasDia = facturas.filter((f) => isoDe(f.fecha) === fechaISO);
-  const bitacoraDia = bitacora.filter((b) => isoDe(b.fecha) === fechaISO);
+  const bitacoraDia = bitacora.filter((b) => !b.eliminada && isoDe(b.fecha) === fechaISO);
   const bachesImpresos = bachesDia.length > 5
     ? [...bachesDia.slice(0, 4), { resumen: `+${bachesDia.length - 4} baches adicionales; consulte el historial de Planta` }]
     : bachesDia;
