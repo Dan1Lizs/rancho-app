@@ -2740,7 +2740,14 @@ export default function App({ onCerrarSesion }) {
     return false;
   };
   const deltaKardex = (mov) => mov?.tipo === "salida" ? -Number(mov.kg || 0) : Number(mov?.kg || 0);
-  const saldoKardexMP = (codigo, movimientos = kardex) => movimientos.reduce((a, m) => a + (m.mp === codigo ? deltaKardex(m) : 0), 0);
+  const saldoKardexMP = (codigo, movimientos = kardex, fechaCorteISO = null) => movimientos.reduce((a, m) => {
+    if (m.mp !== codigo) return a;
+    if (fechaCorteISO) {
+      const fechaMov = fechaPesajeISO(m.fecha);
+      if (!fechaMov || fechaMov > fechaCorteISO) return a;
+    }
+    return a + deltaKardex(m);
+  }, 0);
   const conteoFisicoMPKg = (inv, presentacion = 1) => {
     const tieneDato = valor => valor !== undefined && valor !== null && String(valor).trim() !== "" && Number.isFinite(Number(valor));
     if (!inv || (!tieneDato(inv.sacos) && !tieneDato(inv.kg))) return null;
@@ -2748,23 +2755,24 @@ export default function App({ onCerrarSesion }) {
   };
   const abrirAjusteMPKardex = ({ codigo, nombre, teorico, fisico, diferencia }) => {
     if (fisico == null || Math.abs(Number(diferencia || 0)) < 0.005) { avisar("✓ Este producto ya está conciliado con el conteo físico"); return; }
-    setFAjMP({ mp: codigo, saldoReal: String(Number(fisico).toFixed(2)), fecha: hoyISO(), responsable: mpResponsable || completadoPor || nombreResponsableSesion(window.__usuarioEmail, nombresUsuarios, window.__usuarioNombre) || "", motivo: "Conciliación con conteo físico" });
+    setFAjMP({ mp: codigo, saldoReal: String(Number(fisico).toFixed(2)), fecha: fechaPesajeISO(mpFechaConteo) || hoyISO(), responsable: mpResponsable || completadoPor || nombreResponsableSesion(window.__usuarioEmail, nombresUsuarios, window.__usuarioNombre) || "", motivo: "Conciliación con conteo físico" });
     setSubPedidoMP("ajustes");
     avisar(`Se preparó el ajuste de ${nombre}. Revisa el saldo real y registra el ajuste.`);
   };
   const guardarAjusteMP = async () => {
     const real = Number(fAjMP.saldoReal);
-    if (!fAjMP.mp || fAjMP.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaPesajeISO(fAjMP.fecha) || fAjMP.fecha > hoyISO()) { avisar("⚠ Elige una materia prima e indica un saldo real y fecha válidos"); return; }
+    const fechaCorte = fechaPesajeISO(fAjMP.fecha);
+    if (!fAjMP.mp || fAjMP.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaCorte || fechaCorte > hoyISO()) { avisar("⚠ Elige una materia prima e indica un saldo real y fecha válidos"); return; }
     if (!String(fAjMP.responsable || "").trim()) { avisar("⚠ Indica quién realizó el conteo"); return; }
     if (!String(fAjMP.motivo || "").trim()) { avisar("⚠ Indica el motivo del ajuste"); return; }
     setGuardando(true);
     try {
       const movimientos = await leer(K.kardex, []);
-      const anterior = saldoKardexMP(fAjMP.mp, movimientos);
+      const anterior = saldoKardexMP(fAjMP.mp, movimientos, fechaCorte);
       const delta = +(real - anterior).toFixed(2);
       if (Math.abs(delta) < 0.005) { avisar("✓ Este saldo ya coincide con el conteo físico"); setGuardando(false); return; }
       const nombre = mpCat.find(m => m.c === fAjMP.mp)?.n || fAjMP.mp;
-      const evento = { id: Date.now() + Math.random(), fecha: fAjMP.fecha.split("-").reverse().join("/"), mp: fAjMP.mp, tipo: "ajuste", kg: delta, saldoAnterior: +anterior.toFixed(2), saldoReal: +real.toFixed(2), ref: "Ajuste por conteo físico", detalle: `Conteo físico de ${nombre}: ${real.toFixed(2)} kg`, motivo: fAjMP.motivo.trim(), responsable: fAjMP.responsable.trim(), por: window.__usuarioEmail || fAjMP.responsable.trim(), registradoEl: new Date().toISOString() };
+      const evento = { id: Date.now() + Math.random(), fecha: fechaCorte.split("-").reverse().join("/"), mp: fAjMP.mp, tipo: "ajuste", kg: delta, saldoAnterior: +anterior.toFixed(2), saldoReal: +real.toFixed(2), ref: "Ajuste por conteo físico", detalle: `Conteo físico de ${nombre}: ${real.toFixed(2)} kg`, motivo: fAjMP.motivo.trim(), responsable: fAjMP.responsable.trim(), por: window.__usuarioEmail || fAjMP.responsable.trim(), registradoEl: new Date().toISOString() };
       const nuevo = [evento, ...movimientos];
       if (!(await escribir(K.kardex, nuevo))) throw new Error("No se pudo guardar");
       setKardex(nuevo);
@@ -2777,16 +2785,17 @@ export default function App({ onCerrarSesion }) {
     if (!editarAjusteMP) return;
     const real = Number(editarAjusteMP.nuevoSaldoReal);
     const fecha = editarAjusteMP.fechaISO || (editarAjusteMP.fecha ? editarAjusteMP.fecha.split("/").reverse().join("-") : hoyISO());
-    if (!Number.isFinite(real) || real < 0 || !fechaPesajeISO(fecha) || fecha > hoyISO()) { avisar("⚠ Indica un saldo real y fecha válidos"); return; }
+    const fechaCorte = fechaPesajeISO(fecha);
+    if (!Number.isFinite(real) || real < 0 || !fechaCorte || fechaCorte > hoyISO()) { avisar("⚠ Indica un saldo real y fecha válidos"); return; }
     if (!String(editarAjusteMP.responsable || "").trim()) { avisar("⚠ Indica quién realizó el conteo"); return; }
     if (!String(editarAjusteMP.motivoCambio || editarAjusteMP.motivo || "").trim()) { avisar("⚠ Indica el motivo de la corrección"); return; }
     setGuardando(true);
     try {
       const movimientos = await leer(K.kardex, []);
-      const base = saldoKardexMP(editarAjusteMP.mp, movimientos.filter(m => String(m.id) !== String(editarAjusteMP.id)));
+      const base = saldoKardexMP(editarAjusteMP.mp, movimientos.filter(m => String(m.id) !== String(editarAjusteMP.id)), fechaCorte);
       const delta = +(real - base).toFixed(2);
       const nombre = mpCat.find(m => m.c === editarAjusteMP.mp)?.n || editarAjusteMP.mp;
-      const actualizado = { ...editarAjusteMP, fecha: fecha.split("-").reverse().join("/"), kg: delta, saldoAnterior: +base.toFixed(2), saldoReal: +real.toFixed(2), detalle: `Conteo físico de ${nombre}: ${real.toFixed(2)} kg`, motivo: String(editarAjusteMP.motivoCambio || editarAjusteMP.motivo).trim(), responsable: editarAjusteMP.responsable.trim(), editadoEl: new Date().toISOString(), editadoPor: window.__usuarioEmail || editarAjusteMP.responsable.trim() };
+      const actualizado = { ...editarAjusteMP, fecha: fechaCorte.split("-").reverse().join("/"), kg: delta, saldoAnterior: +base.toFixed(2), saldoReal: +real.toFixed(2), detalle: `Conteo físico de ${nombre}: ${real.toFixed(2)} kg`, motivo: String(editarAjusteMP.motivoCambio || editarAjusteMP.motivo).trim(), responsable: editarAjusteMP.responsable.trim(), editadoEl: new Date().toISOString(), editadoPor: window.__usuarioEmail || editarAjusteMP.responsable.trim() };
       const nuevo = movimientos.map(m => String(m.id) === String(editarAjusteMP.id) ? actualizado : m);
       if (!(await escribir(K.kardex, nuevo))) throw new Error("No se pudo guardar la modificación");
       setKardex(nuevo); setEditarAjusteMP(null); avisar("✓ Ajuste de materia prima modificado y guardado");
@@ -5791,9 +5800,11 @@ export default function App({ onCerrarSesion }) {
             />
 
             {(subPedidoMP === "kardex" || subPedidoMP === "todo") && (
-              <Seccion titulo="📦 Kardex de materias primas" sub="Perpetuo: entradas por facturas − salidas por baches y núcleo = saldo teórico, conciliado contra tu conteo físico">
+              <Seccion titulo="📦 Kardex de materias primas" sub="Saldo actual: aperturas + entradas − salidas + ajustes. La diferencia se calcula al corte de la fecha del último conteo físico.">
               {kardex.length === 0 && Object.keys(mpInvUltimo).length === 0 && <div style={{ fontSize: 13, color: C.textoSuave }}>Aún sin movimientos - se llena solo con las facturas (PDF con líneas) y la producción registrada.</div>}
               {(kardex.length > 0 || Object.keys(mpInvUltimo).length > 0) && (() => {
+                const fechaCorteISO = fechaPesajeISO(mpFechaConteo);
+                const fechaCorteTexto = fechaCorteISO ? fechaCorteISO.split("-").reverse().slice(0, 2).join("/") : "—";
                 const codigos = [...new Set([...kardex.map(m2 => m2.mp), ...Object.keys(mpInvUltimo)])].filter(Boolean);
                 return (
                   <>
@@ -5801,19 +5812,20 @@ export default function App({ onCerrarSesion }) {
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 520 }}>
                         <thead><tr style={{ color: C.textoSuave, fontSize: 11, textAlign: "right" }}>
                           <th style={{ textAlign: "left", padding: "5px 4px" }}>Materia prima</th>
-                          <th style={{ padding: "5px 4px" }}>Entradas</th><th style={{ padding: "5px 4px" }}>Salidas / rebajas</th><th style={{ padding: "5px 4px" }}>Ajustes físicos</th>
-                          <th style={{ padding: "5px 4px" }}>Saldo conciliado</th><th style={{ padding: "5px 4px" }}>Conteo físico</th><th style={{ padding: "5px 4px" }}>Diferencia</th><th style={{ padding: "5px 4px" }} />
+                          <th style={{ padding: "5px 4px" }}>Entradas + apertura</th><th style={{ padding: "5px 4px" }}>Salidas / rebajas</th><th style={{ padding: "5px 4px" }}>Ajustes físicos</th>
+                          <th style={{ padding: "5px 4px" }}>Saldo actual</th><th style={{ padding: "5px 4px" }}>Conteo {fechaCorteTexto}</th><th style={{ padding: "5px 4px" }}>Dif. al {fechaCorteTexto}</th><th style={{ padding: "5px 4px" }} />
                         </tr></thead>
                         <tbody>
                           {codigos.map(c2 => {
                             const mp = mpCat.find(m2 => m2.c === c2) || { n: c2 };
-                            const ent = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "entrada").reduce((a, m2) => a + Number(m2.kg || 0), 0);
+                            const ent = kardex.filter(m2 => m2.mp === c2 && (m2.tipo === "entrada" || m2.tipo === "apertura")).reduce((a, m2) => a + Number(m2.kg || 0), 0);
                             const sal = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "salida").reduce((a, m2) => a + Number(m2.kg || 0), 0);
                             const ajustes = kardex.filter(m2 => m2.mp === c2 && m2.tipo === "ajuste").reduce((a, m2) => a + Number(m2.kg || 0), 0);
                             const teorico = ent - sal + ajustes;
+                            const teoricoCorte = fechaCorteISO ? saldoKardexMP(c2, kardex, fechaCorteISO) : null;
                             const invF = mpInvUltimo[c2];
                             const fisico = conteoFisicoMPKg(invF, mp.pres || 1);
-                            const dif = fisico != null ? fisico - teorico : null;
+                            const dif = fisico != null && teoricoCorte != null ? fisico - teoricoCorte : null;
                             return (
                               <tr key={c2} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
                                 <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>{mp.n}</td>
@@ -5822,15 +5834,15 @@ export default function App({ onCerrarSesion }) {
                                 <td style={{ padding: "8px 4px", color: ajustes ? "#9A6605" : C.textoSuave }}>{ajustes ? `${ajustes > 0 ? "+" : ""}${ajustes.toFixed(1)}` : "-"}</td>
                                 <td style={{ padding: "8px 4px", fontWeight: 700 }}>{teorico.toFixed(1)} kg</td>
                                 <td style={{ padding: "8px 4px" }}>{fisico != null ? `${fisico.toFixed(1)} kg` : "—"}</td>
-                                <td style={{ padding: "8px 4px", fontWeight: 700, color: dif == null ? C.textoSuave : Math.abs(dif) <= Math.max(5, Math.abs(teorico) * 0.03) ? C.verde : "#9A6605" }}>{dif != null ? `${dif > 0 ? "+" : ""}${dif.toFixed(1)}` : "—"}</td>
-                                <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>{dif != null && Math.abs(dif) > 0.005 ? <button type="button" onClick={() => abrirAjusteMPKardex({ codigo: c2, nombre: mp.n, teorico, fisico, diferencia: dif })} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 700, borderRadius: 7, border: `1px solid ${C.verde}`, background: C.verdeSuave, color: C.verde, cursor: "pointer" }}>Ajustar conteo</button> : dif != null ? <span style={{ color: C.verde, fontSize: 11 }}>Conciliado</span> : null}</td>
+                                <td style={{ padding: "8px 4px", fontWeight: 700, color: dif == null ? C.textoSuave : Math.abs(dif) <= Math.max(5, Math.abs(teoricoCorte) * 0.03) ? C.verde : "#9A6605" }}>{dif != null ? `${dif > 0 ? "+" : ""}${dif.toFixed(1)}` : "—"}</td>
+                                <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>{dif != null && Math.abs(dif) > 0.005 ? <button type="button" onClick={() => abrirAjusteMPKardex({ codigo: c2, nombre: mp.n, teorico: teoricoCorte, fisico, diferencia: dif })} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 700, borderRadius: 7, border: `1px solid ${C.verde}`, background: C.verdeSuave, color: C.verde, cursor: "pointer" }}>Ajustar conteo</button> : dif != null ? <span style={{ color: C.verde, fontSize: 11 }}>Conciliado</span> : null}</td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>Diferencia = conteo físico - saldo teórico. El ajuste físico agrega solo la diferencia, conserva las rebajas originales y deja responsable, fecha y motivo en el kardex.</div>
+                    <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: 6 }}>El saldo actual incluye todo el historial. La diferencia al corte ({fechaCorteTexto}) compara el conteo con el saldo de aperturas, entradas, salidas y ajustes hasta esa fecha. Registrar o corregir un conteo histórico conserva intactos los movimientos posteriores.</div>
                     <details style={{ marginTop: 10 }}>
                       <summary style={{ fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Últimos movimientos del kardex</summary>
                       {selectorHistorial("kardex")}
