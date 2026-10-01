@@ -112,7 +112,7 @@ export function ControlDiarioOperaciones({
   const entradasBodega = movimientoBodega?.producido ?? (registrosDia.length ? cartonesProducidos : "");
   const repartos = movimientoBodega?.repartos?.length
     ? movimientoBodega.repartos
-    : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andr�s", "Bryan"]).map((nombre) => ({ nombre }));
+    : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map((nombre) => ({ nombre }));
   const rutaNeta = movimientoBodega?.rutaNeta ?? (movimientoBodega?.repartos
     ? movimientoBodega.repartos.reduce((s, r) => s + numeroSeguro(r.salida) - numeroSeguro(r.devBueno) - numeroSeguro(r.devMalo), 0)
     : "");
@@ -173,7 +173,7 @@ export function ControlDiarioOperaciones({
     ? [...facturasDia.slice(0, 4), { resumen: `+${facturasDia.length - 4} facturas adicionales; consulte el historial de Planta` }]
     : facturasDia;
   const bitacoraImpresa = bitacoraDia.length > 11
-    ? [...bitacoraDia.slice(0, 10), { texto: `+${bitacoraDia.length - 10} novedades adicionales; consulte la Bit�cora` }]
+    ? [...bitacoraDia.slice(0, 10), { texto: `+${bitacoraDia.length - 10} novedades adicionales; consulte la Bitácora` }]
     : bitacoraDia;
   const responsables = [...new Set([
     ...registrosDia.map((r) => r.por),
@@ -208,8 +208,8 @@ export function ControlDiarioOperaciones({
       <section className="op-page">
         <header className="op-header">
           <div className="op-brand">
-            {logoSrc && <img className="op-logo" src={logoSrc} alt="Logo de Rancho El So�ado" />}
-          <div><div className="op-company">GRANJA AVICOLA RANCHO EL SO�ADO LIMITADA</div><div className="op-document-title">Control Diario de Operaciones</div></div>
+            {logoSrc && <img className="op-logo" src={logoSrc} alt="Logo de Rancho El Soñado" />}
+          <div><div className="op-company">GRANJA AVÍCOLA RANCHO EL SOÑADO LIMITADA</div><div className="op-document-title">Control Diario de Operaciones</div></div>
           </div>
           <div className="op-header-meta">
             <span><b>Completado por:</b> {responsables.join(", ")}</span>
@@ -218,13 +218,13 @@ export function ControlDiarioOperaciones({
           <div className="op-header-note">* Edad calculada a la fecha del control</div>
         </header>
 
-        <TituloSeccion>1. PRODUCCION DIARIA POR GALLINERO</TituloSeccion>
+        <TituloSeccion>1. PRODUCCIÓN DIARIA POR GALLINERO</TituloSeccion>
         <div className="op-houses-grid">
           {produccion.map((g) => <div className="op-house" key={g.galpon}>
             <div className="op-house-title">GALLINERO #{g.galpon}</div>
             <div className="op-house-age">Nacimiento: {fechaCorta(g.lote?.nac) || "________"} <span>Edad: {g.semanas !== "" ? `${g.semanas} sem*` : "________"}</span></div>
             <Cuadricula className="op-ticket-table" columnas={["Tiquete #", "Cant.", "Peso"]} filas={g.tiquetes} />
-            <div className="op-house-total"><b>TOTAL</b><b>{numero(g.cartones)} cart � {numero(g.peso)} kg</b></div>
+            <div className="op-house-total"><b>TOTAL</b><b>{numero(g.cartones)} cart · {numero(g.peso)} kg</b></div>
           </div>)}
         </div>
 
@@ -243,7 +243,7 @@ export function ControlDiarioOperaciones({
         </div>
 
         <div className="op-columns op-health-feed">
-          <div><TituloSeccion>5. FUMIGACION DIARIA</TituloSeccion>
+          <div><TituloSeccion>5. FUMIGACIÓN DIARIA</TituloSeccion>
             <Cuadricula className="op-compact" columnas={["Gallinero", "Producto", "Dosis", "Hora"]} filas={[1, 2, 3, 4].map((galpon) => {
               const items = fumigacionesDia.filter((f) => Number(f.galpon) === galpon);
               return [`Gallinero #${galpon}`, items.map((f) => f.producto).filter(Boolean).join(" / "), items.map((f) => f.dosis).filter(Boolean).join(" / "), items.map((f) => f.hora).filter(Boolean).join(" / ")];
@@ -256,10 +256,10 @@ export function ControlDiarioOperaciones({
       </section>
 
       <section className="op-page">
-        <header className="op-page-heading"><span>GRANJA AVICOLA RANCHO EL SO�ADO LIMITADA</span><b>Control Diario de Operaciones</b><span>{fechaDMY}</span></header>
+        <header className="op-page-heading"><span>GRANJA AVÍCOLA RANCHO EL SOÑADO LIMITADA</span><b>Control Diario de Operaciones</b><span>{fechaDMY}</span></header>
         <div className="op-columns op-medical">
           <div><TituloSeccion>7. CONTROL DIARIO DE GALLINAS MUERTAS</TituloSeccion>
-            <Cuadricula className="op-compact" columnas={["Gallinero", "Cantidad", "Saldo final del d�a"]} filas={[
+            <Cuadricula className="op-compact" columnas={["Gallinero", "Cantidad", "Saldo final del día"]} filas={[
               ...produccion.map((g) => [`Gallinero #${g.galpon}`, numero(g.muertas), numero(g.saldoAves)]),
               ["TOTAL MUERTAS", numero(produccion.reduce((s, g) => s + g.muertas, 0)), ""],
             ]} />
@@ -273,12 +273,12 @@ export function ControlDiarioOperaciones({
         </div>
 
         <div className="op-tasks"><TituloSeccion>9. CONTROL DE TRABAJOS DIARIOS EN GRANJA</TituloSeccion>
-          <Cuadricula className="op-compact op-task-table" columnas={["Actividad realizada", "Gallinero #1", "Gallinero #2", "Gallinero #3", "Gallinero #4"]} filas={trabajos.map((t, i) => [t, ...[0, 1, 2, 3].map((idx) => trabajosPorGalpon[idx][i] ? "�" : "")])} />
+          <Cuadricula className="op-compact op-task-table" columnas={["Actividad realizada", "Gallinero #1", "Gallinero #2", "Gallinero #3", "Gallinero #4"]} filas={trabajos.map((t, i) => [t, ...[0, 1, 2, 3].map((idx) => trabajosPorGalpon[idx][i] ? "✓" : "")])} />
         </div>
       </section>
 
       <section className="op-page">
-        <header className="op-page-heading"><span>GRANJA AVICOLA RANCHO EL SO�ADO LIMITADA</span><b>Control Diario de Operaciones</b><span>{fechaDMY}</span></header>
+        <header className="op-page-heading"><span>GRANJA AVÍCOLA RANCHO EL SOÑADO LIMITADA</span><b>Control Diario de Operaciones</b><span>{fechaDMY}</span></header>
         <TituloSeccion>CONTROL DE PLANTA DE CONCENTRADO</TituloSeccion>
         <div className="op-columns op-plant">
           <div><TituloSeccion>A. INVENTARIO DE CONCENTRADO (KG)</TituloSeccion>
@@ -290,10 +290,10 @@ export function ControlDiarioOperaciones({
         </div>
 
         <div className="op-invoices"><TituloSeccion>C. CONTROL DE PRODUCTOS Y FACTURAS RECIBIDAS</TituloSeccion>
-          <Cuadricula className="op-compact" columnas={["Proveedor", "Producto", "Factura #", "Cantidad", "Monto ?", "Recibido por"]} filas={(facturasImpresas.length ? facturasImpresas : [{}]).map((f) => f.resumen ? ["", f.resumen, "", "", "", ""] : [f.proveedor || "", f.producto || "", f.numero || f.factura || "", f.cantidad || f.kg || "", tieneDato(f.monto) ? `? ${numero(f.monto)}` : "", mostrarNombre(f.recibidoPor || f.por || "")])} />
+          <Cuadricula className="op-compact" columnas={["Proveedor", "Producto", "Factura #", "Cantidad", "Monto ₡", "Recibido por"]} filas={(facturasImpresas.length ? facturasImpresas : [{}]).map((f) => f.resumen ? ["", f.resumen, "", "", "", ""] : [f.proveedor || "", f.producto || "", f.numero || f.factura || "", f.cantidad || f.kg || "", tieneDato(f.monto) ? `₡ ${numero(f.monto)}` : "", mostrarNombre(f.recibidoPor || f.por || "")])} />
         </div>
 
-        <div className="op-bitacora"><TituloSeccion>BITACORA DE NOVEDADES</TituloSeccion>
+        <div className="op-bitacora"><TituloSeccion>BITÁCORA DE NOVEDADES</TituloSeccion>
           {bitacoraImpresa.length ? bitacoraImpresa.map((nota, i) => <div className="op-note" key={`${nota.id || i}-${i}`}><span>{nota.texto}</span><small>{nota.resumen ? "" : mostrarNombre(nota.por)}</small></div>) : null}
           {Array.from({ length: Math.max(0, 11 - bitacoraImpresa.length) }, (_, i) => <div className="op-note op-empty-note" key={`linea-${i}`}>&nbsp;</div>)}
         </div>
