@@ -1421,6 +1421,21 @@ export default function App({ onCerrarSesion }) {
   const formulasAves = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Aves").map(([n]) => n);
   const formulasGanado = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Ganado").map(([n]) => n);
 
+  const saldosAvesFormula = (() => {
+    const res = saldosFormulasDesdeConteo("Aves", formulasAves, movsPlanta, registros) || {};
+    formulasAves.forEach(f => {
+      const ajustes = movsPlanta.filter(m => m.tipo === "ajuste" && (m.formula === f || m.conteosFormula?.[f] != null));
+      if (!ajustes.length) return;
+      const conteo = [...ajustes].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
+      const base = extraerKilosConteo(conteo, f);
+      const fechaBase = aDate(conteo.fecha);
+      const bachesPosteriores = movsPlanta.filter(m => m.tipo === "bache" && m.formula === f && aDate(m.fecha) > fechaBase).reduce((s, m) => s + Number(m.kg || 0), 0);
+      const consumoPosterior = registros.filter(r => r.formulaConcentrado === f && aDate(r.fecha) > fechaBase).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
+      res[f] = Math.max(0, +(base + bachesPosteriores - consumoPosterior).toFixed(1));
+    });
+    return res;
+  })();
+
   const saldosGanadoFormula = (() => {
     const res = saldosFormulasDesdeConteo("Ganado", formulasGanado, movsPlanta, registros) || {};
     formulasGanado.forEach(f => {
