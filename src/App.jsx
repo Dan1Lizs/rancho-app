@@ -1126,7 +1126,7 @@ export default function App({ onCerrarSesion }) {
       if (soloLoteId && l.id !== soloLoteId) return l;
       const c = capturas[l.id];
       const t = totalesGalpon(c);
-      const alimTotal = Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0);
+      const alimTotal = n2Dec(Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0));
       if (t.huevos === 0 && !c?.muertas && !alimTotal) return l;
       const previo = registros.find(r => r.fecha === fecha && r.lote === l.id);
       if (previo) {
@@ -2462,7 +2462,7 @@ export default function App({ onCerrarSesion }) {
         const espKg = Number(r.alimentoEsperadoKg || 0) || (l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0);
         if (espKg > 0 && r.alimentoKg > 0) {
           const desvR = ((r.alimentoKg - espKg) / espKg) * 100;
-          if (Math.abs(desvR) > 5) decisiones.push({ nivel: desvR > 0 ? "amarillo" : "rojo", texto: `Gallinero ${l.galpon}: se sirvieron ${r.alimentoKg} kg vs ${espKg.toFixed(1)} kg de ración definida (${desvR > 0 ? "+" : ""}${desvR.toFixed(1)}%). ${desvR > 0 ? "Posible desperdicio o sobrealimentación." : "Las aves comieron menos de lo definido — revisar salud, agua o calidad del alimento."}` });
+          if (Math.abs(desvR) > 5) decisiones.push({ nivel: desvR > 0 ? "amarillo" : "rojo", texto: `Gallinero ${l.galpon}: se sirvieron ${f2Dec(r.alimentoKg)} kg vs ${espKg.toFixed(1)} kg de ración definida (${desvR > 0 ? "+" : ""}${desvR.toFixed(1)}%). ${desvR > 0 ? "Posible desperdicio o sobrealimentación." : "Las aves comieron menos de lo definido — revisar salud, agua o calidad del alimento."}` });
         } else if (gAve > 125) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: consumo de ${gAve.toFixed(0)} g/ave/día — posible desperdicio o sobreconsumo.` });
       }
     });
@@ -3061,7 +3061,7 @@ export default function App({ onCerrarSesion }) {
       cartones: tiquetes.reduce((s, t) => s + Number(t.cartones), 0),
       pesoKg: +tiquetes.reduce((s, t) => s + Number(t.peso), 0).toFixed(1),
       muertas: Number(editarProduccion.muertas), quebrados: Number(editarProduccion.quebrados),
-      alimentoKg: Number(editarProduccion.alimento6am) + Number(editarProduccion.alimento1pm),
+      alimentoKg: n2Dec(Number(editarProduccion.alimento6am || 0) + Number(editarProduccion.alimento1pm || 0)),
       alimento6am: Number(editarProduccion.alimento6am), alimento1pm: Number(editarProduccion.alimento1pm),
     };
     if (!eliminar && [nuevo.muertas, nuevo.quebrados, nuevo.alimentoKg].some(n => !Number.isFinite(n) || n < 0)) { avisar("⚠ Los valores deben ser números positivos o cero."); return; }
@@ -3801,7 +3801,7 @@ export default function App({ onCerrarSesion }) {
             ["Huevos quebrados", reg.quebrados ?? "—", "<3%"],
             ["Peso promedio del huevo (g)", pesoHuevo ? pesoHuevo.toFixed(1) : "—", "Según edad"],
             ["Consumo alimento (g/ave/día)", gAve ? gAve.toFixed(0) : "—", l.racionGAve ? `${l.racionGAve} g (ración)` : "Según tabla"],
-            ["Consumo total alimento (kg)", reg.alimentoKg ?? "—", ""],
+            ["Consumo total alimento (kg)", f2Dec(reg.alimentoKg), ""],
             ["Consumo de agua (ml/ave/día)", mlAve ? mlAve.toFixed(0) : "—", gAve ? `${(gAve * 1.8).toFixed(0)}–${(gAve * 2.2).toFixed(0)} (1.8–2.2× alimento)` : "1.8–2.2× alimento"],
             ["Peso corporal promedio (g)", promP ? promP.toFixed(0) : "—", pesUlt && metaPesoLote(l, pesUlt.fecha, pesUlt) ? `${metaPesoLote(l, pesUlt.fecha, pesUlt).toFixed(0)} g` : "—"],
             ["Uniformidad del lote (%)", unif ? unif.toFixed(1) : "—", ">85%"],
@@ -4200,8 +4200,8 @@ export default function App({ onCerrarSesion }) {
           const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id);
           return (
             <div key={l.id} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
-              <b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0)} kg alimento · {c?.muertas || 0} muertas
-              {anterior && <div style={{ color: C.textoSuave, fontSize: 11.5, marginTop: 2 }}>Antes: {anterior.cartones} cartones · {anterior.alimentoKg} kg alimento · {anterior.muertas} muertas</div>}
+              <b>G{l.galpon}</b> · {t.cartones} cartones · {t.pesoKg.toFixed(1)} kg · {n2Dec(Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0))} kg alimento · {c?.muertas || 0} muertas
+              {anterior && <div style={{ color: C.textoSuave, fontSize: 11.5, marginTop: 2 }}>Antes: {anterior.cartones} cartones · {f2Dec(anterior.alimentoKg, "0")} kg alimento · {anterior.muertas} muertas</div>}
             </div>
           );
         })}
@@ -6999,7 +6999,7 @@ export default function App({ onCerrarSesion }) {
                 Fecha: r.fecha, Gallinero: r.lote, Cartones: r.cartones, Huevos: r.cartones * HXC,
                 "Peso (kg)": r.pesoKg, Quebrados: r.quebrados, Muertas: r.muertas, Diagnóstico: r.dx,
                 "Alimento 6am (kg)": r.alimento6am ?? "", "Alimento 1pm (kg)": r.alimento1pm ?? "",
-                "Alimento total (kg)": r.alimentoKg, "Capturado por": mostrarNombre(r.por),
+                "Alimento total (kg)": r.alimentoKg == null ? "" : n2Dec(r.alimentoKg), "Capturado por": mostrarNombre(r.por),
               }));
               XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasProd), "Produccion");
               const filasBod = bodegaMovs.filter(m => !rsMes.length || mesDe(m.fecha) === claveMes).map(m => ({
@@ -7066,7 +7066,7 @@ export default function App({ onCerrarSesion }) {
                             <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{r.cartones}</td>
                             <td style={{ padding: "8px 4px" }}>{r.quebrados}</td>
                             <td style={{ padding: "8px 4px", color: r.muertas > 3 ? C.alerta : C.texto }}>{r.muertas}</td>
-                            <td style={{ padding: "8px 4px" }}>{r.alimentoKg}</td>
+                            <td style={{ padding: "8px 4px" }}>{f2Dec(r.alimentoKg, "0")}</td>
                             <td><button onClick={() => { setEditarProduccion({ ...r, tiquetes: (r.tiquetes || []).map(t => ({ ...t })) }); setMotivoProduccion(""); }} style={{ fontSize: 11 }}>Corregir</button></td>
                           </tr>
                         ))}
@@ -7109,8 +7109,8 @@ export default function App({ onCerrarSesion }) {
                 {historialVisible(correccionesProduccion.map(c => ({ ...c, fecha: c.anterior?.fecha })), "correccionesProduccion").map(c => <details key={c.id} style={{ padding: 9, borderBottom: `1px solid ${C.borde}`, fontSize: 12 }}>
                   <summary>{c.anterior?.fecha} · G{lotes.find(l => l.id === c.anterior?.lote)?.galpon || c.anterior?.lote} · {c.accion === "eliminar" ? "Registro retirado" : "Editado"} · {mostrarNombre(c.por)} {c.estado !== "aplicado" && `· ${c.estado}`}</summary>
                   <div>{new Date(c.instante).toLocaleString()} · Motivo: {c.motivo}</div>
-                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados · {c.anterior?.alimentoKg} kg alimento</div>
-                  {c.nuevo && <div>Después: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados · {c.nuevo.alimentoKg} kg alimento</div>}
+                  <div>Antes: {c.anterior?.cartones} cart, {c.anterior?.pesoKg} kg, {c.anterior?.muertas} muertas, {c.anterior?.quebrados} quebrados · {f2Dec(c.anterior?.alimentoKg, "0")} kg alimento</div>
+                  {c.nuevo && <div>Después: {c.nuevo.cartones} cart, {c.nuevo.pesoKg} kg, {c.nuevo.muertas} muertas, {c.nuevo.quebrados} quebrados · {f2Dec(c.nuevo.alimentoKg, "0")} kg alimento</div>}
                   <div>Tiquetes anteriores: {(c.anterior?.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ") || "Ninguno"}</div>
                   {c.nuevo && <div>Tiquetes corregidos: {(c.nuevo.tiquetes || []).map(t => `#${t.num}: ${t.cartones} cart, ${t.peso} kg`).join(" · ")}</div>}
                 </details>)}
