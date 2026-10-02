@@ -3199,7 +3199,16 @@ export default function App({ onCerrarSesion }) {
     const l = printDoc.lote ? lotes.find(x => x.id === printDoc.lote) : null;
     const celda = { padding: "7px 6px", borderBottom: "1px solid #ccc", fontSize: 12.5, textAlign: "left", verticalAlign: "top" };
     const th = { ...celda, fontWeight: 700, borderBottom: "2px solid #333", fontSize: 11.5 };
-    const abrirParaImprimir = () => { window.print(); };
+    const abrirParaImprimir = () => {
+      if (printDoc.tipo === "controldiario") {
+        const tituloAnterior = document.title;
+        const fechaArchivo = String(printDoc.fecha || "").replace(/\//g, "-");
+        const restaurarTitulo = () => { document.title = tituloAnterior; };
+        window.addEventListener("afterprint", restaurarTitulo, { once: true });
+        document.title = `Control Diario de Operaciones - ${fechaArchivo}`;
+      }
+      window.print();
+    };
     return (
       <div className={printDoc.tipo === "controldiario" ? "control-operaciones-shell" : undefined} style={{ fontFamily: "'Inter', sans-serif", background: "#fff", minHeight: "100vh", color: "#111", padding: "24px 20px", maxWidth: printDoc.tipo === "controldiario" ? "none" : 800, margin: "0 auto" }}>
         <style>{fuentes + " @media print { .no-print { display: none !important } }"}</style>

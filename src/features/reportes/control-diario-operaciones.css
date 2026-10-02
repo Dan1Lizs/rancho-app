@@ -336,8 +336,8 @@
   }
 
   .op-page {
-    height: 10.52in;
-    min-height: 10.52in;
+    height: auto;
+    min-height: 0;
     margin: 0;
     padding: 0;
     overflow: visible;
