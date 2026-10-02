@@ -1,4 +1,5 @@
 import React from "react";
+import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
 import "./control-diario-operaciones.css";
 
 const numero = (valor, decimales = 2) => {
@@ -130,36 +131,31 @@ export function ControlDiarioOperaciones({
     tipo: m.tipo || "bache",
     categoria: m.categoria || usoPorFormula[m.formula] || "Aves",
   }));
-  const saldoPlanta = (categoria, hastaInclusive) => {
-    const nombreInicial = categoria === "Aves" ? "inicialAves" : "inicialGanado";
-    const fechaApertura = isoDe(plantaCfg.inicialFecha);
-    if (fechaApertura && fechaISO < fechaApertura) return null;
-    let saldo = numeroSeguro(plantaCfg[nombreInicial]);
-    const aplicaFecha = (d) => (!fechaApertura || d >= fechaApertura) && d && (hastaInclusive ? d <= fechaISO : d < fechaISO);
-    movimientosPlanta.filter((m) => m.categoria === categoria && aplicaFecha(isoDe(m.fecha))).forEach((m) => {
-      if (m.tipo === "bache" || m.tipo === "ajuste") saldo += numeroSeguro(m.kg);
-      if (m.tipo === "servido") saldo -= numeroSeguro(m.kg);
-    });
-    if (categoria === "Aves") {
-      registros.filter((r) => aplicaFecha(isoDe(r.fecha))).forEach((r) => {
-        saldo -= numeroSeguro(r.alimentoKg ?? (numeroSeguro(r.alimento6am) + numeroSeguro(r.alimento1pm)));
-      });
-    }
-    return saldo;
-  };
+  const diaAnteriorISO = fechaISO
+    ? new Date(Date.parse(fechaISO + "T00:00:00Z") - 86400000).toISOString().slice(0, 10)
+    : "";
+  const saldoPlanta = (categoria, hastaInclusive) => calcularSaldoPlantaCategoria({
+    categoria,
+    fechaHasta: hastaInclusive ? fechaISO : diaAnteriorISO,
+    movimientos: movimientosPlanta,
+    registros,
+    saldoInicial: categoria === "Aves" ? plantaCfg.inicialAves : plantaCfg.inicialGanado,
+    fechaApertura: plantaCfg.inicialFecha,
+    usoPorFormula,
+  });
   const inventarioPlanta = ["Aves", "Ganado"].map((categoria) => {
     const apertura = saldoPlanta(categoria, false);
     const cierre = saldoPlanta(categoria, true);
     const deHoy = movimientosPlanta.filter((m) => m.categoria === categoria && isoDe(m.fecha) === fechaISO);
     const baches = deHoy.filter((m) => m.tipo === "bache").reduce((s, m) => s + numeroSeguro(m.kg), 0);
-    const ajustes = deHoy.filter((m) => m.tipo === "ajuste").reduce((s, m) => s + numeroSeguro(m.kg), 0);
     const alimento = categoria === "Aves" ? registrosDia.reduce((s, r) => s + numeroSeguro(r.alimentoKg ?? (numeroSeguro(r.alimento6am) + numeroSeguro(r.alimento1pm))), 0) : 0;
     const servido = categoria === "Ganado" ? deHoy.filter((m) => m.tipo === "servido").reduce((s, m) => s + numeroSeguro(m.kg), 0) : 0;
+    const ajusteNeto = apertura == null || cierre == null ? 0 : cierre - (apertura + baches - alimento - servido);
     return {
       producto: `Concentrado ${categoria.toLowerCase()}`,
       apertura: apertura == null ? "" : apertura,
-      entradas: apertura == null ? "" : baches + Math.max(0, ajustes),
-      salidas: apertura == null ? "" : alimento + servido + Math.max(0, -ajustes),
+      entradas: apertura == null ? "" : baches + Math.max(0, ajusteNeto),
+      salidas: apertura == null ? "" : alimento + servido + Math.max(0, -ajusteNeto),
       cierre: cierre == null ? "" : cierre,
     };
   });

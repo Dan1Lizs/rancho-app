@@ -12,7 +12,8 @@ import logoOficial from "./assets/logo-oficial.png";
 import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "./historial";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
-import { saldosFormulasDesdeConteo, deltaConteoFormula } from "./inventarioFormulas";
+import { saldosFormulasDesdeConteo, deltaConteoFormula, calcularSaldoPlantaCategoria } from "./inventarioFormulas";
+import { kgNucleoEnFormula, nucleosDisponibles, resolverNucleoFormula } from "./plantaNucleos";
 import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
 import { filtroPlantaInicial, filtrarMovimientosPlanta } from "./plantaHistorial";
 import { Campo } from "./components/Campo";
@@ -623,7 +624,7 @@ export default function App({ onCerrarSesion }) {
   const [fNucleo, setFNucleo] = useState({ formula: "Impulsor", porciones: "", numNucleo: "", fecha: hoyISO() });
 
   // Planta
-  const [fBache, setFBache] = useState({ formula: "Impulsor", baches: "", kg: "", numBache: "", hora: "", fecha: hoyISO() });
+  const [fBache, setFBache] = useState({ formula: "Impulsor", nucleo: null, baches: "", kg: "", numBache: "", hora: "", fecha: hoyISO() });
   const [plantaCfg, setPlantaCfg] = useState({ inicialAves: SEED_PLANTA.saldoKg, inicialGanado: 0 });
   const [bodegaCfg, setBodegaCfg] = useState({ inicialCart: 128 });
   const [aperturaIns, setAperturaIns] = useState({});
@@ -1420,22 +1421,6 @@ export default function App({ onCerrarSesion }) {
   const formulasAves = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Aves").map(([n]) => n);
   const formulasGanado = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Ganado").map(([n]) => n);
 
-  const saldosAvesFormula = (() => {
-    const res = saldosFormulasDesdeConteo("Aves", formulasAves, movsPlanta, registros) || {};
-    formulasAves.forEach(f => {
-      const ajF = movsPlanta.filter(m => m.tipo === "ajuste" && (m.formula === f || m.conteosFormula?.[f] != null));
-      if (ajF.length > 0) {
-        const ult = [...ajF].sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0];
-        const val = extraerKilosConteo(ult, f);
-        const fDate = aDate(ult.fecha);
-        const bPost = movsPlanta.filter(m => m.tipo === "bache" && m.formula === f && aDate(m.fecha) > fDate).reduce((s, m) => s + Number(m.kg || 0), 0);
-        const sPost = registros.filter(r => r.formulaConcentrado === f && aDate(r.fecha) > fDate).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
-        res[f] = Math.max(0, +(val + bPost - sPost).toFixed(1));
-      }
-    });
-    return res;
-  })();
-
   const saldosGanadoFormula = (() => {
     const res = saldosFormulasDesdeConteo("Ganado", formulasGanado, movsPlanta, registros) || {};
     formulasGanado.forEach(f => {
@@ -1452,32 +1437,15 @@ export default function App({ onCerrarSesion }) {
     return res;
   })();
 
-  const saldoAves = (() => {
-    if (saldosAvesFormula) {
-      const vals = Object.values(saldosAvesFormula).filter(v => v != null && !isNaN(Number(v)));
-      if (vals.length > 0) {
-        return Math.max(0, +vals.reduce((s, n) => s + Number(n), 0).toFixed(1));
-      }
-    }
-    const ajustesAves = movsPlanta.filter(m => m.tipo === "ajuste" && (m.categoria === "Aves" || usoFormula(m.formula) === "Aves"));
-    if (ajustesAves.length > 0) {
-      const porFormula = {};
-      [...ajustesAves].sort((a, b) => fechaVal(a.fecha) - fechaVal(b.fecha)).forEach(m => {
-        const k = m.formula || "Aves";
-        porFormula[k] = { val: extraerKilosConteo(m, k), fecha: m.fecha };
-      });
-      let tot = Object.values(porFormula).reduce((s, x) => s + Number(x.val || 0), 0);
-      const ultF = Object.values(porFormula).sort((a, b) => fechaVal(b.fecha) - fechaVal(a.fecha))[0]?.fecha;
-      if (ultF) {
-        const dF = aDate(ultF);
-        const bPost = movsPlanta.filter(m => m.tipo === "bache" && (m.categoria === "Aves" || usoFormula(m.formula) === "Aves") && aDate(m.fecha) > dF).reduce((s, m) => s + Number(m.kg || 0), 0);
-        const sPost = registros.filter(r => aDate(r.fecha) > dF).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
-        tot = tot + bPost - sPost;
-      }
-      return Math.max(0, +tot.toFixed(1));
-    }
-    return Math.max(0, +(Number(plantaCfg.inicialAves || 0) + sumaMovs("Aves", "bache") + sumaMovs("Aves", "ajuste") - servidoAvesTotal).toFixed(1));
-  })();
+  const saldoAves = calcularSaldoPlantaCategoria({
+    categoria: "Aves",
+    fechaHasta: hoyISO(),
+    movimientos: movsPlanta,
+    registros,
+    saldoInicial: plantaCfg.inicialAves,
+    fechaApertura: plantaCfg.inicialFecha,
+    usoPorFormula: Object.fromEntries(Object.keys(recetas.formulas).map(formula => [formula, usoFormula(formula)])),
+  }) ?? 0;
 
   const saldoGanado = (() => {
     if (saldosGanadoFormula) {
@@ -1507,36 +1475,37 @@ export default function App({ onCerrarSesion }) {
   })();
   const saldoPlanta = saldoAves;
 
-  const kgNucleoDe = (formula) => {
-    const f = recetas.formulas[formula];
-    if (!f || f.uso === "Ganado") return 0;
-    return Object.entries(f.items).reduce((a, [c, kg]) => a + (basculaDe(c) === 4 ? Number(kg || 0) : 0), 0);
-  };
+  const kgNucleoDe = (formula) => kgNucleoEnFormula(recetas.formulas[formula], basculaDe);
+  const nucleosDeRecetas = nucleosDisponibles(recetas.formulas, basculaDe);
+  const nucleoAsignado = (formula) => resolverNucleoFormula(formula, recetas.formulas, basculaDe);
+  const nucleoParaBache = fBache.nucleo ?? nucleoAsignado(fBache.formula);
 
   const guardarBache = async () => {
     if (!fBache.kg && !fBache.baches) return;
     setGuardando(true);
     const nBaches = Number(fBache.baches || 0);
     const fechaBache = (fBache.fecha || hoyISO()).split("-").reverse().join("/");
-    const nuevo = [{ fecha: fechaBache, registradoEl: new Date().toISOString(), tipo: "bache", categoria: usoFormula(fBache.formula), formula: fBache.formula, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), hora: fBache.hora || "", por: completadoPor }, ...plantaMovs];
+    const formulaBache = fBache.formula;
+    const keyNucleo = nucleoParaBache;
+    const usaNucleo = usoFormula(formulaBache) === "Aves" && kgNucleoDe(keyNucleo) > 0;
+    const nuevo = [{ fecha: fechaBache, registradoEl: new Date().toISOString(), tipo: "bache", categoria: usoFormula(formulaBache), formula: formulaBache, nucleoFormula: usaNucleo ? keyNucleo : "", baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), hora: fBache.hora || "", por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) {
       if (nBaches > 0) {
-        const f2 = recetas.formulas[fBache.formula];
+        const f2 = recetas.formulas[formulaBache];
         if (f2) {
-          const usaNucleo = f2.uso === "Aves" && kgNucleoDe(fBache.formula) > 0;
           const salidas = Object.entries(f2.items)
             .filter(([c2, kg]) => (!usaNucleo || basculaDe(c2) !== 4) && Number(kg) > 0)
-            .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaBache, mp: c2, tipo: "salida", kg: +(Number(kg) * nBaches).toFixed(2), ref: `Bache ${fBache.formula} ×${nBaches}${fBache.numBache ? ` #${fBache.numBache}` : ""}` }));
+            .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: fechaBache, mp: c2, tipo: "salida", kg: +(Number(kg) * nBaches).toFixed(2), ref: `Bache ${formulaBache} ×${nBaches}${fBache.numBache ? ` #${fBache.numBache}` : ""}` }));
           await registrarKardex(salidas);
         }
       }
-      if (nBaches > 0 && usoFormula(fBache.formula) === "Aves" && kgNucleoDe(fBache.formula) > 0) {
+      if (nBaches > 0 && usaNucleo) {
         const invReal = await leer(K.nucleo, {});
-        const inv = { ...invReal, [fBache.formula]: +((invReal[fBache.formula] || 0) - nBaches).toFixed(2) };
+        const inv = { ...invReal, [keyNucleo]: +((invReal[keyNucleo] || 0) - nBaches).toFixed(2) };
         await escribir(K.nucleo, inv); setNucleoInv(inv);
       }
-      setPlantaMovs(nuevo); setFBache({ ...fBache, baches: "", kg: "", numBache: "", hora: "", fecha: hoyISO() });
-      avisar(`✓ Bache registrado — concentrado ${usoFormula(fBache.formula)}`);
+      setPlantaMovs(nuevo); setFBache({ ...fBache, nucleo: null, baches: "", kg: "", numBache: "", hora: "", fecha: hoyISO() });
+      avisar(`✓ Bache registrado — concentrado ${usoFormula(formulaBache)}${usaNucleo ? ` · núcleo ${keyNucleo}` : ""}`);
     } else avisar("⚠ No se pudo guardar");
     setGuardando(false);
   };
@@ -1646,13 +1615,14 @@ export default function App({ onCerrarSesion }) {
     const f2 = recetas.formulas[m.formula];
     if (m.tipo === "bache" && f2) {
       const nB = Number(m.baches || 0);
+      const keyNucleo = Object.hasOwn(m, "nucleoFormula") ? m.nucleoFormula : (kgNucleoDe(m.formula) > 0 ? m.formula : "");
       const reversas = Object.entries(f2.items)
-        .filter(([c2, kg]) => basculaDe(c2) !== 4 && Number(kg) > 0)
+        .filter(([c2, kg]) => (!keyNucleo || basculaDe(c2) !== 4) && Number(kg) > 0)
         .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nB).toFixed(2), ref: `Reversión bache ${m.formula} ×${nB}${m.numBache ? ` #${m.numBache}` : ""}` }));
       await registrarKardex(reversas);
-      if (nB > 0 && kgNucleoDe(m.formula) > 0) {
+      if (nB > 0 && keyNucleo) {
         const invReal = await leer(K.nucleo, {});
-        const inv = { ...invReal, [m.formula]: +((invReal[m.formula] || 0) + nB).toFixed(2) };
+        const inv = { ...invReal, [keyNucleo]: +((invReal[keyNucleo] || 0) + nB).toFixed(2) };
         if (await escribir(K.nucleo, inv)) setNucleoInv(inv);
       }
     }
@@ -1709,11 +1679,18 @@ export default function App({ onCerrarSesion }) {
       if (!movimientos) throw new Error("No se pudo consultar el historial actual");
       const inv = esNucleo ? await leer(K.nucleo, null) : null;
       if (esNucleo && !inv) throw new Error("No se pudo consultar el inventario de núcleos");
-      const actual = esNucleo ? Number(inv[formula] || 0) : Number(plantaCfg[fAjPlanta.categoria === "Aves" ? "inicialAves" : "inicialGanado"] || 0)
-        + movimientos.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) }).filter(m => (!aperturaP || aDate(m.fecha) >= aperturaP) && m.categoria === fAjPlanta.categoria).reduce((s, m) => s + (m.tipo === "bache" || m.tipo === "ajuste" ? Number(m.kg || 0) : m.tipo === "servido" ? -Number(m.kg || 0) : 0), 0)
-        - (fAjPlanta.categoria === "Aves" ? servidoAvesTotal : 0);
       const registrosActuales = esConcentrado && fAjPlanta.categoria === "Aves" ? await leer(K.registros, null) : [];
       if (esConcentrado && fAjPlanta.categoria === "Aves" && !registrosActuales) throw new Error("No se pudo consultar el servido de aves actual");
+      const movimientosNormalizados = movimientos.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) });
+      const actual = esNucleo ? Number(inv[formula] || 0) : (calcularSaldoPlantaCategoria({
+        categoria: fAjPlanta.categoria,
+        fechaHasta: fAjPlanta.fecha,
+        movimientos: movimientosNormalizados,
+        registros: registrosActuales || registros,
+        saldoInicial: plantaCfg[fAjPlanta.categoria === "Aves" ? "inicialAves" : "inicialGanado"],
+        fechaApertura: plantaCfg.inicialFecha,
+        usoPorFormula: Object.fromEntries(Object.keys(recetas.formulas).map(nombre => [nombre, usoFormula(nombre)])),
+      }) ?? 0);
       const saldos = esConcentrado ? saldosFormulasDesdeConteo(fAjPlanta.categoria, formulas, movimientos, registrosActuales) : null;
       const anteriorFormula = saldos?.[formula] ?? null;
       const delta = +(real - actual).toFixed(2);
@@ -1980,6 +1957,10 @@ export default function App({ onCerrarSesion }) {
     const items = { ...f.items }; delete items[mpc];
     persistirRecetas({ ...recetas, formulas: { ...recetas.formulas, [formula]: { ...f, items } } });
   };
+  const asignarNucleoFormula = (formula, nucleo) => {
+    const f = recetas.formulas[formula];
+    if (f) persistirRecetas({ ...recetas, formulas: { ...recetas.formulas, [formula]: { ...f, nucleo } } });
+  };
   const agregarIngrediente = () => {
     if (!fIng.kg) return;
     const f = recetas.formulas[recActiva];
@@ -1996,6 +1977,8 @@ export default function App({ onCerrarSesion }) {
     avisar(`✓ Fórmula "${nombre}" creada — agrega sus ingredientes`);
   };
   const eliminarFormula = (nombre) => {
+    const dependientes = Object.keys(recetas.formulas).filter(otra => otra !== nombre && nucleoAsignado(otra) === nombre);
+    if (dependientes.length) { avisar(`No se puede eliminar: el núcleo ${nombre} está asignado a ${dependientes.join(", ")}`); return; }
     if (!pideConfirm(`elimF-${nombre}`, `⚠ Toca otra vez para eliminar la fórmula "${nombre}" definitivamente`)) return;
     const fs = { ...recetas.formulas }; delete fs[nombre];
     persistirRecetas({ ...recetas, formulas: fs });
@@ -3233,7 +3216,7 @@ export default function App({ onCerrarSesion }) {
           {" · Emitido: "}{hoyStr()}
         </div>
 
-        {printDoc.tipo === "planta_historial" && <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Fecha", "Tipo", "Categoría", "Fórmula / detalle", "Cantidad", "Responsable"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{printDoc.items.map((m, i) => <tr key={m.id || i}><td style={celda}>{m.fecha}</td><td style={celda}>{m.tipo}</td><td style={celda}>{m.categoria}</td><td style={celda}>{m.formula} {m.detalle || m.numBache || m.numNucleo || ""}</td><td style={celda}>{m.categoria === "Núcleo" ? `${m.porciones || 0} porciones` : `${m.kg || 0} kg`}</td><td style={celda}>{mostrarNombre(m.responsable || m.por || "—")}</td></tr>)}</tbody></table>}
+        {printDoc.tipo === "planta_historial" && <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Fecha", "Tipo", "Categoría", "Fórmula / detalle", "Cantidad", "Responsable"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{printDoc.items.map((m, i) => <tr key={m.id || i}><td style={celda}>{m.fecha}</td><td style={celda}>{m.tipo}</td><td style={celda}>{m.categoria}</td><td style={celda}>{m.formula} {m.tipo === "bache" && m.nucleoFormula ? `(núcleo ${m.nucleoFormula})` : ""} {m.detalle || m.numBache || m.numNucleo || ""}</td><td style={celda}>{m.categoria === "Núcleo" ? `${m.porciones || 0} porciones` : `${m.kg || 0} kg`}</td><td style={celda}>{mostrarNombre(m.responsable || m.por || "—")}</td></tr>)}</tbody></table>}
 
         {printDoc.tipo === "mp_inventario" && (() => {
           const historial = printDoc.historial || {};
@@ -3380,6 +3363,9 @@ export default function App({ onCerrarSesion }) {
           const f = recetas.formulas[printDoc.formula];
           if (!f) return <div>Fórmula no encontrada.</div>;
           const esc = (printDoc.tipo === "bache" ? Number(printDoc.kg || recetas.bacheKg) / recetas.bacheKg : Number(printDoc.baches || 1));
+          const nucleoFormula = printDoc.nucleoFormula ?? nucleoAsignado(printDoc.formula);
+          const kgNucleoPorBache = kgNucleoDe(nucleoFormula);
+          const usaNucleoEnBache = printDoc.tipo === "bache" && f.uso === "Aves" && kgNucleoPorBache > 0;
           const items = Object.entries(f.items).map(([c, kg]) => {
             const mp = mpCat.find(m => m.c === c) || { n: c, pres: 1 };
             return { c, mp, kg: Number(kg || 0) * esc, bascula: basculaDe(c) };
@@ -3401,9 +3387,10 @@ export default function App({ onCerrarSesion }) {
             <tr><th style={th}>✓</th><th style={th}>Materia prima</th><th style={{ ...th, textAlign: "right" }}>Peso (kg)</th>
               {conQ && <th style={{ ...th, textAlign: "right" }}>Sacos</th>}{conQ && <th style={{ ...th, textAlign: "right" }}>Kg remanentes</th>}</tr>
           );
-          const kgNuc = items.filter(x => x.bascula === 4).reduce((a, x) => a + x.kg, 0);
-          const usaNucleoEnBache = f.uso === "Aves" && kgNuc > 0;
-          const total = items.reduce((a, x) => a + x.kg, 0);
+          const kgNuc = printDoc.tipo === "bache" && usaNucleoEnBache
+            ? kgNucleoPorBache * esc
+            : items.filter(x => x.bascula === 4).reduce((a, x) => a + x.kg, 0);
+          const total = items.filter(x => !usaNucleoEnBache || x.bascula !== 4).reduce((a, x) => a + x.kg, 0) + (usaNucleoEnBache ? kgNuc : 0);
           return (
             <>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 12.5 }}>
@@ -3432,7 +3419,7 @@ export default function App({ onCerrarSesion }) {
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>{cab(false)}</thead>
                         <tbody>
-                          <tr><td style={{ ...celda, width: 26, fontSize: 15 }}>☐</td><td style={celda}><b>NÚCLEO {printDoc.formula.toUpperCase()}</b> (premezcla — ver hoja de núcleo)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{kgNuc.toFixed(2)}</td></tr>
+                          <tr><td style={{ ...celda, width: 26, fontSize: 15 }}>☐</td><td style={celda}><b>NÚCLEO {nucleoFormula}</b> (premezcla — ver hoja de núcleo)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{kgNuc.toFixed(2)}</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -5569,9 +5556,18 @@ export default function App({ onCerrarSesion }) {
 
             {(subPlanta === "baches" || subPlanta === "todo") && (
             <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
-              <select value={fBache.formula} onChange={e => setFBache({ ...fBache, formula: e.target.value })} style={selectStyle}>
+              <select value={fBache.formula} onChange={e => setFBache({ ...fBache, formula: e.target.value, nucleo: null })} style={selectStyle}>
                 {Object.keys(recetas.formulas).map(f => <option key={f} value={f}>{f} — {usoFormula(f)}</option>)}
               </select>
+              {usoFormula(fBache.formula) === "Aves" && (
+                <label style={{ display: "block", margin: "0 0 12px", maxWidth: 520 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Núcleo para este bache</span>
+                  <select value={nucleoParaBache} onChange={e => setFBache({ ...fBache, nucleo: e.target.value })} style={selectStyle}>
+                    <option value="">Sin núcleo premezclado</option>
+                    {nucleosDeRecetas.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
+                  </select>
+                </label>
+              )}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Campo mitad etiqueta={`Cantidad de baches (mixer ${recetas.bacheKg} kg)`} type="text" inputMode="numeric" placeholder="ej. 2" value={fBache.baches} onChange={e => setFBache({ ...fBache, baches: e.target.value, kg: e.target.value ? String(Number(e.target.value) * recetas.bacheKg) : fBache.kg })} />
                 <Campo mitad etiqueta="Kilogramos totales" type="text" inputMode="decimal" placeholder="ej. 1380" value={fBache.kg} onChange={e => setFBache({ ...fBache, kg: e.target.value })} />
@@ -5586,7 +5582,7 @@ export default function App({ onCerrarSesion }) {
                 </label>
               </div>
               <button onClick={guardarBache} disabled={guardando} style={btnStyle}>Registrar producción</button>
-              <button onClick={() => setPrintDoc({ tipo: "bache", formula: fBache.formula, kg: fBache.kg || recetas.bacheKg })}
+              <button onClick={() => setPrintDoc({ tipo: "bache", formula: fBache.formula, nucleoFormula: nucleoParaBache, kg: fBache.kg || recetas.bacheKg })}
                 style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
                 🖨 Imprimir checklist del bache (básculas 1–4)
               </button>
@@ -5751,7 +5747,7 @@ export default function App({ onCerrarSesion }) {
                 {historialVisible(plantaFiltrada, "planta").map((m, i) => (
                   <div key={m.id || i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
+                    <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.nucleoFormula ? ` · núcleo ${m.nucleoFormula}` : ""}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
                     <button onClick={() => eliminarMovPlanta(m)} title="Eliminar movimiento" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
                     </div>
@@ -6182,6 +6178,16 @@ export default function App({ onCerrarSesion }) {
 
               {f && (
                 <Seccion titulo={`${recActiva} — kg por bache`} sub={`Uso: ${f.uso}`}>
+                  {f.uso === "Aves" && (
+                    <label style={{ display: "block", marginBottom: 12, maxWidth: 520 }}>
+                      <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Núcleo asignado a esta fórmula</span>
+                      <select value={nucleoAsignado(recActiva)} onChange={e => asignarNucleoFormula(recActiva, e.target.value)} style={inputStyle}>
+                        <option value="">Sin núcleo premezclado</option>
+                        {nucleosDeRecetas.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
+                      </select>
+                      <span style={{ display: "block", marginTop: 4, fontSize: 11.5, color: C.textoSuave }}>El bache descontará una porción del núcleo elegido y usará sus microingredientes como referencia.</span>
+                    </label>
+                  )}
                   {Object.entries(f.items).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0)).map(([mpc, kg]) => {
                     const mp = mpCat.find(m => m.c === mpc);
                     const pct = total > 0 ? (Number(kg || 0) / total) * 100 : 0;
