@@ -1,4 +1,5 @@
 import { fechaHistorialISO } from "./historial.js";
+import { movimientosConFechaFutura } from "./plantaHistorial.js";
 
 export function saltosTiquetes(tiquetes) {
   const nums = [...new Set(tiquetes.map(t => String(t.num || "").trim()).filter(x => /^\d+$/.test(x)).map(Number))].sort((a, b) => a - b);
@@ -35,7 +36,7 @@ export function observacionesCaptura(capturas, lotes, tiquetesGlobales = []) {
   return avisos;
 }
 
-export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas }) {
+export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas, plantaMovs = [], hoy = new Date() }) {
   const hallazgos = [];
   const grupos = new Map();
   for (const r of registros) {
@@ -59,9 +60,17 @@ export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado,
       hallazgos.push({ tipo: "Sin conciliar", texto: `${categoria}: ${resto.toFixed(1)} kg sin distribuir o con diferencia`, destino: { vista: "planta", categoria } });
     }
   }
-  const hoy = new Date();
   const iso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
   const fecha = `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+  for (const m of movimientosConFechaFutura(plantaMovs, iso)) {
+    const movimiento = m.tipo || "bache";
+    const descripcion = [movimiento, m.formula].filter(Boolean).join(" ");
+    hallazgos.push({
+      tipo: "Fecha futura",
+      texto: `Planta: ${descripcion || "movimiento"} · ${m.fecha}${m.kg != null ? ` · ${Number(m.kg).toFixed(2)} kg` : ""} — posterior a hoy`,
+      destino: { vista: "planta", sub: "historial", categoria: m.categoria || "", formula: m.formula || "", id: m.id, fecha: fechaHistorialISO(m.fecha) },
+    });
+  }
   for (const l of lotes.filter(x => x.estado !== "cerrado")) if (!registros.some(r => r.fecha === fecha && r.lote === l.id)) {
     hallazgos.push({ tipo: "Pendiente", texto: `G${l.galpon}: falta control de hoy`, destino: { vista: "captura", fecha: iso, lote: l.id } });
   }

@@ -2,6 +2,17 @@ import { fechaHistorialISO } from "./historial.js";
 
 export const filtroPlantaInicial = () => ({ texto: "", tipo: "", categoria: "", formula: "", desde: "", hasta: "" });
 
+export function movimientosConFechaFutura(movimientos = [], fechaCorte = new Date()) {
+  const corte = fechaCorte instanceof Date
+    ? `${fechaCorte.getFullYear()}-${String(fechaCorte.getMonth() + 1).padStart(2, "0")}-${String(fechaCorte.getDate()).padStart(2, "0")}`
+    : fechaHistorialISO(fechaCorte);
+  if (!corte) return [];
+  return movimientos.filter(movimiento => {
+    const fecha = fechaHistorialISO(movimiento?.fecha);
+    return Boolean(fecha && fecha > corte);
+  });
+}
+
 export function filtrarMovimientosPlanta(movimientos, filtro) {
   const q = (filtro.texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   return movimientos.filter(m => {

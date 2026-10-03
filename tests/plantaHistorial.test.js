@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarMovimientosPlanta, filtroPlantaInicial } from "../src/plantaHistorial.js";
+import { filtrarMovimientosPlanta, filtroPlantaInicial, movimientosConFechaFutura } from "../src/plantaHistorial.js";
 
 const datos = [
   { fecha: "25/09/2026", tipo: "bache", categoria: "Aves", formula: "Impulsor", numBache: "P-17", responsable: "José" },
@@ -12,4 +12,14 @@ test("el historial de planta combina fecha, fórmula, tipo y búsqueda sin perde
   assert.deepEqual(filtrarMovimientosPlanta(datos, filtro), [datos[0]]);
   assert.deepEqual(filtrarMovimientosPlanta(datos, { ...filtro, tipo: "servido" }), []);
   assert.equal(filtrarMovimientosPlanta(datos, filtroPlantaInicial()).length, 2);
+});
+
+
+test("detecta movimientos futuros sin marcar los del mismo día", () => {
+  const movimientos = [
+    { id: "hoy", fecha: "03/10/2026", tipo: "bache" },
+    { id: "futuro", fecha: "30/10/2026", tipo: "bache" },
+    { id: "pasado", fecha: "02/10/2026", tipo: "servido" },
+  ];
+  assert.deepEqual(movimientosConFechaFutura(movimientos, "2026-10-03"), [movimientos[1]]);
 });

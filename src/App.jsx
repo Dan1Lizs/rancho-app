@@ -16,7 +16,7 @@ import { saldosFormulasDesdeConteo, deltaConteoFormula, calcularSaldoPlantaCateg
 import { kgNucleoEnFormula, nucleosDisponibles, resolverNucleoFormula } from "./plantaNucleos";
 import { correccionesInventarioPlanta } from "./plantaCorrecciones";
 import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
-import { filtroPlantaInicial, filtrarMovimientosPlanta } from "./plantaHistorial";
+import { filtroPlantaInicial, filtrarMovimientosPlanta, movimientosConFechaFutura } from "./plantaHistorial";
 import { Campo } from "./components/Campo";
 import { ModalDialog } from "./components/ModalDialog";
 import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
@@ -1497,6 +1497,7 @@ export default function App({ onCerrarSesion }) {
   const nucleoParaBache = fBache.nucleo ?? nucleoAsignado(fBache.formula);
 
   const guardarBache = async () => {
+    if (fBache.fecha && fBache.fecha > hoyISO()) { avisar("⚠ La fecha del bache no puede ser futura. Selecciona hoy o una fecha anterior."); return; }
     if (!fBache.kg && !fBache.baches) return;
     setGuardando(true);
     const nBaches = Number(fBache.baches || 0);
@@ -1528,6 +1529,7 @@ export default function App({ onCerrarSesion }) {
 
   const producirNucleo = async () => {
     if (cargandoFondo) { avisar("⏳ Sincronizando datos — espera unos segundos"); return; }
+    if (!fNucleo.fecha || fNucleo.fecha > hoyISO()) { avisar("⚠ La fecha de producción de núcleo no puede ser futura."); return; }
     const n = Number(fNucleo.porciones || 0);
     if (!n) return;
     const fechaNuc = (fNucleo.fecha || hoyISO()).split("-").reverse().join("/");
@@ -2708,6 +2710,7 @@ export default function App({ onCerrarSesion }) {
       if (destino.lote) setGalponActivo(destino.lote);
     } else if (destino.vista === "planta") {
       setSubPlanta(destino.sub || "historial");
+      if (destino.id) setPeriodosHistorial(v => ({ ...v, planta: "todo" }));
       setFiltroPlanta({ ...filtroPlantaInicial(), categoria: destino.categoria || "", formula: destino.formula || "" });
     } else if (destino.vista === "bodega") {
       setSubBodega("historial");
@@ -2724,7 +2727,8 @@ export default function App({ onCerrarSesion }) {
     irA(destino.vista || "inicio");
   };
   const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta, filtroPlanta);
-  const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
+  const discrepanciasFechaPlanta = movimientosConFechaFutura(plantaMovs, hoyISO());
+  const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, plantaMovs, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
     const filas = [
       ...correccionesProduccion.map(c => ({ fecha: c.instante, area: "Producción", accion: c.accion, responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.cartones} cart`, despues: c.nuevo ? `${c.nuevo.cartones} cart` : "Retirado" })),
@@ -5814,10 +5818,11 @@ export default function App({ onCerrarSesion }) {
                 </label>
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del bache</span>
-                  <input type="date" value={fBache.fecha} onChange={e => setFBache({ ...fBache, fecha: e.target.value })} style={inputStyle} />
+                  <input type="date" max={hoyISO()} value={fBache.fecha} onChange={e => setFBache({ ...fBache, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
-              <button onClick={guardarBache} disabled={guardando} style={btnStyle}>Registrar producción</button>
+              {fBache.fecha > hoyISO() && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 9, marginBottom: 10, fontSize: 13 }}>⚠ La fecha elegida es futura. Registra el bache el día que se produzca o corrige la fecha.</div>}
+              <button onClick={guardarBache} disabled={guardando || fBache.fecha > hoyISO()} style={btnStyle}>Registrar producción</button>
               <button onClick={() => setPrintDoc({ tipo: "bache", formula: fBache.formula, nucleoFormula: nucleoParaBache, kg: fBache.kg || recetas.bacheKg })}
                 style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>
                 🖨 Imprimir checklist del bache (básculas 1–4)
@@ -5846,11 +5851,12 @@ export default function App({ onCerrarSesion }) {
                 <Campo mitad etiqueta="No. de producción de núcleo" type="text" placeholder="ej. N-012" value={fNucleo.numNucleo} onChange={e => setFNucleo({ ...fNucleo, numNucleo: e.target.value })} />
                 <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 140 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha de producción</span>
-                  <input type="date" value={fNucleo.fecha} onChange={e => setFNucleo({ ...fNucleo, fecha: e.target.value })} style={inputStyle} />
+                  <input type="date" max={hoyISO()} value={fNucleo.fecha} onChange={e => setFNucleo({ ...fNucleo, fecha: e.target.value })} style={inputStyle} />
                 </label>
               </div>
+              {fNucleo.fecha > hoyISO() && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 9, marginBottom: 10, fontSize: 13 }}>⚠ La fecha elegida es futura. El núcleo debe registrarse el día que se produzca o después.</div>}
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={producirNucleo} style={{ ...btnStyle, flex: 1 }}>Registrar núcleo producido</button>
+                <button onClick={producirNucleo} disabled={fNucleo.fecha > hoyISO()} style={{ ...btnStyle, flex: 1 }}>Registrar núcleo producido</button>
                 <button onClick={() => setPrintDoc({ tipo: "nucleo", formula: fNucleo.formula, baches: fNucleo.porciones || 1 })}
                   style={{ flex: 1, padding: "12px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
                   🖨 Imprimir hoja de núcleo
@@ -5980,6 +5986,14 @@ export default function App({ onCerrarSesion }) {
                   <button onClick={() => setFiltroPlanta(filtroPlantaInicial())}>Limpiar</button>
                 </div>
                 <div className="v10-history-actions">{selectorHistorial("planta")}<span>{historialVisible(plantaFiltrada, "planta").length} de {movsPlanta.length} movimientos</span><button onClick={() => setPrintDoc({ tipo: "planta_historial", items: historialVisible(plantaFiltrada, "planta") })}>🖨 Imprimir filtrados</button></div>
+                {discrepanciasFechaPlanta.length > 0 && <div role="alert" style={{ padding: 12, background: C.alertaSuave, color: C.alerta, border: `1px solid ${C.alerta}`, borderRadius: 10, marginBottom: 12 }}>
+                  <b>⚠ Discrepancias lógicas: hay {discrepanciasFechaPlanta.length} movimiento(s) de Planta con fecha futura.</b>
+                  <div style={{ marginTop: 4, fontSize: 12.5 }}>No deberían registrarse antes de ocurrir. El saldo general los excluye hasta su fecha; revisa que la fecha sea correcta.</div>
+                  {discrepanciasFechaPlanta.map(m => <div key={`futuro-${m.id}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: `1px solid ${C.alerta}`, marginTop: 7, paddingTop: 7, fontSize: 12.5 }}>
+                    <span><b>{m.fecha}</b> · {m.tipo || "bache"} {m.formula || ""} · {m.categoria || "sin categoría"} · {m.tipo === "nucleo" ? `${m.porciones || 0} porciones` : `${f2Dec(m.kg || 0)} kg`}</span>
+                    <button type="button" onClick={() => { setPeriodosHistorial(v => ({ ...v, planta: "todo" })); setFiltroPlanta({ ...filtroPlantaInicial(), categoria: m.categoria || "", formula: m.formula || "" }); }} style={{ padding: "5px 9px", borderRadius: 7, border: `1px solid ${C.alerta}`, color: C.alerta, background: C.superficie, cursor: "pointer", fontWeight: 700 }}>Ver en historial</button>
+                  </div>)}
+                </div>}
                 {historialVisible(plantaFiltrada, "planta").map((m, i) => (
                   <div key={m.id || i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
@@ -5987,6 +6001,7 @@ export default function App({ onCerrarSesion }) {
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
                     <button onClick={() => eliminarMovPlanta(m)} title="Eliminar movimiento" style={{ padding: "0 9px", fontSize: 14, background: confirmar === `delplanta:${m.id}` ? "#FBEAE6" : "transparent", color: confirmar === `delplanta:${m.id}` ? C.alerta : C.textoSuave, border: "none", borderRadius: 8, cursor: "pointer" }}>×</button>
                     </div>
+                    {movimientosConFechaFutura([m], hoyISO()).length > 0 && <div role="status" style={{ marginTop: 6, padding: 7, background: C.alertaSuave, color: C.alerta, borderRadius: 7, fontSize: 12, fontWeight: 700 }}>⚠ DISCREPANCIA: la fecha está después de hoy. Este movimiento no entra al saldo actual.</div>}
                     {m.tipo === "ajuste" && (
                       <button onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ marginTop: 7, fontSize: 12, marginRight: 8, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 600 }}>Editar ajuste</button>
                     )}

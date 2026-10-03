@@ -64,3 +64,17 @@ test("la exportación CSV conserva comas y comillas de la auditoría", () => {
   const csv = csvAuditoria([{ fecha: "28/09/2026", area: "Bodega", accion: "Edición", responsable: "José", motivo: 'Cambio, "conteo"', antes: 5, despues: 6 }]);
   assert.ok(csv.includes('"Cambio, ""conteo"""'));
 });
+
+
+test("las excepciones enlazan movimientos de planta fechados en el futuro", () => {
+  const movimiento = { id: "bache-futuro", fecha: "30/10/2026", tipo: "bache", categoria: "Aves", formula: "651 Impulsor VYMISA", kg: 687.86 };
+  const h = excepcionesOperacion({
+    registros: [], lotes: [], saldoAves: 0, saldoGanado: 0,
+    saldosAvesFormula: null, saldosGanadoFormula: null,
+    bodegaMovs: [], retirosActivos: [], tareas: [], plantaMovs: [movimiento],
+    hoy: new Date(2026, 9, 3),
+  });
+  const alerta = h.find(x => x.tipo === "Fecha futura");
+  assert.ok(alerta.texto.includes("30/10/2026"));
+  assert.deepEqual(alerta.destino, { vista: "planta", sub: "historial", categoria: "Aves", formula: "651 Impulsor VYMISA", id: "bache-futuro", fecha: "2026-10-30" });
+});
