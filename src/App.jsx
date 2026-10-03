@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirDetallePlanta } from "./storage";
+import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirMovimientoPlanta } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
@@ -14,6 +14,7 @@ import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
 import { saldosFormulasDesdeConteo, deltaConteoFormula, calcularSaldoPlantaCategoria } from "./inventarioFormulas";
 import { kgNucleoEnFormula, nucleosDisponibles, resolverNucleoFormula } from "./plantaNucleos";
+import { correccionesInventarioPlanta } from "./plantaCorrecciones";
 import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
 import { filtroPlantaInicial, filtrarMovimientosPlanta } from "./plantaHistorial";
 import { Campo } from "./components/Campo";
@@ -1503,7 +1504,7 @@ export default function App({ onCerrarSesion }) {
     const formulaBache = fBache.formula;
     const keyNucleo = nucleoParaBache;
     const usaNucleo = usoFormula(formulaBache) === "Aves" && kgNucleoDe(keyNucleo) > 0;
-    const nuevo = [{ fecha: fechaBache, registradoEl: new Date().toISOString(), tipo: "bache", categoria: usoFormula(formulaBache), formula: formulaBache, nucleoFormula: usaNucleo ? keyNucleo : "", baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), hora: fBache.hora || "", por: completadoPor }, ...plantaMovs];
+    const nuevo = [{ fecha: fechaBache, registradoEl: new Date().toISOString(), tipo: "bache", categoria: usoFormula(formulaBache), formula: formulaBache, nucleoFormula: usaNucleo ? keyNucleo : "", componentesReceta: { ...(recetas.formulas[formulaBache]?.items || {}) }, baches: nBaches, kg: Number(fBache.kg || 0), numBache: (fBache.numBache || "").trim(), hora: fBache.hora || "", por: completadoPor }, ...plantaMovs];
     if (await escribir(K.planta, nuevo)) {
       if (nBaches > 0) {
         const f2 = recetas.formulas[formulaBache];
@@ -1533,7 +1534,7 @@ export default function App({ onCerrarSesion }) {
     const invReal = await leer(K.nucleo, {});
     const inv = { ...invReal, [fNucleo.formula]: +((invReal[fNucleo.formula] || 0) + n).toFixed(2) };
     if (await escribir(K.nucleo, inv)) {
-      const movNuc = [{ id: Date.now(), fecha: fechaNuc, tipo: "nucleo", categoria: usoFormula(fNucleo.formula), formula: fNucleo.formula, porciones: n, numNucleo: (fNucleo.numNucleo || "").trim(), por: completadoPor }, ...plantaMovs];
+      const movNuc = [{ id: Date.now(), fecha: fechaNuc, tipo: "nucleo", categoria: usoFormula(fNucleo.formula), formula: fNucleo.formula, componentesReceta: { ...(recetas.formulas[fNucleo.formula]?.items || {}) }, porciones: n, numNucleo: (fNucleo.numNucleo || "").trim(), por: completadoPor }, ...plantaMovs];
       if (await escribir(K.planta, movNuc)) setPlantaMovs(movNuc);
       const f2 = recetas.formulas[fNucleo.formula];
       if (f2) {
@@ -1634,7 +1635,7 @@ export default function App({ onCerrarSesion }) {
       const reversas = Object.entries(f2.items)
         .filter(([c2, kg]) => (!keyNucleo || basculaDe(c2) !== 4) && Number(kg) > 0)
         .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nB).toFixed(2), ref: `Reversión bache ${m.formula} ×${nB}${m.numBache ? ` #${m.numBache}` : ""}` }));
-      await registrarKardex(reversas);
+      await registrarCorreccionKardex(reversas);
       if (nB > 0 && keyNucleo) {
         const invReal = await leer(K.nucleo, {});
         const inv = { ...invReal, [keyNucleo]: +((invReal[keyNucleo] || 0) + nB).toFixed(2) };
@@ -1649,7 +1650,7 @@ export default function App({ onCerrarSesion }) {
       const reversas = Object.entries(f2.items)
         .filter(([c2, kg]) => basculaDe(c2) === 4 && Number(kg) > 0)
         .map(([c2, kg]) => ({ id: Date.now() + Math.random(), fecha: m.fecha, mp: c2, tipo: "entrada", kg: +(Number(kg) * nP).toFixed(3), ref: `Reversión núcleo ${m.formula} ×${nP}${m.numNucleo ? ` #${m.numNucleo}` : ""}` }));
-      await registrarKardex(reversas);
+      await registrarCorreccionKardex(reversas);
     }
     avisar("✓ Movimiento eliminado y efectos revertidos");
     setGuardando(false);
@@ -2674,6 +2675,54 @@ export default function App({ onCerrarSesion }) {
     ...(esAdmin ? (cxp.facturas || []).map(f => ({ texto: `Factura ${f.proveedor || ""} · ${f.numero || ""}`, vista: "cxp" })) : []),
   ].filter(x => x.texto.toLocaleLowerCase("es").includes(busquedaGlobal.trim().toLocaleLowerCase("es"))).slice(0, 30);
   const abrirResultado = r => { if (r.vista === "historial" && r.fecha) setHistFecha(r.fecha); if (r.vista === "bodega" && r.fecha) cambiarFechaBodegaSegura(r.fecha); if (r.lote) setGalponActivo(r.lote); if (r.formula) setRecActiva(r.formula); irA(r.vista); };
+  const destinoAlertaRevision = item => {
+    if (item?.destino?.vista) return item.destino;
+    const texto = [item?.texto, item?.textoAjustado].filter(Boolean).join(" ");
+    if (item?.seccion === "cobertura") {
+      const coincidencia = texto.match(/^(Aves|Ganado) · (.+?):/);
+      return { vista: "planta", categoria: coincidencia?.[1] || "", formula: coincidencia?.[2] || "" };
+    }
+    const lote = lotes.find(l => {
+      const numeroGalpon = String(l.galpon);
+      return new RegExp("Gallinero\\s+" + numeroGalpon + "\\b|\\bG" + numeroGalpon + "\\b", "i").test(texto);
+    });
+    if (/materia prima|kardex|insumo/i.test(texto)) return { vista: "pedidomp", sub: "kardex" };
+    if (/ruta|cart[oó]n|bodega|cierre del d[ií]a/i.test(texto)) return { vista: "bodega", sub: "historial", fecha: hoyISO() };
+    if (/peso|pesaje|uniformidad/i.test(texto)) return { vista: "pesaje", sub: "resumen", lote: lote?.id };
+    if (/fumig|retiro|vacun|sanidad|enfermedad/i.test(texto)) return { vista: "pesaje", sub: "enfermedades", lote: lote?.id };
+    if (/concentrado|f[oó]rmula|planta|bache|servido|cobertura/i.test(texto)) {
+      const categoria = /ganado/i.test(texto) ? "Ganado" : /aves/i.test(texto) ? "Aves" : "";
+      const formula = Object.keys(recetas.formulas).find(nombre => texto.toLocaleLowerCase("es").includes(nombre.toLocaleLowerCase("es"))) || "";
+      return { vista: "planta", sub: "historial", categoria, formula };
+    }
+    if (lote) return { vista: "captura", fecha: hoyISO(), lote: lote.id };
+    return { vista: "inicio" };
+  };
+  const irAlError = item => {
+    const destino = destinoAlertaRevision(item);
+    if (destino.vista === "historial") {
+      setSubHistorial("dia"); setHistFecha(destino.fecha || hoyISO());
+    } else if (destino.vista === "captura") {
+      const fecha = destino.fecha || hoyISO();
+      fechaCapturaRef.current = fecha; setFechaCaptura(fecha);
+      if (destino.lote) setGalponActivo(destino.lote);
+    } else if (destino.vista === "planta") {
+      setSubPlanta(destino.sub || "historial");
+      setFiltroPlanta({ ...filtroPlantaInicial(), categoria: destino.categoria || "", formula: destino.formula || "" });
+    } else if (destino.vista === "bodega") {
+      setSubBodega("historial");
+      const fecha = destino.fecha || hoyISO();
+      cambiarFechaBodega(fecha, destino.id ?? null);
+    } else if (destino.vista === "pesaje") {
+      setSubPesaje(destino.sub || "resumen");
+      if (destino.lote) setFPeso(v => ({ ...v, lote: destino.lote }));
+    } else if (destino.vista === "pedidomp") {
+      setSubPedidoMP(destino.sub || "kardex");
+    } else if (destino.vista === "revision") {
+      setSubRevision(destino.sub || "excepciones");
+    }
+    irA(destino.vista || "inicio");
+  };
   const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta, filtroPlanta);
   const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
@@ -2692,11 +2741,130 @@ export default function App({ onCerrarSesion }) {
   const guardarDetallePlanta = async () => {
     const original = editarDetallePlanta?.original;
     if (!original) return;
+    const tipo = original.tipo || "bache";
+    const campos = { ...editarDetallePlanta.campos };
+    const fechaISO = fechaPesajeISO(campos.fecha);
+    if (!fechaISO || fechaISO > hoyISO()) { avisar("⚠ Elige una fecha válida que no sea futura"); return; }
+    campos.fecha = fechaISO.split("-").reverse().join("/");
+    const formula = String(campos.formula ?? original.formula ?? "").trim();
+    const formulaExiste = Boolean(recetas.formulas[formula]);
+    const formulaCambio = formula !== String(original.formula || "");
+    if (["bache", "nucleo", "servido", "ajuste"].includes(tipo) && formulaCambio && !formulaExiste) {
+      avisar("⚠ La fórmula seleccionada ya no está en el catálogo"); return;
+    }
+    if (tipo === "bache") {
+      const baches = Number(campos.baches), kg = Number(campos.kg);
+      if ((!formula || (formulaCambio && !formulaExiste)) || !Number.isFinite(baches) || baches < 0 || !Number.isFinite(kg) || kg < 0) { avisar("⚠ Revisa la fórmula, cantidad de baches y kilos"); return; }
+      campos.formula = formula; campos.categoria = formulaExiste ? usoFormula(formula) : original.categoria || "Aves"; campos.baches = baches; campos.kg = kg;
+      const nucleo = String(campos.nucleoFormula || "").trim();
+      campos.nucleoFormula = formulaExiste && campos.categoria === "Aves" && nucleo && kgNucleoDe(nucleo) > 0 ? nucleo : "";
+    } else if (tipo === "nucleo") {
+      const porciones = Number(campos.porciones);
+      if ((!formula || (formulaCambio && !formulaExiste)) || !Number.isFinite(porciones) || porciones < 0) { avisar("⚠ Revisa la fórmula y las porciones"); return; }
+      campos.formula = formula; campos.categoria = formulaExiste ? usoFormula(formula) : original.categoria || "Aves"; campos.porciones = porciones;
+    } else if (tipo === "servido") {
+      const kg = Number(campos.kg);
+      if ((!formula || (formulaCambio && !formulaExiste)) || (formulaExiste && usoFormula(formula) !== "Ganado") || !Number.isFinite(kg) || kg < 0) { avisar("⚠ Elige una fórmula de ganado e indica kilos válidos"); return; }
+      campos.formula = formula; campos.categoria = formulaExiste ? "Ganado" : original.categoria || "Ganado"; campos.kg = kg;
+    } else if (tipo === "ajuste" && formula) {
+      campos.formula = formula;
+      campos.categoria = original.categoria === "Núcleo" ? "Núcleo" : (formulaExiste ? usoFormula(formula) : original.categoria || "Aves");
+    }
+
+    const camposConEfecto = tipo === "bache"
+      ? ["formula", "fecha", "baches", "nucleoFormula", "numBache"]
+      : tipo === "nucleo" ? ["formula", "fecha", "porciones", "numNucleo"] : [];
+    const requiereRecalculo = camposConEfecto.some(k => String(original[k] ?? "") !== String(campos[k] ?? ""));
+    if (requiereRecalculo && formulaExiste && (tipo === "bache" || tipo === "nucleo")) {
+      campos.componentesReceta = original.formula === formula && original.componentesReceta && Object.keys(original.componentesReceta).length
+        ? { ...original.componentesReceta }
+        : { ...(recetas.formulas[formula]?.items || {}) };
+    }
+
+    const movimientoPrevisto = { ...original, ...campos, tipo };
+    let efectos = { kardex: [], nucleoDelta: {} };
+    try {
+      efectos = correccionesInventarioPlanta({
+        anterior: original, nuevo: movimientoPrevisto, recetas, basculaDe, kgNucleoDe, usoFormula,
+      });
+    } catch (e) { avisar(`⚠ ${e.message}`); return; }
+
     setGuardando(true);
     try {
-      const nuevo = await corregirDetallePlanta({ id: original.id, visto: original, campos: editarDetallePlanta.campos, motivo: motivoDetallePlanta, responsable: editarDetallePlanta.campos.responsable || completadoPor });
+      if (efectos.kardex.length && !(await leer(K.kardex, null))) throw new Error("No se pudo verificar el kardex actual; no se cambió el movimiento.");
+      const nucleoActual = Object.keys(efectos.nucleoDelta).length ? await leer(K.nucleo, null) : null;
+      if (Object.keys(efectos.nucleoDelta).length && !nucleoActual) throw new Error("No se pudo verificar el inventario de núcleos; no se cambió el movimiento.");
+      const nuevo = await corregirMovimientoPlanta({
+        id: original.id, visto: original, campos, motivo: motivoDetallePlanta,
+        responsable: campos.responsable || completadoPor,
+      });
+
+      let kardexGuardado = false;
+      let nucleoGuardado = false;
+      try {
+        if (efectos.kardex.length) {
+          if (!(await registrarCorreccionKardex(efectos.kardex))) throw new Error("No se pudieron guardar los movimientos compensatorios del kardex.");
+          kardexGuardado = true;
+        }
+        if (nucleoActual) {
+          const nucleoActualizado = { ...nucleoActual };
+          Object.entries(efectos.nucleoDelta).forEach(([nombre, delta]) => {
+            nucleoActualizado[nombre] = +(Number(nucleoActualizado[nombre] || 0) + Number(delta)).toFixed(2);
+          });
+          if (!(await escribir(K.nucleo, nucleoActualizado))) throw new Error("No se pudo sincronizar el inventario de núcleos.");
+          nucleoGuardado = true;
+          setNucleoInv(nucleoActualizado);
+        }
+      } catch (errorEfectos) {
+        const erroresReversion = [];
+        if (nucleoGuardado) {
+          const actual = await leer(K.nucleo, null);
+          const revertido = actual ? { ...actual } : null;
+          if (revertido) Object.entries(efectos.nucleoDelta).forEach(([nombre, delta]) => {
+            revertido[nombre] = +(Number(revertido[nombre] || 0) - Number(delta)).toFixed(2);
+          });
+          if (!revertido || !(await escribir(K.nucleo, revertido))) erroresReversion.push("núcleos");
+          else setNucleoInv(revertido);
+        }
+        if (kardexGuardado) {
+          const reversas = efectos.kardex.map(m => ({
+            ...m, id: crypto.randomUUID(), tipo: m.tipo === "salida" ? "entrada" : "salida",
+            ref: `Reversión automática · ${m.ref}`,
+          }));
+          if (!(await registrarCorreccionKardex(reversas))) erroresReversion.push("kardex");
+        }
+        let movimientoRevertido = null;
+        const camposOriginales = {
+          fecha: original.fecha, formula: original.formula || "", categoria: original.categoria || (formulaExiste ? usoFormula(original.formula) : "Aves"),
+          detalle: original.detalle || "", responsable: original.responsable || original.por || completadoPor,
+        };
+        if (tipo === "bache") Object.assign(camposOriginales, {
+          nucleoFormula: original.nucleoFormula || "", componentesReceta: original.componentesReceta || {},
+          baches: Number(original.baches || 0), kg: Number(original.kg || 0), numBache: original.numBache || "",
+        });
+        if (tipo === "nucleo") Object.assign(camposOriginales, {
+          componentesReceta: original.componentesReceta || {}, porciones: Number(original.porciones || 0), numNucleo: original.numNucleo || "",
+        });
+        if (tipo === "servido") Object.assign(camposOriginales, { kg: Number(original.kg || 0) });
+        if (tipo === "ajuste") Object.assign(camposOriginales, { categoria: original.categoria || "Aves" });
+        try {
+          movimientoRevertido = await corregirMovimientoPlanta({
+            id: original.id, visto: nuevo, campos: camposOriginales,
+            motivo: "Reversión automática: no se pudieron sincronizar los inventarios relacionados",
+            responsable: original.responsable || completadoPor,
+          });
+          setPlantaMovs(v => v.map(m => String(m.id) === String(original.id) ? movimientoRevertido : m));
+        } catch { erroresReversion.push("movimiento de planta"); }
+        setEditarDetallePlanta(null); setMotivoDetallePlanta("");
+        avisar(`⚠ No se completó la corrección de inventario. ${erroresReversion.length ? `Revisa ${erroresReversion.join(", ")} y no vuelvas a guardar este movimiento todavía.` : "La app revirtió los cambios automáticamente; puedes intentarlo de nuevo."} Detalle: ${errorEfectos.message}`);
+        return;
+      }
+
       setPlantaMovs(v => v.map(m => String(m.id) === String(original.id) ? nuevo : m));
-      setEditarDetallePlanta(null); setMotivoDetallePlanta(""); avisar("✓ Detalle corregido y auditado. Los saldos no cambiaron.");
+      setEditarDetallePlanta(null); setMotivoDetallePlanta("");
+      avisar(efectos.kardex.length || Object.keys(efectos.nucleoDelta).length
+        ? "✓ Movimiento corregido y auditado; kardex y núcleos compensados."
+        : "✓ Movimiento corregido y auditado.");
     } catch (e) { avisar(`⚠ ${e.message}`); }
     finally { setGuardando(false); }
   };
@@ -2734,6 +2902,14 @@ export default function App({ onCerrarSesion }) {
     if (!movs.length) return true;
     const actual = await leer(K.kardex, []);
     const nuevo = [...movs, ...actual].slice(0, 4000);
+    if (await escribir(K.kardex, nuevo)) { setKardex(nuevo); return true; }
+    return false;
+  };
+  const registrarCorreccionKardex = async (movs) => {
+    if (!movs.length) return true;
+    const actual = await leer(K.kardex, null);
+    if (!actual) return false;
+    const nuevo = [...movs, ...actual];
     if (await escribir(K.kardex, nuevo)) { setKardex(nuevo); return true; }
     return false;
   };
@@ -3022,6 +3198,7 @@ export default function App({ onCerrarSesion }) {
         alertaId: `cobertura:${categoria.toLowerCase()}:${formula.toLowerCase()}:sin-consumo`,
         nivel: "amarillo",
         texto: `${categoria} · ${formula}: sin consumo suficiente para estimar la cobertura del inventario.`,
+        destino: { vista: "planta", categoria, formula },
       }];
     }));
   const coberturaVisibles = procesarAdvertencias(coberturaAlertas, "cobertura");
@@ -3948,10 +4125,10 @@ export default function App({ onCerrarSesion }) {
       </ModalDialog>
       <ModalDialog
         abierto={!!editarDetallePlanta}
-        titulo="Corregir detalle de planta"
-        subtitulo={`Movimiento del ${editarDetallePlanta?.original?.fecha || ""} · ${editarDetallePlanta?.original?.formula || ""}. Para cambiar kilos o porciones usa el ajuste por conteo físico; esta corrección conserva los saldos.`}
+        titulo="Corregir movimiento de planta"
+        subtitulo="Corrige fecha, concentrado, cantidades y datos del movimiento. Las correcciones a baches/núcleos generan reversas auditadas en kardex según la receta guardada; registros antiguos sin copia de receta usan la receta actual."
         onClose={() => setEditarDetallePlanta(null)}
-        ancho={540}
+        ancho={600}
         pie={
           <>
             <button type="button" onClick={() => setEditarDetallePlanta(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
@@ -3963,20 +4140,52 @@ export default function App({ onCerrarSesion }) {
           </>
         }
       >
-        {editarDetallePlanta && (
-          <>
-            {[...new Set(["detalle", editarDetallePlanta.original.tipo === "bache" ? "numBache" : "numNucleo", "responsable"])].map(k => (
-              <label key={k} style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>
-                {({ detalle: "Detalle", numBache: "Número de bache", numNucleo: "Número de núcleo", responsable: "Responsable" })[k]}
-                <input style={{ ...inputStyle, width: "100%", marginTop: 4 }} value={editarDetallePlanta.campos[k] || ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, [k]: e.target.value } }))} />
-              </label>
-            ))}
-            <label style={{ display: "block", fontSize: 12.5, fontWeight: 600 }}>
-              Motivo de la corrección
-              <textarea style={{ ...inputStyle, width: "100%", marginTop: 4 }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} placeholder="Indica el motivo de la corrección" />
+        {editarDetallePlanta && (() => {
+          const original = editarDetallePlanta.original;
+          const tipo = original.tipo || "bache";
+          const formulaActual = editarDetallePlanta.campos.formula || "";
+          const formulasEditables = Object.keys(recetas.formulas).filter(nombre => tipo !== "servido" || usoFormula(nombre) === "Ganado");
+          if (original.formula && !formulasEditables.includes(original.formula)) formulasEditables.unshift(original.formula);
+          const campo = (clave, etiqueta, extra = {}) => (
+            <label key={clave} style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>
+              {etiqueta}
+              <input type={extra.type || "text"} min={extra.min} step={extra.step} max={extra.max} style={{ ...inputStyle, width: "100%", marginTop: 4 }} value={editarDetallePlanta.campos[clave] ?? ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, [clave]: e.target.value } }))} />
             </label>
-          </>
-        )}
+          );
+          return <>
+            {campo("fecha", "Fecha del movimiento", { type: "date", max: hoyISO() })}
+            {["bache", "nucleo", "servido", "ajuste"].includes(tipo) && <label style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>
+              Tipo de concentrado / fórmula
+              <select style={{ ...inputStyle, width: "100%", marginTop: 4 }} value={formulaActual} onChange={e => {
+                const formula = e.target.value;
+                setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, formula, categoria: tipo === "ajuste" && original.categoria === "Núcleo" ? "Núcleo" : usoFormula(formula), ...(tipo === "bache" ? { nucleoFormula: kgNucleoDe(v.campos.nucleoFormula || formula) > 0 ? (v.campos.nucleoFormula || formula) : "" } : {}) } }));
+              }}>
+                <option value="">Selecciona fórmula</option>
+                {formulasEditables.map(nombre => <option key={nombre} value={nombre}>{nombre} · {usoFormula(nombre)}</option>)}
+              </select>
+            </label>}
+            {tipo === "bache" && <>
+              {campo("baches", "Cantidad de baches", { type: "number", min: 0, step: 1 })}
+              {campo("kg", "Kilos producidos", { type: "number", min: 0, step: "0.01" })}
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12.5, fontWeight: 600 }}>
+                Núcleo usado
+                <select style={{ ...inputStyle, width: "100%", marginTop: 4 }} value={editarDetallePlanta.campos.nucleoFormula || ""} onChange={e => setEditarDetallePlanta(v => ({ ...v, campos: { ...v.campos, nucleoFormula: e.target.value } }))}>
+                  <option value="">Sin núcleo premezclado</option>
+                  {[...new Set([...(nucleosDeRecetas || []), ...(editarDetallePlanta.campos.nucleoFormula ? [editarDetallePlanta.campos.nucleoFormula] : [])])].map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
+                </select>
+              </label>
+              {campo("numBache", "Número de bache")}
+            </>}
+            {tipo === "nucleo" && <>{campo("porciones", "Porciones producidas", { type: "number", min: 0, step: "0.01" })}{campo("numNucleo", "Número de núcleo")}</>}
+            {tipo === "servido" && campo("kg", "Kilos servidos", { type: "number", min: 0, step: "0.01" })}
+            {campo("detalle", "Detalle")}
+            {campo("responsable", "Responsable")}
+            <label style={{ display: "block", marginTop: 6, fontSize: 12.5, fontWeight: 600 }}>
+              Motivo de la corrección
+              <textarea style={{ ...inputStyle, width: "100%", marginTop: 4 }} rows={2} value={motivoDetallePlanta} onChange={e => setMotivoDetallePlanta(e.target.value)} placeholder="Indica por qué se corrige este movimiento" />
+            </label>
+          </>;
+        })()}
       </ModalDialog>
       <nav className="v10-desktop-nav" aria-label="Navegación principal">
         <div className="v10-menu-brand">{configOrganizacion.nombre || "Rancho El Soñado"} <small>Operación de la granja</small></div>
@@ -4496,7 +4705,8 @@ export default function App({ onCerrarSesion }) {
                       <span>{a.nivel === "rojo" ? "🔴" : "🟡"}</span>
                       <div><b style={{ fontSize: 11, color: C.textoSuave }}>{a.seccion === "cobertura" ? "Cobertura" : a.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}</b><br />{a.textoAjustado || a.texto}</div>
                     </div>
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <button type="button" onClick={() => irAlError(a)} title="Abrir el módulo y los registros relacionados" style={{ padding: "5px 8px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>↗ Ir al error</button>
                       <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "modificar")} title="Modificar alerta" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
                       <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "eliminar")} title="Desactivar alerta; quedará en el historial" aria-label="Desactivar alerta" style={{ padding: "4px 8px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
                     </div>
@@ -4529,8 +4739,9 @@ export default function App({ onCerrarSesion }) {
                   <button onClick={() => window.print()}>Imprimir revisión</button>
                 </div>
                 {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => (
-                  <div key={i} style={{ padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
-                    <b>{h.tipo}</b> · {h.texto}
+                  <div key={`${h.tipo}-${h.texto}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
+                    <span style={{ flex: "1 1 220px" }}><b>{h.tipo}</b> · {h.texto}</span>
+                    <button type="button" onClick={() => irAlError(h)} style={{ padding: "6px 9px", fontSize: 12, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>↗ Ir al error</button>
                   </div>
                 ))}
                 {!hallazgosOperacion.length && <p>Sin excepciones detectadas.</p>}
@@ -4548,7 +4759,7 @@ export default function App({ onCerrarSesion }) {
                       return (
                         <div key={formula} style={{ padding: 7, borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
                           <div>{formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : alerta ? "sin consumo suficiente para estimar" : "cobertura no estimada"}`}</div>
-                          {alerta && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 5, color: C.yema, fontSize: 12 }}><span>⚠ {alerta.texto}</span><button onClick={() => abrirModalAjusteAdv(alerta, "cobertura", "eliminar")} title="Desactivar esta alerta" aria-label={`Desactivar alerta de ${formula}`} style={{ padding: "2px 7px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button></div>}
+                          {alerta && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 5, color: C.yema, fontSize: 12 }}><span>⚠ {alerta.texto}</span><button type="button" onClick={() => irAlError(alerta)} title="Abrir existencias y movimientos de esta fórmula" style={{ padding: "3px 7px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>Ir al error</button><button onClick={() => abrirModalAjusteAdv(alerta, "cobertura", "eliminar")} title="Desactivar esta alerta" aria-label={`Desactivar alerta de ${formula}`} style={{ padding: "2px 7px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button></div>}
                         </div>
                       );
                     }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por fórmula.</p>}
@@ -4563,8 +4774,9 @@ export default function App({ onCerrarSesion }) {
                   const sumaF = saldos ? Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0) : null;
                   const dif = sumaF != null ? +(total - sumaF).toFixed(1) : null;
                   return (
-                    <div key={categoria} style={{ padding: 8, fontSize: 13 }}>
-                      <b>{categoria}</b> · total {f2Dec(total)} kg · fórmulas {sumaF != null ? `${f2Dec(sumaF)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${f2Dec(dif)} kg` : "—"}
+                    <div key={categoria} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: 8, fontSize: 13 }}>
+                      <span><b>{categoria}</b> · total {f2Dec(total)} kg · fórmulas {sumaF != null ? `${f2Dec(sumaF)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${f2Dec(dif)} kg` : "—"}</span>
+                      {dif != null && Math.abs(dif) > 0.11 && <button type="button" onClick={() => irAlError({ destino: { vista: "planta", categoria } })} style={{ padding: "5px 8px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>Ir al error</button>}
                     </div>
                   );
                 })}
@@ -5559,7 +5771,7 @@ export default function App({ onCerrarSesion }) {
               <b>Existencias por fórmula · {categoria}</b>
               {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por fórmula. El total de {total.toFixed(1)} kg aún no tiene distribución verificada.</div> : <>
                 {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg == null ? C.textoSuave : kg < 0 ? C.alerta : C.verde }}>{kg == null ? "Sin conteo" : `${f2Dec(kg)} kg`}</b></div>)}
-                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."}</div> : null; })()}
+                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."} <button type="button" onClick={() => irAlError({ destino: { vista: "planta", categoria } })} style={{ marginLeft: 6, padding: "3px 8px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>Ir al error</button></div> : null; })()}
               </>}
             </div>)}
 
@@ -5758,7 +5970,7 @@ export default function App({ onCerrarSesion }) {
             )}
 
             {(subPlanta === "historial" || subPlanta === "todo") && movsPlanta.length > 0 && (
-              <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. Puedes editar cualquier detalle o ajuste, o eliminar movimientos.">
+              <Seccion titulo="Historial de movimientos de planta" sub="Filtra e imprime. Corrige fecha, fórmula, cantidades y responsables; los cambios quedan auditados.">
                 <div className="v10-plant-filters">
                   <input aria-label="Buscar movimiento de planta" placeholder="Fórmula, detalle, número o responsable" value={filtroPlanta.texto} onChange={e => setFiltroPlanta(v => ({ ...v, texto: e.target.value }))} />
                   <select aria-label="Tipo de movimiento" value={filtroPlanta.tipo} onChange={e => setFiltroPlanta(v => ({ ...v, tipo: e.target.value }))}><option value="">Todos los tipos</option>{["bache", "nucleo", "servido", "ajuste"].map(t => <option key={t}>{t}</option>)}</select>
@@ -5778,8 +5990,8 @@ export default function App({ onCerrarSesion }) {
                     {m.tipo === "ajuste" && (
                       <button onClick={() => setEditarAjustePlanta({ ...m, nuevoSaldoReal: String(m.saldoReal ?? m.kg ?? "") })} style={{ marginTop: 7, fontSize: 12, marginRight: 8, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 600 }}>Editar ajuste</button>
                     )}
-                    <button onClick={() => { setEditarDetallePlanta({ original: plantaMovs.find(x => String(x.id) === String(m.id)) || m, campos: { detalle: m.detalle || "", numBache: m.numBache || "", numNucleo: m.numNucleo || "", responsable: m.responsable || m.por || completadoPor } }); setMotivoDetallePlanta(""); }} style={{ marginTop: 7, fontSize: 12 }}>Corregir detalle</button>
-                    {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} · {mostrarNombre(ed.por)} · {ed.motivo}<div>Antes: {ed.anterior?.detalle || ed.anterior?.numBache || ed.anterior?.numNucleo || "—"} → Después: {ed.nuevo?.detalle || ed.nuevo?.numBache || ed.nuevo?.numNucleo || "—"}</div></div>)}</details>}
+                    <button type="button" onClick={() => { const original = plantaMovs.find(x => String(x.id) === String(m.id)) || m; setEditarDetallePlanta({ original, campos: { fecha: fechaPesajeISO(m.fecha) || hoyISO(), formula: m.formula || "", nucleoFormula: Object.hasOwn(m, "nucleoFormula") ? m.nucleoFormula || "" : (kgNucleoDe(m.formula) > 0 ? m.formula : ""), categoria: m.categoria || usoFormula(m.formula), kg: String(m.kg ?? ""), baches: String(m.baches ?? ""), porciones: String(m.porciones ?? ""), detalle: m.detalle || "", numBache: m.numBache || "", numNucleo: m.numNucleo || "", responsable: m.responsable || m.por || completadoPor } }); setMotivoDetallePlanta(""); }} style={{ marginTop: 7, fontSize: 12 }}>Corregir movimiento</button>
+                    {!!m.historialEdiciones?.length && <details><summary>Ver cambios ({m.historialEdiciones.length})</summary>{m.historialEdiciones.map((ed, j) => { const etiquetas = { fecha: "Fecha", formula: "Concentrado", categoria: "Categoría", kg: "Kg", baches: "Baches", porciones: "Porciones", nucleoFormula: "Núcleo usado", numBache: "Núm. bache", numNucleo: "Núm. núcleo", detalle: "Detalle", responsable: "Responsable" }; const cambios = Object.entries(ed.anterior || {}).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(ed.nuevo?.[k])); return <div key={j} style={{ fontSize: 12, padding: 5 }}>{new Date(ed.fechaHora).toLocaleString("es-CR")} · {mostrarNombre(ed.por)} · {ed.motivo}<div>{cambios.length ? cambios.map(([k, antes]) => `${etiquetas[k] || k}: ${antes == null || antes === "" ? "—" : antes} → ${ed.nuevo?.[k] == null || ed.nuevo?.[k] === "" ? "—" : ed.nuevo[k]}`).join(" · ") : "Cambio registrado"}</div></div>; })}</details>}
                   </div>
                 ))}
                 {!historialVisible(plantaFiltrada, "planta").length && <p>No hay movimientos con estos filtros.</p>}

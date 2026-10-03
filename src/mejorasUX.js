@@ -38,22 +38,44 @@ export function observacionesCaptura(capturas, lotes, tiquetesGlobales = []) {
 export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas }) {
   const hallazgos = [];
   const grupos = new Map();
-  for (const r of registros) { const k = `${r.fecha}|${r.lote}`; grupos.set(k, (grupos.get(k) || 0) + 1); }
-  for (const [k, n] of grupos) if (n > 1) hallazgos.push({ tipo: "Duplicado", texto: `${k.replace("|", " · ")} tiene ${n} controles` });
-  for (const [nombre, saldo] of [["Aves", saldoAves], ["Ganado", saldoGanado]]) if (saldo < 0) hallazgos.push({ tipo: "Saldo negativo", texto: `Concentrado ${nombre}: ${saldo.toFixed(1)} kg` });
+  for (const r of registros) {
+    const k = `${r.fecha}|${r.lote}`;
+    grupos.set(k, (grupos.get(k) || 0) + 1);
+  }
+  for (const [k, n] of grupos) if (n > 1) {
+    const [fecha, lote] = k.split("|");
+    hallazgos.push({ tipo: "Duplicado", texto: `${fecha} · ${lote} tiene ${n} controles`, destino: { vista: "historial", fecha: fechaHistorialISO(fecha), lote } });
+  }
+  for (const [nombre, saldo] of [["Aves", saldoAves], ["Ganado", saldoGanado]]) {
+    if (saldo < 0) hallazgos.push({ tipo: "Saldo negativo", texto: `Concentrado ${nombre}: ${saldo.toFixed(1)} kg`, destino: { vista: "planta", categoria: nombre } });
+  }
   for (const [categoria, saldos, total] of [["Aves", saldosAvesFormula, saldoAves], ["Ganado", saldosGanadoFormula, saldoGanado]]) {
     if (!saldos) continue;
-    for (const [nombre, kg] of Object.entries(saldos)) if (kg != null && kg < 0) hallazgos.push({ tipo: "Saldo negativo", texto: `${categoria} · ${nombre}: ${kg.toFixed(1)} kg` });
+    for (const [nombre, kg] of Object.entries(saldos)) if (kg != null && kg < 0) {
+      hallazgos.push({ tipo: "Saldo negativo", texto: `${categoria} · ${nombre}: ${kg.toFixed(1)} kg`, destino: { vista: "planta", categoria, formula: nombre } });
+    }
     const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0);
-    if (Math.abs(resto) > 0.11) hallazgos.push({ tipo: "Sin conciliar", texto: `${categoria}: ${resto.toFixed(1)} kg sin distribuir o con diferencia` });
+    if (Math.abs(resto) > 0.11) {
+      hallazgos.push({ tipo: "Sin conciliar", texto: `${categoria}: ${resto.toFixed(1)} kg sin distribuir o con diferencia`, destino: { vista: "planta", categoria } });
+    }
   }
-  const hoy = new Date(); const iso = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,"0")}-${String(hoy.getDate()).padStart(2,"0")}`;
-  const fecha = `${iso.slice(8)}/${iso.slice(5,7)}/${iso.slice(0,4)}`;
-  for (const l of lotes.filter(x => x.estado !== "cerrado")) if (!registros.some(r => r.fecha === fecha && r.lote === l.id)) hallazgos.push({ tipo: "Pendiente", texto: `G${l.galpon}: falta control de hoy` });
-  for (const m of retirosActivos) hallazgos.push({ tipo: "Retiro", texto: `G${m.galpon}: ${m.producto} hasta ${m.retiroHasta}` });
-  for (const t of tareas) if (t.vence && t.vence < iso) hallazgos.push({ tipo: "Tarea atrasada", texto: t.nombre });
+  const hoy = new Date();
+  const iso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  const fecha = `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+  for (const l of lotes.filter(x => x.estado !== "cerrado")) if (!registros.some(r => r.fecha === fecha && r.lote === l.id)) {
+    hallazgos.push({ tipo: "Pendiente", texto: `G${l.galpon}: falta control de hoy`, destino: { vista: "captura", fecha: iso, lote: l.id } });
+  }
+  for (const m of retirosActivos) {
+    const lote = lotes.find(l => String(l.id) === String(m.lote)) || lotes.find(l => String(l.galpon) === String(m.galpon));
+    hallazgos.push({ tipo: "Retiro", texto: `G${m.galpon}: ${m.producto} hasta ${m.retiroHasta}`, destino: { vista: "captura", fecha: fechaHistorialISO(m.fecha) || iso, lote: lote?.id } });
+  }
+  for (const t of tareas) if (t.vence && t.vence < iso) {
+    hallazgos.push({ tipo: "Tarea atrasada", texto: t.nombre, destino: { vista: "captura", fecha: iso, lote: t.lote || "" } });
+  }
   const ultimo = bodegaMovs[0];
-  if (ultimo && fechaHistorialISO(ultimo.fecha) < iso) hallazgos.push({ tipo: "Bodega", texto: `Último cierre: ${ultimo.fecha}` });
+  if (ultimo && fechaHistorialISO(ultimo.fecha) < iso) {
+    hallazgos.push({ tipo: "Bodega", texto: `Último cierre: ${ultimo.fecha}`, destino: { vista: "bodega", fecha: fechaHistorialISO(ultimo.fecha), id: ultimo.id } });
+  }
   return hallazgos;
 }
 

@@ -27,10 +27,37 @@ test("la secuencia se comparte entre gallineros, incluso con un registro guardad
   assert.deepEqual(saltosTiquetes(tiquetesDelDia(capturas, registros, fecha, ["G1", "G3"])), [7004]);
 });
 
-test("el centro de revisión distingue duplicados y saldos negativos", () => {
-  const h = excepcionesOperacion({ registros: [{ fecha: "25/09/2026", lote: "G3" }, { fecha: "25/09/2026", lote: "G3" }], lotes: [], saldoAves: 10, saldoGanado: -2, saldosAvesFormula: null, saldosGanadoFormula: null, bodegaMovs: [], retirosActivos: [], tareas: [] });
-  assert.ok(h.some(x => x.tipo === "Duplicado"));
-  assert.ok(h.some(x => x.tipo === "Saldo negativo"));
+test("las excepciones de revisión incluyen un destino para investigar el origen", () => {
+  const h = excepcionesOperacion({
+    registros: [{ fecha: "25/09/2026", lote: "G3" }, { fecha: "25/09/2026", lote: "G3" }],
+    lotes: [], saldoAves: 10, saldoGanado: -2,
+    saldosAvesFormula: { "Cría": 8 }, saldosGanadoFormula: { "Impulsor": -3 },
+    bodegaMovs: [{ id: "cierre-antiguo", fecha: "01/01/2000" }], retirosActivos: [], tareas: [],
+  });
+  const duplicado = h.find(x => x.tipo === "Duplicado");
+  const negativo = h.find(x => x.tipo === "Saldo negativo" && x.texto.includes("Concentrado Ganado"));
+  const formula = h.find(x => x.tipo === "Saldo negativo" && x.texto.includes("Impulsor"));
+  const diferencia = h.find(x => x.tipo === "Sin conciliar");
+  const bodega = h.find(x => x.tipo === "Bodega");
+  assert.equal(duplicado.destino.vista, "historial");
+  assert.deepEqual(duplicado.destino, { vista: "historial", fecha: "2026-09-25", lote: "G3" });
+  assert.deepEqual(negativo.destino, { vista: "planta", categoria: "Ganado" });
+  assert.deepEqual(formula.destino, { vista: "planta", categoria: "Ganado", formula: "Impulsor" });
+  assert.equal(diferencia.destino.vista, "planta");
+  assert.equal(bodega.destino.vista, "bodega");
+  assert.equal(bodega.destino.id, "cierre-antiguo");
+});
+
+test("los controles pendientes enlazan al galpón que falta", () => {
+  const h = excepcionesOperacion({
+    registros: [], lotes: [{ id: "lote-1", galpon: 1, estado: "activo" }],
+    saldoAves: 0, saldoGanado: 0, saldosAvesFormula: null, saldosGanadoFormula: null,
+    bodegaMovs: [], retirosActivos: [], tareas: [],
+  });
+  const pendiente = h.find(x => x.tipo === "Pendiente");
+  assert.equal(pendiente.destino.vista, "captura");
+  assert.equal(pendiente.destino.lote, "lote-1");
+  assert.match(pendiente.destino.fecha, /^\d{4}-\d{2}-\d{2}$/);
 });
 
 test("la exportación CSV conserva comas y comillas de la auditoría", () => {

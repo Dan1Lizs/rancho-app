@@ -244,22 +244,54 @@ export async function corregirProduccion({ id, nuevo, motivo, eliminar = false }
   return evento;
 }
 
-// Corrige metadatos de planta sin tocar kg, fórmula, fecha ni inventarios.
-// Esos valores se concilian mediante un ajuste físico independiente.
-export async function corregirDetallePlanta({ id, visto, campos, motivo, responsable }) {
+// Corrige movimientos de planta con control de concurrencia y auditoría.
+export async function corregirMovimientoPlanta({ id, visto, campos, motivo, responsable }) {
   if (!motivo?.trim() || !responsable?.trim()) throw new Error("Indica el motivo y el responsable.");
   const { data: fila, error: lecturaError } = await supabase.from("planta_movs").select("id,data").eq("id", String(id)).maybeSingle();
   if (lecturaError) throw lecturaError;
   if (!fila || JSON.stringify(fila.data) !== JSON.stringify(visto)) throw new Error("El movimiento cambió en otro dispositivo. Actualiza antes de corregir.");
   const anterior = fila.data;
-  const permitidos = ["detalle", "numBache", "numNucleo", "responsable"];
-  const valores = Object.fromEntries(permitidos.map(k => [k, String(campos[k] ?? anterior[k] ?? "").trim()]));
-  const cambio = permitidos.some(k => valores[k] !== String(anterior[k] ?? ""));
-  if (!cambio) throw new Error("No hay cambios para guardar.");
-  const nuevo = { ...anterior, ...valores, historialEdiciones: [...(anterior.historialEdiciones || []), {
+  const tipo = anterior.tipo || "bache";
+  const camposPorTipo = {
+    bache: ["formula", "categoria", "nucleoFormula", "componentesReceta", "baches", "kg", "numBache"],
+    nucleo: ["formula", "categoria", "componentesReceta", "porciones", "numNucleo"],
+    servido: ["formula", "categoria", "kg"],
+    ajuste: ["formula", "categoria"],
+  };
+  const permitidos = [...new Set(["fecha", "detalle", "responsable", ...(camposPorTipo[tipo] || [])])];
+  const numericos = new Set(["kg", "baches", "porciones"]);
+  const valores = Object.fromEntries(permitidos.filter(k => campos[k] !== undefined).map(k => {
+    if (numericos.has(k)) {
+      const valor = Number(campos[k]);
+      if (!Number.isFinite(valor) || valor < 0) throw new Error(`El campo ${k} debe ser un número válido no negativo.`);
+      return [k, valor];
+    }
+    if (k === "componentesReceta") return [k, campos[k] && typeof campos[k] === "object" ? { ...campos[k] } : {}];
+    return [k, String(campos[k] ?? "").trim()];
+  }));
+  const cambioCampos = Object.keys(valores).some(k => JSON.stringify(valores[k]) !== JSON.stringify(anterior[k] ?? (numericos.has(k) ? 0 : "")));
+  if (!cambioCampos) throw new Error("No hay cambios para guardar.");
+  const nuevo = { ...anterior, ...valores };
+  if (tipo === "ajuste" && valores.formula && valores.formula !== anterior.formula && anterior.conteosFormula && typeof anterior.conteosFormula === "object") {
+    const conteosFormula = { ...anterior.conteosFormula };
+    const conteo = conteosFormula[anterior.formula] ?? anterior.saldoReal;
+    if (anterior.formula) delete conteosFormula[anterior.formula];
+    if (conteo != null) conteosFormula[valores.formula] = conteo;
+    nuevo.conteosFormula = conteosFormula;
+  }
+  const cambioConteos = JSON.stringify(nuevo.conteosFormula || null) !== JSON.stringify(anterior.conteosFormula || null);
+  if (!cambioCampos && !cambioConteos) throw new Error("No hay cambios para guardar.");
+  const clavesAuditoria = permitidos.filter(k => k !== "componentesReceta" && (Object.hasOwn(anterior, k) || Object.hasOwn(valores, k)));
+  const anteriorAuditoria = Object.fromEntries(clavesAuditoria.map(k => [k, anterior[k] ?? ""]));
+  const nuevoAuditoria = Object.fromEntries(clavesAuditoria.map(k => [k, nuevo[k] ?? ""]));
+  if (cambioConteos) {
+    anteriorAuditoria.conteosFormula = anterior.conteosFormula || {};
+    nuevoAuditoria.conteosFormula = nuevo.conteosFormula || {};
+  }
+  nuevo.historialEdiciones = [...(anterior.historialEdiciones || []), {
     fechaHora: new Date().toISOString(), por: emailActual(), responsable: responsable.trim(), motivo: motivo.trim(),
-    anterior: Object.fromEntries(permitidos.map(k => [k, anterior[k] ?? ""])), nuevo: valores,
-  }] };
+    anterior: anteriorAuditoria, nuevo: nuevoAuditoria,
+  }];
   const { data: cambiado, error } = await supabase.from("planta_movs").update({ data: nuevo })
     .eq("id", String(id)).filter("data", "eq", JSON.stringify(anterior)).select("id");
   if (error || cambiado?.length !== 1) throw error || new Error("El movimiento cambió mientras se guardaba. Actualiza y revisa.");
