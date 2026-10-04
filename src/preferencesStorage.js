@@ -61,7 +61,8 @@ export async function eliminarBorrador(clave, almacenamiento = "local") {
   if (almacenamiento !== "nube") return;
   const user = await usuarioActual();
   if (!user) return;
-  await supabase.from("user_drafts").delete().eq("user_id", user.id).eq("draft_key", clave);
+  const { error } = await supabase.from("user_drafts").delete().eq("user_id", user.id).eq("draft_key", clave);
+  if (error) throw error;
 }
 
 

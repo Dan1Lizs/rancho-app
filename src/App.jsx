@@ -10,6 +10,7 @@ import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } fr
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
 import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "./historial";
+import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
 import { saldosFormulasDesdeConteo, deltaConteoFormula, calcularSaldoPlantaCategoria } from "./inventarioFormulas";
@@ -554,6 +555,8 @@ export default function App({ onCerrarSesion }) {
   const basesEdicionRef = useRef({});
   const notaSuciaRef = useRef(false);
   const fechaCapturaRef = useRef(hoyISO());
+  const borradorAutoGuardadoFechaRef = useRef(null);
+  const borradorAutoTimerRef = useRef(null);
   const [completadoPor, setCompletadoPor] = useState("");
   const [capturas, setCapturas] = useState({});
   const [borradorDisponible, setBorradorDisponible] = useState(null);
@@ -596,6 +599,7 @@ export default function App({ onCerrarSesion }) {
   const fechaBodegaRef = useRef(hoyISO());
   const movBodegaIdRef = useRef(null);
   const movBodegaOriginalRef = useRef(null);
+  const bodegaFormularioBaseRef = useRef(null);
   const [motivoEdicionBodega, setMotivoEdicionBodega] = useState("");
   const [periodosHistorial, setPeriodosHistorial] = useState(() => { try { return JSON.parse(localStorage.getItem(`rancho:periodos:${window.__usuarioEmail || "local"}`) || "{}"); } catch { return {}; } });
   useEffect(() => { localStorage.setItem(`rancho:periodos:${window.__usuarioEmail || "local"}`, JSON.stringify(periodosHistorial)); }, [periodosHistorial]);
@@ -656,16 +660,15 @@ export default function App({ onCerrarSesion }) {
   const [fechaCaptura, setFechaCaptura] = useState(hoyISO());
   useEffect(() => {
     if (!preferenciasCargadas) return;
+    let activo = true;
     leerBorrador(fechaCaptura, preferencias.borradores.almacenamiento).then(b => {
-      const vigente = b?.fecha === fechaCaptura && Date.now() - b.guardadoEl < 7 * 86400000 ? b : null;
-      if (vigente && preferencias.borradores.recuperarAutomaticamente) {
-        suciosRef.current = Object.fromEntries(Object.keys(vigente.capturas || {}).map(id => [id, true]));
-        basesEdicionRef.current = vigente.bases || {};
-        setCapturas(v => ({ ...v, ...vigente.capturas }));
-        if (vigente.nota) { notaSuciaRef.current = true; setNotaDia(vigente.nota); }
-      } else setBorradorDisponible(vigente);
-    });
+      if (!activo) return;
+      const vigente = b?.fecha === fechaCaptura && Date.now() - Number(b.guardadoEl || 0) < 7 * 86400000 ? b : null;
+      setBorradorDisponible(vigente);
+    }).catch(() => { if (activo) setBorradorDisponible(null); });
+    return () => { activo = false; };
   }, [preferenciasCargadas, preferencias.borradores.almacenamiento]);
+
   useEffect(() => {
     if (vista !== "captura") return;
     const revisar = async () => {
@@ -712,11 +715,50 @@ export default function App({ onCerrarSesion }) {
     };
   };
 
+  useEffect(() => {
+    if (!preferenciasCargadas || !borradorDisponible || cargando || cargandoFondo || !lotes.length) return;
+    if (borradorDisponible.fecha !== fechaCaptura) {
+      setBorradorDisponible(null);
+      return;
+    }
+    const dmy = fechaCaptura.split("-").reverse().join("/");
+    const bases = Object.fromEntries(lotes.map(lote => [
+      lote.id,
+      construirCaptura(lote, dmy, registros, medicaciones, fumigaciones) || capturaVacia(),
+    ]));
+    const capturasCambiadas = capturasDiferentesDeBase(borradorDisponible.capturas, bases);
+    const notaBase = bitacora.find(nota => nota.fecha === dmy)?.texto || "";
+    const notaBorrador = String(borradorDisponible.nota || "");
+    const notaCambiada = borradorDisponible.notaSucia === true
+      ? notaBorrador.trim() !== String(notaBase).trim()
+      : Boolean(notaBorrador.trim()) && notaBorrador.trim() !== String(notaBase).trim();
+    const tieneCambios = Object.keys(capturasCambiadas).length > 0 || notaCambiada;
+    if (!tieneCambios) {
+      setBorradorDisponible(null);
+      eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento).catch(() => {});
+      return;
+    }
+    const borradorLimpio = { ...borradorDisponible, capturas: capturasCambiadas, nota: notaCambiada ? notaBorrador : "", notaSucia: notaCambiada };
+    if (Object.keys(capturasCambiadas).length !== Object.keys(borradorDisponible.capturas || {}).length
+      || borradorDisponible.nota !== borradorLimpio.nota
+      || borradorDisponible.notaSucia !== borradorLimpio.notaSucia) setBorradorDisponible(borradorLimpio);
+    if (!preferencias.borradores.recuperarAutomaticamente) return;
+    suciosRef.current = Object.fromEntries(Object.keys(capturasCambiadas).map(id => [id, true]));
+    basesEdicionRef.current = borradorDisponible.bases || {};
+    borradorAutoGuardadoFechaRef.current = fechaCaptura;
+    setCapturas(v => ({ ...v, ...capturasCambiadas }));
+    notaSuciaRef.current = notaCambiada;
+    setNotaDia(notaCambiada ? notaBorrador : notaBase);
+    setBorradorDisponible(null);
+  }, [preferenciasCargadas, borradorDisponible, cargando, cargandoFondo, fechaCaptura, lotes, registros, medicaciones, fumigaciones, bitacora, preferencias.borradores]);
+
   const cambiarFechaCaptura = async (iso) => {
+    setBorradorDisponible(null);
     setFechaCaptura(iso);
     fechaCapturaRef.current = iso;
     suciosRef.current = {};
     basesEdicionRef.current = {};
+    notaSuciaRef.current = false;
     const dmy = iso.split("-").reverse().join("/");
     let cargados = 0;
     const nuevas = Object.fromEntries(lotes.map(l => {
@@ -725,27 +767,41 @@ export default function App({ onCerrarSesion }) {
       return [l.id, c2 || capturaVacia()];
     }));
     setCapturas(nuevas);
+    setNotaDia(bitacora.find(nota => nota.fecha === dmy)?.texto || "");
     try {
       const borrador = await leerBorrador(iso, preferencias.borradores.almacenamiento);
-      const vigente = borrador?.fecha === iso && Date.now() - borrador.guardadoEl < 7 * 86400000 ? borrador : null;
-      if (vigente && preferencias.borradores.recuperarAutomaticamente) {
-        suciosRef.current = Object.fromEntries(Object.keys(vigente.capturas || {}).map(id => [id, true]));
-        basesEdicionRef.current = vigente.bases || {};
-        setCapturas(v => ({ ...v, ...vigente.capturas }));
-        if (vigente.nota) { notaSuciaRef.current = true; setNotaDia(vigente.nota); }
-        setBorradorDisponible(null);
-      } else setBorradorDisponible(vigente);
+      const vigente = borrador?.fecha === iso && Date.now() - Number(borrador.guardadoEl || 0) < 7 * 86400000 ? borrador : null;
+      setBorradorDisponible(vigente);
     } catch { setBorradorDisponible(null); }
     if (cargados > 0) avisar(`✓ Se cargó lo guardado del ${dmy} (${cargados} gallinero(s)) — edita solo lo necesario`);
   };
   useEffect(() => {
-    if (!preferencias.borradores.autoguardado || (!Object.keys(suciosRef.current).length && !notaSuciaRef.current)) return;
-    const timer = setTimeout(() => {
-      guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento)
+    clearTimeout(borradorAutoTimerRef.current);
+    const hayCambios = Object.keys(suciosRef.current).length > 0 || notaSuciaRef.current;
+    if (!preferencias.borradores.autoguardado || !hayCambios) {
+      if (!hayCambios && borradorAutoGuardadoFechaRef.current === fechaCaptura) {
+        borradorAutoGuardadoFechaRef.current = null;
+        eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento)
+          .then(() => setBorradorDisponible(null))
+          .catch(() => setEstadoSync("Borrador local"));
+      }
+      return;
+    }
+    borradorAutoTimerRef.current = setTimeout(() => {
+      guardarBorrador(fechaCaptura, {
+        fecha: fechaCaptura,
+        capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])),
+        bases: basesEdicionRef.current,
+        nota: notaSuciaRef.current ? notaDia : "",
+        notaSucia: notaSuciaRef.current,
+        guardadoEl: Date.now(),
+      }, preferencias.borradores.almacenamiento)
+        .then(() => { borradorAutoGuardadoFechaRef.current = fechaCaptura; })
         .catch(() => setEstadoSync("Borrador local"));
     }, preferencias.borradores.intervaloSegundos * 1000);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(borradorAutoTimerRef.current);
   }, [capturas, notaDia, fechaCaptura, preferencias.borradores]);
+  
   const [fNecFotos, setFNecFotos] = useState([]);
   const [fotosVista, setFotosVista] = useState({});
   const [printDoc, setPrintDoc] = useState(null);
@@ -787,11 +843,12 @@ export default function App({ onCerrarSesion }) {
   useEffect(() => {
     if (!preferenciasCargadas || mpBorradorCargadoRef.current) return;
     mpBorradorCargadoRef.current = true;
-    leerBorrador("consulta-materia-prima", "local").then(borrador => {
+    leerBorrador("consulta-materia-prima", "local").then(async borrador => {
       const vigente = borrador?.tipo === "materia-prima-inventario" && Date.now() - Number(borrador.guardadoEl || 0) < 7 * 86400000
         ? borrador
         : null;
-      if (vigente) setMpBorradorConsulta(vigente);
+      if (vigente && inventarioMPTieneDatos(vigente.items)) setMpBorradorConsulta(vigente);
+      else if (borrador) await eliminarBorrador("consulta-materia-prima", "local").catch(() => {});
     }).catch(() => {});
   }, [preferenciasCargadas]);
   useEffect(() => {
@@ -953,14 +1010,23 @@ export default function App({ onCerrarSesion }) {
       if (!silencioso) {
         const elegido = mv.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current && String(m.id) === String(movBodegaIdRef.current))
           || mv.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current);
+        const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
+        const pasosBase = { salidas: false, devoluciones: false, conteo: false };
         movBodegaIdRef.current = elegido?.id ?? null;
         movBodegaOriginalRef.current = elegido ? snapshotBodega(elegido) : null;
+        bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(elegido, repartidoresBase, pasosBase);
+        setPasosBodega(pasosBase);
         setMovBodegaId(elegido?.id ?? null);
         if (elegido) {
           setMovBodega({ comprado: elegido.comprado || "", vendGranja: elegido.vendGranja || "", destruido: elegido.destruido || "", regalado: elegido.regalado || "" });
-          if (elegido.repartos) setRepartos(elegido.repartos);
+          setRepartos((elegido.repartos?.length ? elegido.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
           setObsInv(elegido.obs || "");
           setAjusteBodega(elegido.ajusteConteo == null ? "" : String(elegido.ajusteConteo));
+        } else {
+          setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
+          setRepartos(repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" })));
+          setObsInv("");
+          setAjusteBodega("");
         }
       }
       {
@@ -1225,7 +1291,7 @@ export default function App({ onCerrarSesion }) {
       setConflictoEdicion("");
       if (!soloLoteId || notaDia.trim()) notaSuciaRef.current = false;
       try {
-        if (Object.keys(suciosRef.current).length || notaSuciaRef.current) await guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() }, preferencias.borradores.almacenamiento);
+        if (Object.keys(suciosRef.current).length || notaSuciaRef.current) await guardarBorrador(fechaCaptura, { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", notaSucia: notaSuciaRef.current, guardadoEl: Date.now() }, preferencias.borradores.almacenamiento);
         else await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento);
         setBorradorDisponible(null);
       } catch { /* sin espacio local */ }
@@ -1263,26 +1329,47 @@ export default function App({ onCerrarSesion }) {
     setFechaBodega(iso);
     fechaBodegaRef.current = iso;
     const mov = id != null ? bodegaMovs.find(m => String(m.id) === String(id)) : bodegaMovs.find(m => fechaHistorialISO(m.fecha) === iso);
+    const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
+    const pasosBase = { salidas: false, devoluciones: false, conteo: false };
     setMovBodegaId(mov?.id ?? null);
     movBodegaIdRef.current = mov?.id ?? null;
     movBodegaOriginalRef.current = mov ? snapshotBodega(mov) : null;
+    bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(mov, repartidoresBase, pasosBase);
+    setPasosBodega(pasosBase);
     setMotivoEdicionBodega("");
     if (mov) {
       setMovBodega({ comprado: mov.comprado || "", vendGranja: mov.vendGranja || "", destruido: mov.destruido || "", regalado: mov.regalado || "" });
-      setRepartos((mov.repartos?.length ? mov.repartos : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
+      setRepartos((mov.repartos?.length ? mov.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
       setObsInv(mov.obs || "");
       setAjusteBodega(mov.ajusteConteo == null ? "" : String(mov.ajusteConteo));
     } else {
       setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
-      setRepartos((bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map(n2 => ({ nombre: n2, salida: "", devBueno: "", devMalo: "" })));
+      setRepartos(repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" })));
       setObsInv("");
+      setAjusteBodega("");
     }
   };
-  const bodegaTieneCambios = Object.values(movBodega).some(v => String(v ?? "").trim() !== "")
-    || repartos.some(r => [r.tiq, r.salida, r.devBueno, r.devMalo].some(v => String(v ?? "").trim() !== ""))
-    || Boolean(String(obsInv || "").trim())
-    || String(ajusteBodega || "").trim() !== ""
-    || Object.values(pasosBodega).some(Boolean);
+  const estadoFormularioBodega = valoresFormularioBodega({ movBodega, repartos, obsInv, ajusteBodega, pasosBodega });
+  const baseFormularioBodega = bodegaFormularioBaseRef.current
+    || formularioBodegaDesdeMovimiento(null, bodegaCfg.repartidores, { salidas: false, devoluciones: false, conteo: false });
+  const bodegaTieneCambios = !formulariosIguales(estadoFormularioBodega, baseFormularioBodega);
+  useEffect(() => {
+    if (!bodegaBorradorConsulta || cargando || cargandoFondo) return;
+    const movimiento = bodegaMovs.find(m => String(m.id) === String(bodegaBorradorConsulta.movimientoId))
+      || bodegaMovs.find(m => fechaHistorialISO(m.fecha) === bodegaBorradorConsulta.fecha);
+    const base = formularioBodegaDesdeMovimiento(movimiento, bodegaCfg.repartidores);
+    const borrador = valoresFormularioBodega({
+      movBodega: bodegaBorradorConsulta.movBodega,
+      repartos: bodegaBorradorConsulta.repartos,
+      obsInv: bodegaBorradorConsulta.obsInv,
+      ajusteBodega: bodegaBorradorConsulta.ajusteBodega,
+      pasosBodega: bodegaBorradorConsulta.pasosBodega,
+    });
+    if (formulariosIguales(borrador, base)) {
+      eliminarBorrador("consulta-bodega", "local").catch(() => {});
+      setBodegaBorradorConsulta(null);
+    }
+  }, [bodegaBorradorConsulta, bodegaMovs, bodegaCfg.repartidores, cargando, cargandoFondo]);
   const guardarBorradorConsultaBodega = async () => {
     const borrador = {
       tipo: "bodega",
@@ -1376,6 +1463,7 @@ export default function App({ onCerrarSesion }) {
     if (await escribir(K.movs, nuevos)) {
       setBodegaMovs(nuevos); setMovBodegaId(nuevoMov.id); movBodegaIdRef.current = nuevoMov.id;
       movBodegaOriginalRef.current = snapshotBodega(nuevos.find(m => String(m.id) === String(nuevoMov.id)));
+      bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(nuevos.find(m => String(m.id) === String(nuevoMov.id)), bodegaCfg.repartidores, pasosBodega);
       setMotivoEdicionBodega("");
       setAjusteBodega(nuevoMov.ajusteConteo == null ? "" : String(nuevoMov.ajusteConteo));
       await eliminarBorrador("consulta-bodega", "local").catch(() => {});
@@ -2139,9 +2227,7 @@ export default function App({ onCerrarSesion }) {
     (pedidoPorProveedor[x.prov] = pedidoPorProveedor[x.prov] || []).push(x);
   });
 
-  const mpInvTieneCambios = Object.values(mpInv).some(v => v && ((v.sacos ?? "") !== "" || (v.kg ?? "") !== ""))
-    || Boolean(String(mpResponsable || "").trim())
-    || mpFechaInput !== hoyISO();
+  const mpInvTieneCambios = inventarioMPTieneDatos(mpInv);
 
   const guardarBorradorConsultaMP = async () => {
     const borrador = {
@@ -2570,6 +2656,113 @@ export default function App({ onCerrarSesion }) {
     if (valor === subPedidoMP) return;
     setSubPedidoMP(valor);
   };
+  const descartarControlYSalir = async () => {
+    if (!salidaPendiente) return;
+    const destino = salidaPendiente;
+    clearTimeout(borradorAutoTimerRef.current);
+    try {
+      await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento);
+      const dmy = fechaCaptura.split("-").reverse().join("/");
+      const restauradas = Object.fromEntries(lotes.map(lote => [
+        lote.id,
+        construirCaptura(lote, dmy, registros, medicaciones, fumigaciones) || capturaVacia(),
+      ]));
+      suciosRef.current = {};
+      basesEdicionRef.current = {};
+      notaSuciaRef.current = false;
+      borradorAutoGuardadoFechaRef.current = null;
+      setBorradorDisponible(null);
+      setConflictoEdicion("");
+      setCapturas(restauradas);
+      setNotaDia(bitacora.find(nota => nota.fecha === dmy)?.texto || "");
+      setSalidaPendiente(null);
+      abrirVista(destino);
+      avisar("Cambios descartados y borrador eliminado.");
+    } catch {
+      avisar("No se pudo eliminar el borrador. Tus datos siguen en pantalla.");
+    }
+  };
+  const guardarControlYSalir = async () => {
+    if (!salidaPendiente) return;
+    const destino = salidaPendiente;
+    clearTimeout(borradorAutoTimerRef.current);
+    const payload = {
+      fecha: fechaCaptura,
+      capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])),
+      bases: basesEdicionRef.current,
+      nota: notaSuciaRef.current ? notaDia : "",
+      notaSucia: notaSuciaRef.current,
+      guardadoEl: Date.now(),
+    };
+    try {
+      await guardarBorrador(fechaCaptura, payload, preferencias.borradores.almacenamiento);
+      borradorAutoGuardadoFechaRef.current = fechaCaptura;
+      setSalidaPendiente(null);
+      abrirVista(destino);
+      avisar("Borrador guardado en este dispositivo.");
+    } catch {
+      avisar("No se pudo guardar el borrador. Tus datos siguen en pantalla.");
+    }
+  };
+  const descartarBorradorControlDisponible = async () => {
+    clearTimeout(borradorAutoTimerRef.current);
+    try {
+      await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento);
+      if (borradorAutoGuardadoFechaRef.current === fechaCaptura) borradorAutoGuardadoFechaRef.current = null;
+      setBorradorDisponible(null);
+      avisar("Borrador descartado.");
+    } catch {
+      avisar("No se pudo eliminar el borrador sincronizado. Intenta de nuevo.");
+    }
+  };
+  const descartarBorradorBodegaDisponible = async () => {
+    try {
+      await eliminarBorrador("consulta-bodega", "local");
+      setBodegaBorradorConsulta(null);
+      avisar("Borrador de bodega descartado.");
+    } catch {
+      avisar("No se pudo eliminar el borrador de bodega.");
+    }
+  };
+  const descartarBorradorMPDisponible = async () => {
+    try {
+      await eliminarBorrador("consulta-materia-prima", "local");
+      setMpBorradorConsulta(null);
+      avisar("Borrador de materia prima descartado.");
+    } catch {
+      avisar("No se pudo eliminar el borrador de materia prima.");
+    }
+  };
+  const aplicarDestinoConsultaHistorial = pendiente => {
+    if (pendiente?.destino?.tipo === "subPedidoMP") setSubPedidoMP(pendiente.destino.valor);
+    else if (pendiente?.destino?.tipo === "mp") setMpHistorialAbierto(true);
+    else if (pendiente?.destino?.tipo === "vista") abrirVista(pendiente.destino.valor);
+    else if (pendiente?.destino?.tipo === "subBodega") setSubBodega(pendiente.destino.valor);
+    else if (pendiente?.destino?.tipo === "fecha") cambiarFechaBodega(pendiente.destino.iso, pendiente.destino.id);
+    setConsultaHistorialPendiente(null);
+  };
+  const descartarCambiosYConsultar = async () => {
+    const pendiente = consultaHistorialPendiente;
+    if (!pendiente) return;
+    try {
+      if (pendiente.tipo === "materia-prima") {
+        await eliminarBorrador("consulta-materia-prima", "local");
+        setMpBorradorConsulta(null);
+        setMpInv({});
+        setMpFechaInput(hoyISO());
+        setMpResponsable("");
+      } else if (pendiente.tipo === "bodega") {
+        await eliminarBorrador("consulta-bodega", "local");
+        setBodegaBorradorConsulta(null);
+        if (pendiente.destino?.tipo !== "fecha") cambiarFechaBodega(fechaBodega, movBodegaIdRef.current);
+      }
+      aplicarDestinoConsultaHistorial(pendiente);
+      avisar("Cambios descartados; puedes consultar el historial.");
+    } catch {
+      avisar("No se pudo descartar el borrador. Tus datos siguen en pantalla.");
+    }
+  };
+
   const irA = (id) => {
     const destino = tabs.find(t => t.id === id);
     if (!destino) return;
@@ -4065,12 +4258,23 @@ export default function App({ onCerrarSesion }) {
   const cap = capturas[galponActivo] || capturaVacia();
   const setCap = (cambios) => {
     const clave = `${fechaCaptura}|${galponActivo}`;
-    if (!Object.prototype.hasOwnProperty.call(basesEdicionRef.current, clave)) {
-      const fecha = fechaCaptura.split("-").reverse().join("/");
-      basesEdicionRef.current[clave] = baseDeRegistro(registros, fecha, galponActivo);
+    const dmy = fechaCaptura.split("-").reverse().join("/");
+    const lote = lotes.find(x => x.id === galponActivo);
+    const baseCaptura = lote
+      ? construirCaptura(lote, dmy, registros, medicaciones, fumigaciones) || capturaVacia()
+      : capturaVacia();
+    const actual = capturas[galponActivo] || capturaVacia();
+    const siguiente = { ...actual, ...cambios };
+    if (formulariosIguales(siguiente, baseCaptura)) {
+      delete suciosRef.current[galponActivo];
+      delete basesEdicionRef.current[clave];
+    } else {
+      if (!Object.prototype.hasOwnProperty.call(basesEdicionRef.current, clave)) {
+        basesEdicionRef.current[clave] = baseDeRegistro(registros, dmy, galponActivo);
+      }
+      suciosRef.current[galponActivo] = true;
     }
-    suciosRef.current[galponActivo] = true;
-    setCapturas(prev => ({ ...prev, [galponActivo]: { ...(prev[galponActivo] || capturaVacia()), ...cambios } }));
+    setCapturas(prev => ({ ...prev, [galponActivo]: siguiente }));
   };
   const tGal = totalesGalpon(cap);
   const loteActivo = lotes.find(l => l.id === galponActivo);
@@ -4208,49 +4412,50 @@ export default function App({ onCerrarSesion }) {
       <ModalDialog
         abierto={!!salidaPendiente}
         titulo="Hay cambios sin enviar"
-        subtitulo="El control diario seguirá guardado como borrador en este dispositivo y podrás recuperarlo al volver a esta fecha."
+        subtitulo="Elige si quieres conservarlos como borrador o descartarlos. Los datos ya guardados no se modifican."
         onClose={() => setSalidaPendiente(null)}
-        ancho={480}
+        ancho={500}
         tono="alerta"
         pie={
           <>
-            <button type="button" autoFocus onClick={() => setSalidaPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+            <button type="button" autoFocus onClick={() => setSalidaPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>
               Seguir editando
             </button>
-            <button type="button" onClick={() => { const id = salidaPendiente; setSalidaPendiente(null); abrirVista(id); }} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>
+            <button type="button" onClick={descartarControlYSalir} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.alerta}`, background: C.superficie, color: C.alerta, cursor: "pointer", fontWeight: 600 }}>
+              Salir y descartar cambios
+            </button>
+            <button type="button" onClick={guardarControlYSalir} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>
               Salir y conservar borrador
             </button>
           </>
         }
       >
-        <p style={{ margin: 0, color: C.textoSuave }}>Si cambias de pantalla sin enviar, tus datos no se perderán pero no estarán reflejados en los reportes hasta que confirmes el envío.</p>
+        <p style={{ margin: 0, color: C.textoSuave }}>El borrador solo contiene lo que cambiaste y queda privado para tu usuario; no reemplaza los registros compartidos hasta que los guardes.</p>
       </ModalDialog>
       <ModalDialog
         abierto={!!consultaHistorialPendiente}
         titulo={consultaHistorialPendiente?.titulo || "Consultar historial"}
-        subtitulo="La captura actual todavía no se ha enviado"
+        subtitulo="Hay cambios en el formulario que aún no se han guardado"
         onClose={() => setConsultaHistorialPendiente(null)}
-        ancho={500}
+        ancho={560}
         tono="alerta"
         pie={
           <>
-            <button type="button" autoFocus onClick={() => setConsultaHistorialPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>
+            <button type="button" autoFocus onClick={() => setConsultaHistorialPendiente(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>
               Seguir digitando
+            </button>
+            <button type="button" onClick={descartarCambiosYConsultar} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.alerta}`, background: C.superficie, color: C.alerta, cursor: "pointer", fontWeight: 600 }}>
+              Descartar cambios y consultar
             </button>
             <button type="button" onClick={async () => {
               const pendiente = consultaHistorialPendiente;
               try {
                 if (pendiente?.tipo === "materia-prima") await guardarBorradorConsultaMP();
                 if (pendiente?.tipo === "bodega") await guardarBorradorConsultaBodega();
-                setConsultaHistorialPendiente(null);
-                if (pendiente?.destino?.tipo === "subPedidoMP") setSubPedidoMP(pendiente.destino.valor);
-                else if (pendiente?.destino?.tipo === "mp") setMpHistorialAbierto(true);
-                else if (pendiente?.destino?.tipo === "vista") abrirVista(pendiente.destino.valor);
-                else if (pendiente?.destino?.tipo === "subBodega") setSubBodega(pendiente.destino.valor);
-                else if (pendiente?.destino?.tipo === "fecha") cambiarFechaBodega(pendiente.destino.iso, pendiente.destino.id);
-                avisar("✓ Captura guardada como borrador local. Puedes recuperarla al volver a Inventario.");
+                aplicarDestinoConsultaHistorial(pendiente);
+                avisar("Captura guardada como borrador local. Puedes recuperarla al volver a Inventario.");
               } catch {
-                avisar("⚠ No se pudo guardar el borrador; la captura sigue abierta.");
+                avisar("No se pudo guardar el borrador; la captura sigue abierta.");
               }
             }} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>
               Guardar borrador y consultar
@@ -4259,7 +4464,7 @@ export default function App({ onCerrarSesion }) {
         }
       >
         <p style={{ margin: 0, lineHeight: 1.55 }}>
-          Si consultas el historial, la sección de captura puede cambiar de lugar. Tus datos se guardarán como un borrador privado de este dispositivo y se podrán recuperar al regresar a la sección correspondiente.
+          Si solo quieres revisar datos, descarta los cambios y consulta. Si quieres retomarlos después, guárdalos como borrador. Los registros ya guardados no se modifican.
         </p>
       </ModalDialog>
       <ModalDialog
@@ -4798,9 +5003,9 @@ export default function App({ onCerrarSesion }) {
         {/* ══ CONTROL DIARIO ══ */}
         {vista === "captura" && (
           <>
-            {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay un borrador sin guardar de esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); basesEdicionRef.current = borradorDisponible.bases || {}; setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.nota) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={async () => { await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento); setBorradorDisponible(null); }} style={{ marginLeft: 8 }}>Descartar</button></div>}
+            {borradorDisponible && <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 10, marginBottom: 10, fontSize: 13 }}>Hay cambios guardados como borrador para esta fecha. <button onClick={() => { suciosRef.current = Object.fromEntries(Object.keys(borradorDisponible.capturas || {}).map(id => [id, true])); basesEdicionRef.current = borradorDisponible.bases || {}; borradorAutoGuardadoFechaRef.current = fechaCaptura; setCapturas(v => ({ ...v, ...borradorDisponible.capturas })); if (borradorDisponible.notaSucia) { notaSuciaRef.current = true; setNotaDia(borradorDisponible.nota); } setBorradorDisponible(null); }}>Recuperar borrador</button><button onClick={descartarBorradorControlDisponible} style={{ marginLeft: 8 }}>Descartar borrador</button></div>}
             {conflictoEdicion && <div role="alert" style={{ padding: 10, background: C.alertaSuave, color: C.alerta, borderRadius: 10, marginBottom: 10 }}>{conflictoEdicion} <button onClick={async () => {
-              const payload = { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", guardadoEl: Date.now() };
+              const payload = { fecha: fechaCaptura, capturas: Object.fromEntries(Object.keys(suciosRef.current).map(id => [id, capturas[id]])), bases: basesEdicionRef.current, nota: notaSuciaRef.current ? notaDia : "", notaSucia: notaSuciaRef.current, guardadoEl: Date.now() };
               await guardarBorrador(fechaCaptura, payload, preferencias.borradores.almacenamiento);
               suciosRef.current = {}; basesEdicionRef.current = {}; notaSuciaRef.current = false;
               setConflictoEdicion(""); await cargarTodo(false); setBorradorDisponible(payload);
@@ -5251,7 +5456,7 @@ export default function App({ onCerrarSesion }) {
             </Seccion>
 
             <Seccion titulo="Bitácora de novedades" sub="UNA sola para toda la granja — compartida entre los gallineros y guardada con el control">
-              <textarea value={notaDia} onChange={e => { notaSuciaRef.current = true; setNotaDia(e.target.value); }} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}
+              <textarea value={notaDia} onChange={e => { const valor = e.target.value; const fecha = fechaCaptura.split("-").reverse().join("/"); const base = bitacora.find(nota => nota.fecha === fecha)?.texto || ""; notaSuciaRef.current = String(valor).trim() !== String(base).trim(); setNotaDia(valor); }} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "'Inter', sans-serif" }} />
             </Seccion>
 
@@ -5495,6 +5700,9 @@ export default function App({ onCerrarSesion }) {
                     setMovBodegaId(movOriginal?.id ?? b.movimientoId ?? null);
                     movBodegaIdRef.current = movOriginal?.id ?? b.movimientoId ?? null;
                     movBodegaOriginalRef.current = movOriginal ? snapshotBodega(movOriginal) : null;
+                    const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
+                    bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(movOriginal, repartidoresBase, { salidas: false, devoluciones: false, conteo: false });
+                    setPasosBodega(b.pasosBodega || { salidas: false, devoluciones: false, conteo: false });
                     setMovBodega(b.movBodega || { comprado: "", vendGranja: "", destruido: "", regalado: "" });
                     setRepartos(b.repartos || []);
                     setObsInv(b.obsInv || "");
@@ -5503,7 +5711,7 @@ export default function App({ onCerrarSesion }) {
                     setBodegaBorradorConsulta(null);
                     avisar("✓ Borrador de bodega recuperado");
                   }} style={{ padding: "7px 11px", border: "none", borderRadius: 8, background: C.verde, color: "#fff", cursor: "pointer", fontWeight: 600 }}>Recuperar borrador</button>
-                  <button type="button" onClick={async () => { await eliminarBorrador("consulta-bodega", "local").catch(() => {}); setBodegaBorradorConsulta(null); avisar("✓ Borrador descartado"); }} style={{ padding: "7px 11px", border: `1px solid ${C.borde}`, borderRadius: 8, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Descartar</button>
+                  <button type="button" onClick={descartarBorradorBodegaDisponible} style={{ padding: "7px 11px", border: `1px solid ${C.borde}`, borderRadius: 8, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Descartar borrador</button>
                 </div>
               </div>
             )}
@@ -6163,7 +6371,7 @@ export default function App({ onCerrarSesion }) {
                       setMpBorradorConsulta(null);
                       avisar("✓ Borrador de inventario recuperado");
                     }} style={{ padding: "7px 11px", border: "none", borderRadius: 8, background: C.verde, color: "#fff", cursor: "pointer", fontWeight: 600 }}>Recuperar borrador</button>
-                    <button type="button" onClick={async () => { await eliminarBorrador("consulta-materia-prima", "local").catch(() => {}); setMpBorradorConsulta(null); avisar("✓ Borrador descartado"); }} style={{ padding: "7px 11px", border: `1px solid ${C.borde}`, borderRadius: 8, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Descartar</button>
+                    <button type="button" onClick={descartarBorradorMPDisponible} style={{ padding: "7px 11px", border: `1px solid ${C.borde}`, borderRadius: 8, background: C.superficie, color: C.texto, cursor: "pointer", fontWeight: 600 }}>Descartar borrador</button>
                   </div>
                 </div>
               )}
