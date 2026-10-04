@@ -4915,7 +4915,7 @@ export default function App({ onCerrarSesion }) {
                       <div><b style={{ fontSize: 11, color: C.textoSuave }}>{a.seccion === "cobertura" ? "Cobertura" : a.seccion === "decisiones" ? "Para decidir hoy" : "Auditoría"}</b><br />{a.textoAjustado || a.texto}</div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                      <button type="button" onClick={() => irAlError(a)} title="Abrir el módulo y los registros relacionados" style={{ padding: "5px 8px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>↗ Ir al error</button>
+                      <button type="button" onClick={() => irAlError(a)} title="Abrir el módulo y los registros relacionados" style={{ padding: "5px 8px", fontSize: 11.5, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>↗ Ir a la alerta</button>
                       <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "modificar")} title="Modificar alerta" style={{ padding: "4px 8px", fontSize: 11.5, background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>✏️</button>
                       <button onClick={() => abrirModalAjusteAdv(a, a.seccion, "eliminar")} title="Desactivar alerta; quedará en el historial" aria-label="Desactivar alerta" style={{ padding: "4px 8px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button>
                     </div>
@@ -4950,7 +4950,7 @@ export default function App({ onCerrarSesion }) {
                 {hallazgosOperacion.filter(h => filtroExcepciones === "Todas" || h.tipo === filtroExcepciones).map((h, i) => (
                   <div key={`${h.tipo}-${h.texto}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, padding: 9, marginBottom: 6, background: h.tipo === "Duplicado" || h.tipo === "Saldo negativo" ? C.alertaSuave : C.yemaSuave, borderRadius: 9, fontSize: 13 }}>
                     <span style={{ flex: "1 1 220px" }}><b>{h.tipo}</b> · {h.texto}</span>
-                    <button type="button" onClick={() => irAlError(h)} style={{ padding: "6px 9px", fontSize: 12, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>↗ Ir al error</button>
+                    <button type="button" onClick={() => irAlError(h)} style={{ padding: "6px 9px", fontSize: 12, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>↗ Ir a la alerta</button>
                   </div>
                 ))}
                 {!hallazgosOperacion.length && <p>Sin excepciones detectadas.</p>}
@@ -4968,7 +4968,7 @@ export default function App({ onCerrarSesion }) {
                       return (
                         <div key={formula} style={{ padding: 7, borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
                           <div>{formula}: {kg == null ? "Sin conteo" : `${kg.toFixed(1)} kg · ${consumo > 0 ? `${(kg / consumo).toFixed(1)} días` : alerta ? "sin consumo suficiente para estimar" : "cobertura no estimada"}`}</div>
-                          {alerta && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 5, color: C.yema, fontSize: 12 }}><span>⚠ {alerta.texto}</span><button type="button" onClick={() => irAlError(alerta)} title="Abrir existencias y movimientos de esta fórmula" style={{ padding: "3px 7px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>Ir al error</button><button onClick={() => abrirModalAjusteAdv(alerta, "cobertura", "eliminar")} title="Desactivar esta alerta" aria-label={`Desactivar alerta de ${formula}`} style={{ padding: "2px 7px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button></div>}
+                          {alerta && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 5, color: C.yema, fontSize: 12 }}><span>⚠ {alerta.texto}</span><button type="button" onClick={() => irAlError(alerta)} title="Abrir existencias y movimientos de esta fórmula" style={{ padding: "3px 7px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>Ir a la alerta</button><button onClick={() => abrirModalAjusteAdv(alerta, "cobertura", "eliminar")} title="Desactivar esta alerta" aria-label={`Desactivar alerta de ${formula}`} style={{ padding: "2px 7px", fontSize: 14, background: "#fff", color: C.alerta, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>×</button></div>}
                         </div>
                       );
                     }) : <p style={{ fontSize: 12 }}>Falta el primer conteo por fórmula.</p>}
@@ -4985,7 +4985,7 @@ export default function App({ onCerrarSesion }) {
                   return (
                     <div key={categoria} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: 8, fontSize: 13 }}>
                       <span><b>{categoria}</b> · total {f2Dec(total)} kg · fórmulas {sumaF != null ? `${f2Dec(sumaF)} kg` : "sin conteo"} · diferencia {dif != null ? `${dif > 0 ? "+" : ""}${f2Dec(dif)} kg` : "—"}</span>
-                      {dif != null && Math.abs(dif) > 0.11 && <button type="button" onClick={() => irAlError({ destino: { vista: "planta", categoria } })} style={{ padding: "5px 8px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>Ir al error</button>}
+                      {dif != null && Math.abs(dif) > 0.11 && <button type="button" onClick={() => irAlError({ destino: { vista: "planta", categoria } })} style={{ padding: "5px 8px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>Ir a la alerta</button>}
                     </div>
                   );
                 })}
@@ -5983,7 +5983,7 @@ export default function App({ onCerrarSesion }) {
               <b>Existencias por fórmula · {categoria}</b>
               {!saldos ? <div style={{ color: C.textoSuave, marginTop: 5 }}>Pendiente del primer conteo por fórmula. El total de {total.toFixed(1)} kg aún no tiene distribución verificada.</div> : <>
                 {Object.entries(saldos).map(([nombre, kg]) => <div key={nombre} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.borde}` }}><span>{nombre}</span><b style={{ color: kg == null ? C.textoSuave : kg < 0 ? C.alerta : C.verde }}>{kg == null ? "Sin conteo" : `${f2Dec(kg)} kg`}</b></div>)}
-                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."} <button type="button" onClick={() => irAlError({ destino: { vista: "planta", categoria } })} style={{ marginLeft: 6, padding: "3px 8px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>Ir al error</button></div> : null; })()}
+                {(() => { const resto = total - Object.values(saldos).reduce((s, n) => s + Number(n || 0), 0); return Math.abs(resto) > 0.11 ? <div style={{ color: resto < 0 ? C.alerta : C.textoSuave, marginTop: 6 }}>{Object.values(saldos).some(n => n == null) ? "Pendiente de distribuir" : "Diferencia por revisar"}: {resto.toFixed(1)} kg. {resto < 0 && "Revisa servidos o movimientos sin fórmula."} <button type="button" onClick={() => irAlError({ destino: { vista: "planta", categoria } })} style={{ marginLeft: 6, padding: "3px 8px", fontSize: 11, background: C.verdeSuave, color: C.verde, border: `1px solid ${C.borde}`, borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>Ir a la alerta</button></div> : null; })()}
               </>}
             </div>)}
 
