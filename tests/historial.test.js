@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarHistorial, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "../src/historial.js";
+import { filtrarHistorial, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, rutaNetaBodega } from "../src/historial.js";
 
 test("el período filtra D/M/A e ISO sin confundir años y permite ver todo", () => {
   const items = [{ fecha: "25/09/2025" }, { fecha: "01/09/2026" }, { fecha: "2026-09-26" }, { fecha: "27/09/2026" }];
@@ -31,4 +31,45 @@ test("la impresión de historial toma el movimiento elegido aunque no sea el úl
   const movimientos = [{ id: "hoy", fecha: "27/09/2026" }, { id: "antes", fecha: "25/09/2026" }];
   assert.equal(movimientoBodegaParaReporte(movimientos, "antes").fecha, "25/09/2026");
   assert.equal(movimientoBodegaParaReporte(movimientos).id, "hoy");
+});
+
+test("al imprimir Bodega, el movimiento seleccionado debe pertenecer a la fecha visible", () => {
+  const movimientos = [
+    { id: "seis", fecha: "06/10/2026" },
+    { id: "cinco", fecha: "05/10/2026" },
+  ];
+  assert.equal(elegirMovimientoBodega(movimientos, "2026-10-05", "seis").elegido.id, "cinco");
+  assert.equal(elegirMovimientoBodega(movimientos, "2026-10-05", "cinco").elegido.id, "cinco");
+});
+
+
+test("la devolución mala aumenta la salida proyectada; la buena sí regresa al saldo", () => {
+  assert.equal(rutaNetaBodega([{ salida: 10, devBueno: 3, devMalo: 2 }]), 9);
+  const [movimiento] = reconstruirBodega([
+    { id: "hoy", fecha: "01/10/2026", producido: 0, repartos: [{ salida: 10, devBueno: 3, devMalo: 2 }] },
+  ], 100, "2026-10-01");
+  assert.equal(movimiento.rutaNeta, 9);
+  assert.equal(movimiento.saldoFinal, 91);
+});
+
+test("recalcula el historial, conserva saltos antiguos sin conteo y es idempotente", () => {
+  const legado = [
+    { id: "01", fecha: "01/10/2026", saldoFinal: 1000 },
+    { id: "02", fecha: "02/10/2026", saldoFinal: 995, repartos: [{ salida: 10, devBueno: 2, devMalo: 3 }] },
+    { id: "03", fecha: "03/10/2026", saldoFinal: 1020, producido: 0 },
+    { id: "04", fecha: "04/10/2026", saldoFinal: 1000, ajusteConteo: 1000, difAjuste: -20, producido: 0 },
+  ];
+  const primero = reconstruirBodega(legado, 0, "2026-10-01");
+  const porFecha = [...primero].reverse();
+  assert.deepEqual(porFecha.map(m => m.saldoFinal), [1000, 989, 1014, 1000]);
+  assert.equal(porFecha[2].ajusteHistoricoImplicito, 25);
+  assert.equal(porFecha[3].difAjuste, -14);
+  const segundo = reconstruirBodega(primero, 0, "2026-10-01");
+  assert.deepEqual(segundo.map(m => ({
+    fecha: m.fecha, rutaNeta: m.rutaNeta, saldoFinal: m.saldoFinal,
+    difAjuste: m.difAjuste, ajusteHistoricoImplicito: m.ajusteHistoricoImplicito,
+  })), primero.map(m => ({
+    fecha: m.fecha, rutaNeta: m.rutaNeta, saldoFinal: m.saldoFinal,
+    difAjuste: m.difAjuste, ajusteHistoricoImplicito: m.ajusteHistoricoImplicito,
+  })));
 });

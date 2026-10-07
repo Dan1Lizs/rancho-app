@@ -1,8 +1,8 @@
 const CAMPOS = [
   ["producido", "Producido", "cart"], ["comprado", "Comprado", "cart"],
-  ["rutaNeta", "Impacto neto de ruta", "cart"], ["vendGranja", "Vendido en granja", "cart"],
+  ["rutaNeta", "Impacto de ruta en saldo", "cart"], ["vendGranja", "Vendido en granja", "cart"],
   ["destruido", "Destruido", "cart"], ["regalado", "Regalado", "cart"],
-  ["ajusteConteo", "Conteo físico", "cart"], ["difAjuste", "Diferencia del conteo", "cart"],
+  ["ajusteConteo", "Conteo físico", "cart"], ["difAjuste", "Diferencia del conteo", "cart"], ["ajusteHistoricoImplicito", "Reconciliación histórica conservada", "cart"],
   ["saldoFinal", "Saldo final", "cart"], ["obs", "Observaciones", ""],
 ];
 
@@ -19,7 +19,7 @@ export function presentacionRutaNeta(valor) {
   const esDevolucion = neto < 0;
   return {
     tipo: esDevolucion ? "devolucion" : "salida",
-    etiqueta: esDevolucion ? "Devolución neta de ruta" : "Salida neta a ruta",
+    etiqueta: esDevolucion ? "Entrada por devolución buena" : "Reducción neta del inventario",
     signo: esDevolucion ? "+" : "−",
     cantidad: Math.abs(neto),
   };

@@ -9,7 +9,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, rutaNetaBodega } from "./historial";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
@@ -975,7 +975,7 @@ export default function App({ onCerrarSesion }) {
       if (mc) setMpConfig({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {}, ...mc });
       setMpPedidos(ordenarPorFecha(pedidos)); setRecetas(rc); setMpCat(mcat); setInsumos(ins); setInsumosMovs(ordenarPorFecha(insMovs));
       setPesajes(ordenarPorFecha(ps)); setMedicaciones(ordenarPorFecha(ms)); setFumigaciones(ordenarPorFecha(fs));
-      setBodegaMovs(ordenarPorFecha(mv)); setPlantaMovs(ordenarPorFecha(pl)); setFacturas(ordenarPorFecha(fa)); setBitacora(ordenarPorFecha(bi)); setCostos(cs);
+      setBodegaMovs(reconstruirBodega(mv, bcfg?.inicialCart, bcfg?.inicialFecha)); setPlantaMovs(ordenarPorFecha(pl)); setFacturas(ordenarPorFecha(fa)); setBitacora(ordenarPorFecha(bi)); setCostos(cs);
       setVacunas(ordenarPorFecha(va)); setEnfermedades(ordenarPorFecha(en)); setNecropsias(ordenarPorFecha(ne)); setPlanVac(pv);
       setNucleoInv(nuc0 || {});
       if (cxp0) setCxp({ facturas: [], pagos: [], notas: [], ...cxp0 });
@@ -1318,14 +1318,13 @@ export default function App({ onCerrarSesion }) {
     cartones: regsFechaB.filter(r => r.lote === l.id).reduce((s, r) => s + r.cartones, 0),
   }));
   const producidoHoyCart = producidoPorGalpon.reduce((s, g) => s + g.cartones, 0);
-  const rutaNeta = repartos.reduce((s, r) => s + Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0), 0);
+  const rutaNeta = +rutaNetaBodega(repartos).toFixed(1);
   const impactoRuta = presentacionRutaNeta(rutaNeta);
   const devolucionNetaRuta = impactoRuta.tipo === "devolucion" ? impactoRuta.cantidad : 0;
   const salidaNetaRuta = impactoRuta.tipo === "salida" ? impactoRuta.cantidad : 0;
   const otrasSalidasBodega = Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0);
-  const aperturaB = bodegaCfg.inicialFecha ? aDate(bodegaCfg.inicialFecha.split("-").reverse().join("/")) : null;
   const saldoBase = (() => {
-    const previos = bodegaMovs.filter(m => aDate(m.fecha) < aDate(fechaB) && (!aperturaB || aDate(m.fecha) >= aperturaB));
+    const previos = bodegaMovs.filter(m => aDate(m.fecha) < aDate(fechaB));
     if (!previos.length) return Number(bodegaCfg.inicialCart || 0);
     return previos.reduce((mejor, m) => (!mejor || aDate(m.fecha) > aDate(mejor.fecha) ? m : mejor), null).saldoFinal;
   })();
@@ -1411,8 +1410,10 @@ export default function App({ onCerrarSesion }) {
     }
     setSubBodega(valor);
   };
+  const ajusteHistoricoBodega = Number(bodegaMovs.find(m => String(m.id) === String(movBodegaId))?.ajusteHistoricoImplicito || 0);
   const saldoCalculado = saldoBase + Number(movBodega.comprado || 0) + producidoHoyCart
-    - rutaNeta - Number(movBodega.vendGranja || 0) - Number(movBodega.destruido || 0) - Number(movBodega.regalado || 0);
+    - rutaNeta - Number(movBodega.vendGranja || 0) - Number(movBodega.destruido || 0) - Number(movBodega.regalado || 0)
+    + ajusteHistoricoBodega;
   const hayAjuste = ajusteBodega !== "" && !isNaN(Number(ajusteBodega));
   const saldoFinal = hayAjuste ? Number(ajusteBodega) : saldoCalculado;
   const difAjuste = hayAjuste ? +(Number(ajusteBodega) - saldoCalculado).toFixed(1) : 0;
@@ -1428,8 +1429,13 @@ export default function App({ onCerrarSesion }) {
     if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("⚠ El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
     if (delDia.length && movBodegaIdRef.current == null) { avisar("⚠ Ya hay un movimiento para esta fecha. Cárgalo desde el historial antes de editarlo."); return; }
     if (elegido && !motivoEdicionBodega.trim()) { avisar("⚠ Escribe el motivo de la modificación para dejar constancia."); return; }
+    const ajusteHistoricoElegido = Number(
+      bodegaMovs.find(m => String(m.id) === String(idMovimiento))?.ajusteHistoricoImplicito
+      ?? elegido?.ajusteHistoricoImplicito ?? 0
+    );
     const nuevoMov = {
       id: idMovimiento,
+      versionSaldoBodega: 2, ajusteHistoricoImplicito: ajusteHistoricoElegido,
       fecha: fechaB, producido: +producidoHoyCart.toFixed(1),
       comprado: Number(movBodega.comprado || 0), vendGranja: Number(movBodega.vendGranja || 0),
       destruido: Number(movBodega.destruido || 0), regalado: Number(movBodega.regalado || 0),
@@ -3963,8 +3969,13 @@ export default function App({ onCerrarSesion }) {
         })()}
 
         {printDoc.tipo === "bodega" && (() => {
-          const mov = movimientoBodegaParaReporte(bodegaMovs, printDoc.movimientoId);
-          const saldoPrevio = mov ? +(mov.saldoFinal - (mov.producido || 0) - (mov.comprado || 0) + (mov.rutaNeta || 0) + (mov.vendGranja || 0) + (mov.destruido || 0) + (mov.regalado || 0) - (mov.difAjuste || 0)).toFixed(1) : null;
+          const mov = printDoc.movimientoId != null
+            ? movimientoBodegaParaReporte(bodegaMovs, printDoc.movimientoId)
+            : bodegaMovs.find(m => fechaHistorialISO(m.fecha) === fechaBodega);
+          const movimientoPrevio = mov && bodegaMovs
+            .filter(m => fechaHistorialISO(m.fecha) < fechaHistorialISO(mov.fecha))
+            .sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))[0];
+          const saldoPrevio = mov ? Number(movimientoPrevio?.saldoFinal ?? bodegaCfg.inicialCart ?? 0) : null;
           const impactoRuta = presentacionRutaNeta(mov?.rutaNeta);
           const fila = (nombre, val, signo) => (val != null && val !== 0) || signo === "=" ? (
             <tr><td style={celda}>{nombre} ({signo})</td><td style={{ ...celda, fontWeight: signo === "=" ? 700 : 600, textAlign: "right" }}>{Number(val).toFixed(1)}</td></tr>
@@ -3985,6 +3996,7 @@ export default function App({ onCerrarSesion }) {
                       {fila("Destruido / quebrado", mov.destruido, "−")}
                       {fila("Regalado", mov.regalado, "−")}
                       {mov.ajusteConteo != null && <tr><td style={celda}>Ajuste por conteo físico</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{mov.ajusteConteo} ({mov.difAjuste > 0 ? "+" : ""}{mov.difAjuste})</td></tr>}
+                      {Number(mov.ajusteHistoricoImplicito || 0) !== 0 && <tr><td style={celda}>Reconciliación histórica conservada</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{Number(mov.ajusteHistoricoImplicito) > 0 ? "+" : ""}{Number(mov.ajusteHistoricoImplicito).toFixed(1)}</td></tr>}
                       <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{f2Dec(mov.saldoFinal)}</td></tr>
                     </tbody>
                   </table>
@@ -3992,7 +4004,7 @@ export default function App({ onCerrarSesion }) {
                     <>
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Detalle por repartidor</div>
                       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-                        <thead><tr><th style={th}>Repartidor</th><th style={th}>Salida</th><th style={th}>Dev. bueno</th><th style={th}>Dev. malo</th><th style={th}>Neto</th></tr></thead>
+                        <thead><tr><th style={th}>Repartidor</th><th style={th}>Salida</th><th style={th}>Dev. bueno</th><th style={th}>Dev. malo (−)</th><th style={th}>Impacto en saldo</th></tr></thead>
                         <tbody>
                           {mov.repartos.map((r, i) => (
                             <tr key={i}>
@@ -4000,7 +4012,7 @@ export default function App({ onCerrarSesion }) {
                               <td style={celda}>{Number(r.salida || 0)}</td>
                               <td style={celda}>{Number(r.devBueno || 0)}</td>
                               <td style={celda}>{Number(r.devMalo || 0)}</td>
-                              <td style={{ ...celda, fontWeight: 700 }}>{(Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0)).toFixed(1)}</td>
+                              <td style={{ ...celda, fontWeight: 700 }}>{rutaNetaBodega([r]).toFixed(1)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -5726,7 +5738,11 @@ export default function App({ onCerrarSesion }) {
                 <b>🔴 Retiro de medicamento activo:</b> {retirosActivos.map(m => `G${m.galpon} (${m.producto}) hasta ${m.retiroHasta}`).join(" · ")}. No comercializar huevo de esos gallineros.
               </div>
             )}
-            <button onClick={() => setPrintDoc({ tipo: "bodega" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir movimiento de bodega</button>
+            <button onClick={() => {
+              const { elegido: seleccionado } = elegirMovimientoBodega(bodegaMovs, fechaBodega, movBodegaId);
+              if (!seleccionado) { avisar(`⚠ No hay un movimiento de bodega guardado para el ${fechaB}.`); return; }
+              setPrintDoc({ tipo: "bodega", movimientoId: seleccionado.id });
+            }} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir movimiento de bodega del {fechaB}</button>
             <label id="form-bodega" style={{ display: "block", marginBottom: 10, scrollMarginTop: 110 }}>
               <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Fecha del movimiento de bodega</span>
               <input type="date" value={fechaBodega} onChange={e => cambiarFechaBodegaSegura(e.target.value)} style={inputStyle} />
@@ -5741,9 +5757,9 @@ export default function App({ onCerrarSesion }) {
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
-              <KPI etiqueta="Entradas (+)" valor={f2Dec(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta)} unidad="cart" tono="ok" sub={`Producido ${producidoHoyCart.toFixed(1)}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${Number(movBodega.comprado).toFixed(1)}` : ""}${devolucionNetaRuta > 0 ? ` · devolución neta de ruta +${devolucionNetaRuta.toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Salidas (−)" valor={f2Dec(salidaNetaRuta + otrasSalidasBodega)} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega > 0 ? "alerta" : undefined} sub={`Ruta neta −${salidaNetaRuta.toFixed(1)}${otrasSalidasBodega > 0 ? ` + otras ${otrasSalidasBodega.toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Saldo proyectado" valor={f2Dec(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : "= inicial + entradas − salidas"} />
+              <KPI etiqueta="Entradas (+)" valor={f2Dec(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta)} unidad="cart" tono="ok" sub={`Producido ${producidoHoyCart.toFixed(1)}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${Number(movBodega.comprado).toFixed(1)}` : ""}${devolucionNetaRuta > 0 ? ` · devolución buena neta +${devolucionNetaRuta.toFixed(1)}` : ""}`} />
+              <KPI etiqueta="Salidas (−)" valor={f2Dec(salidaNetaRuta + otrasSalidasBodega)} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega > 0 ? "alerta" : undefined} sub={`Ruta (incluye devolución mala) −${salidaNetaRuta.toFixed(1)}${otrasSalidasBodega > 0 ? ` + otras ${otrasSalidasBodega.toFixed(1)}` : ""}`} />
+              <KPI etiqueta="Saldo proyectado" valor={f2Dec(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : ajusteHistoricoBodega ? `= inicial + entradas − salidas · reconciliación histórica ${ajusteHistoricoBodega > 0 ? "+" : ""}${ajusteHistoricoBodega.toFixed(1)} cart` : "= inicial + entradas − salidas"} />
             </div>
 
             {/* Sub-menú de funciones de Bodega */}
@@ -5803,9 +5819,9 @@ export default function App({ onCerrarSesion }) {
             )}
 
             {(subBodega === "ruta" || subBodega === "todo") && (
-            <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Salida menos devoluciones = salida neta de ruta">
+            <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Saldo: salida − devolución buena + devolución mala (la mala se descuenta)">
               {repartos.map((r, i) => {
-                const neto = Number(r.salida || 0) - Number(r.devBueno || 0) - Number(r.devMalo || 0);
+                const neto = rutaNetaBodega([r]);
                 const impactoRutaRepartidor = presentacionRutaNeta(neto);
                 return (
                   <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: i === 0 ? `1px solid ${C.borde}` : "none" }}>
@@ -5816,7 +5832,7 @@ export default function App({ onCerrarSesion }) {
                           guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });
                         }}
                         style={{ ...inputStyle, flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 700 }} />
-                      <span style={{ color: C.verde, fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>{impactoRutaRepartidor.signo}{impactoRutaRepartidor.cantidad.toFixed(1)} {impactoRutaRepartidor.tipo === "devolucion" ? "devolución" : "salida neta"}</span>
+                      <span style={{ color: C.verde, fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>{impactoRutaRepartidor.signo}{impactoRutaRepartidor.cantidad.toFixed(1)} {impactoRutaRepartidor.tipo === "devolucion" ? "entrada por devolución buena" : "reducción de saldo"}</span>
                       <button onClick={() => {
                         const rs = repartos.filter((_, j) => j !== i); setRepartos(rs);
                         guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });

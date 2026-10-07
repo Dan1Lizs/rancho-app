@@ -1,5 +1,6 @@
 import React from "react";
 import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
+import { rutaNetaBodega } from "../../historial.js";
 import { presentacionRutaNeta } from "../../bodegaResumen.js";
 import "./control-diario-operaciones.css";
 
@@ -115,9 +116,9 @@ export function ControlDiarioOperaciones({
   const repartos = movimientoBodega?.repartos?.length
     ? movimientoBodega.repartos
     : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map((nombre) => ({ nombre }));
-  const rutaNeta = movimientoBodega?.rutaNeta ?? (movimientoBodega?.repartos
-    ? movimientoBodega.repartos.reduce((s, r) => s + numeroSeguro(r.salida) - numeroSeguro(r.devBueno) - numeroSeguro(r.devMalo), 0)
-    : "");
+  const rutaNeta = movimientoBodega?.repartos
+    ? rutaNetaBodega(movimientoBodega.repartos)
+    : (movimientoBodega?.rutaNeta ?? "");
   const impactoRuta = presentacionRutaNeta(rutaNeta);
   const hayDatosRutas = Boolean(movimientoBodega?.repartos?.length);
 
@@ -187,10 +188,10 @@ export function ControlDiarioOperaciones({
   const filasRutas = [
     ["Salida para ruta", ...repartos.map((r) => hayDatosRutas ? numero(r.salida) : "")],
     ["Huevo devuelto bueno", ...repartos.map((r) => hayDatosRutas ? numero(r.devBueno) : "")],
-    ["Huevo devuelto malo", ...repartos.map((r) => hayDatosRutas ? numero(r.devMalo) : "")],
-    ["Impacto neto en bodega (=)", ...repartos.map((r) => {
+    ["Huevo devuelto malo (reduce saldo)", ...repartos.map((r) => hayDatosRutas ? numero(r.devMalo) : "")],
+    ["Impacto de ruta en saldo (=)", ...repartos.map((r) => {
       if (!hayDatosRutas) return "";
-      const neto = numeroSeguro(r.salida) - numeroSeguro(r.devBueno) - numeroSeguro(r.devMalo);
+      const neto = rutaNetaBodega([r]);
       const impacto = presentacionRutaNeta(neto);
       return `${impacto.signo}${numero(impacto.cantidad)}`;
     })],

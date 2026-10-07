@@ -28,21 +28,21 @@ test("el responsable usa el nombre configurado y puede recurrir al perfil de ses
 test("la devolución neta se presenta como entrada y la salida neta como salida", () => {
   assert.deepEqual(presentacionRutaNeta(-7.5), {
     tipo: "devolucion",
-    etiqueta: "Devolución neta de ruta",
+    etiqueta: "Entrada por devolución buena",
     signo: "+",
     cantidad: 7.5,
   });
   assert.deepEqual(presentacionRutaNeta(7.5), {
     tipo: "salida",
-    etiqueta: "Salida neta a ruta",
+    etiqueta: "Reducción neta del inventario",
     signo: "−",
     cantidad: 7.5,
   });
   assert.deepEqual(filasCambiosBodega({ rutaNeta: 0 }, { rutaNeta: -3 }), [
     {
-      nombre: "Impacto neto de ruta",
-      antes: "Salida neta a ruta (−) · 0 cart",
-      despues: "Devolución neta de ruta (+) · 3 cart",
+      nombre: "Impacto de ruta en saldo",
+      antes: "Reducción neta del inventario (−) · 0 cart",
+      despues: "Entrada por devolución buena (+) · 3 cart",
     },
   ]);
 });
