@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarHistorial, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, rutaNetaBodega } from "../src/historial.js";
+import { filtrarHistorial, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega } from "../src/historial.js";
 
 test("el período filtra D/M/A e ISO sin confundir años y permite ver todo", () => {
   const items = [{ fecha: "25/09/2025" }, { fecha: "01/09/2026" }, { fecha: "2026-09-26" }, { fecha: "27/09/2026" }];
@@ -33,13 +33,13 @@ test("la impresión de historial toma el movimiento elegido aunque no sea el úl
   assert.equal(movimientoBodegaParaReporte(movimientos).id, "hoy");
 });
 
-test("al imprimir Bodega, el movimiento seleccionado debe pertenecer a la fecha visible", () => {
+test("al imprimir Bodega, el movimiento elegido pertenece a la fecha visible", () => {
   const movimientos = [
     { id: "seis", fecha: "06/10/2026" },
     { id: "cinco", fecha: "05/10/2026" },
   ];
-  assert.equal(elegirMovimientoBodega(movimientos, "2026-10-05", "seis").elegido.id, "cinco");
-  assert.equal(elegirMovimientoBodega(movimientos, "2026-10-05", "cinco").elegido.id, "cinco");
+  assert.equal(movimientoBodegaDeFecha(movimientos, "2026-10-05", "seis").id, "cinco");
+  assert.equal(movimientoBodegaDeFecha(movimientos, "2026-10-05", "cinco").id, "cinco");
 });
 
 

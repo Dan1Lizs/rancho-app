@@ -38,6 +38,11 @@ export function movimientoBodegaParaReporte(movs, id = null) {
   return id == null ? movs[0] : movs.find(m => String(m.id) === String(id));
 }
 
+export function movimientoBodegaDeFecha(movs, fechaISO, id = null) {
+  const delDia = movs.filter(m => fechaHistorialISO(m.fecha) === fechaISO);
+  return (id == null ? null : delDia.find(m => String(m.id) === String(id))) || delDia[0];
+}
+
 const numeroBodega = (valor) => Number.isFinite(Number(valor)) ? Number(valor) : 0;
 const redondearBodega = (valor) => Number(numeroBodega(valor).toFixed(1));
 

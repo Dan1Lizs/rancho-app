@@ -9,7 +9,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, rutaNetaBodega } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega } from "./historial";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
@@ -5739,7 +5739,7 @@ export default function App({ onCerrarSesion }) {
               </div>
             )}
             <button onClick={() => {
-              const { elegido: seleccionado } = elegirMovimientoBodega(bodegaMovs, fechaBodega, movBodegaId);
+              const seleccionado = movimientoBodegaDeFecha(bodegaMovs, fechaBodega, movBodegaId);
               if (!seleccionado) { avisar(`⚠ No hay un movimiento de bodega guardado para el ${fechaB}.`); return; }
               setPrintDoc({ tipo: "bodega", movimientoId: seleccionado.id });
             }} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir movimiento de bodega del {fechaB}</button>
