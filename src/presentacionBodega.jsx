@@ -1,5 +1,5 @@
 import React from "react";
-import { filasCambiosBodega, valorBodega } from "./bodegaResumen";
+import { filasCambiosBodega, presentacionRutaNeta, valorBodega } from "./bodegaResumen";
 
 const tabla = { width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 7 };
 const celda = { padding: "7px 5px", textAlign: "left", borderBottom: "1px solid #E4E4DC", verticalAlign: "top" };
@@ -14,8 +14,9 @@ export function CambiosBodega({ anterior, nuevo }) {
 }
 
 export function ResumenMovimientoBodega({ movimiento }) {
+  const impactoRuta = presentacionRutaNeta(movimiento.rutaNeta);
   return <div style={{ fontSize: 12, lineHeight: 1.6, padding: "8px 10px", marginTop: 6, background: "#F6F6F1", borderRadius: 8 }}>
-    <b>{movimiento.fecha}</b> · Producido: {valorBodega(movimiento.producido, "cart")} · Salida a ruta: {valorBodega(movimiento.rutaNeta, "cart")} · Saldo final: <b>{valorBodega(movimiento.saldoFinal, "cart")}</b>
+    <b>{movimiento.fecha}</b> · Producido: {valorBodega(movimiento.producido, "cart")} · {impactoRuta.etiqueta}{impactoRuta.signo ? ` (${impactoRuta.signo})` : ""}: {impactoRuta.cantidad == null ? "—" : valorBodega(impactoRuta.cantidad, "cart")} · Saldo final: <b>{valorBodega(movimiento.saldoFinal, "cart")}</b>
     {!!movimiento.obs && <div>Observaciones: {movimiento.obs}</div>}
     {(movimiento.repartos || []).map((r, i) => <div key={i}>{r.nombre || "Repartidor"}: salida {valorBodega(r.salida, "cart")}, devolución buena {valorBodega(r.devBueno, "cart")}, devolución mala {valorBodega(r.devMalo, "cart")}</div>)}
   </div>;

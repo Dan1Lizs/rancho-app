@@ -1,5 +1,6 @@
 import React from "react";
 import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
+import { presentacionRutaNeta } from "../../bodegaResumen.js";
 import "./control-diario-operaciones.css";
 
 const numero = (valor, decimales = 2) => {
@@ -117,6 +118,7 @@ export function ControlDiarioOperaciones({
   const rutaNeta = movimientoBodega?.rutaNeta ?? (movimientoBodega?.repartos
     ? movimientoBodega.repartos.reduce((s, r) => s + numeroSeguro(r.salida) - numeroSeguro(r.devBueno) - numeroSeguro(r.devMalo), 0)
     : "");
+  const impactoRuta = presentacionRutaNeta(rutaNeta);
   const hayDatosRutas = Boolean(movimientoBodega?.repartos?.length);
 
   const fumigacionesDia = fumigaciones.filter((f) => isoDe(f.fecha) === fechaISO);
@@ -184,15 +186,20 @@ export function ControlDiarioOperaciones({
 
   const filasRutas = [
     ["Salida para ruta", ...repartos.map((r) => hayDatosRutas ? numero(r.salida) : "")],
-    ["(-) Huevo devuelto bueno", ...repartos.map((r) => hayDatosRutas ? numero(r.devBueno) : "")],
-    ["(-) Huevo devuelto malo", ...repartos.map((r) => hayDatosRutas ? numero(r.devMalo) : "")],
-    ["SALIDA NETA (=)", ...repartos.map((r) => hayDatosRutas ? numero(numeroSeguro(r.salida) - numeroSeguro(r.devBueno) - numeroSeguro(r.devMalo)) : "")],
+    ["Huevo devuelto bueno", ...repartos.map((r) => hayDatosRutas ? numero(r.devBueno) : "")],
+    ["Huevo devuelto malo", ...repartos.map((r) => hayDatosRutas ? numero(r.devMalo) : "")],
+    ["Impacto neto en bodega (=)", ...repartos.map((r) => {
+      if (!hayDatosRutas) return "";
+      const neto = numeroSeguro(r.salida) - numeroSeguro(r.devBueno) - numeroSeguro(r.devMalo);
+      const impacto = presentacionRutaNeta(neto);
+      return `${impacto.signo}${numero(impacto.cantidad)}`;
+    })],
   ];
   const filasInventarioBodega = [
     ["Saldo de huevo en bodega (=)", numero(saldoInicialBodega)],
     ["(+) Entrada de huevo comprado", numero(movimientoBodega?.comprado)],
     ["(+) Entrada de huevo producido", numero(entradasBodega)],
-    ["(-) Salida de huevo para ruta", numero(rutaNeta)],
+    [`${impactoRuta.signo ? `(${impactoRuta.signo}) ` : ""}${impactoRuta.etiqueta}`, impactoRuta.cantidad == null ? "" : numero(impactoRuta.cantidad)],
     ["(-) Salida de huevo vendido en granja", numero(movimientoBodega?.vendGranja)],
     ["(-) Huevo destruido o quebrado", numero(movimientoBodega?.destruido)],
     ["(-) Huevo regalado / salida gratis", numero(movimientoBodega?.regalado)],
@@ -230,7 +237,7 @@ export function ControlDiarioOperaciones({
           </div>
           <div><TituloSeccion>3. SALIDA DIARIA DE HUEVO</TituloSeccion>
             <Cuadricula className="op-compact" columnas={["Concepto", ...repartos.map((r) => r.nombre || "Ruta")]} filas={filasRutas} />
-            <div className="op-route-total">Total salida neta: <b>{numero(rutaNeta)} cartones</b></div>
+            <div className="op-route-total">{impactoRuta.etiqueta}{impactoRuta.signo ? ` (${impactoRuta.signo})` : ""}: <b>{impactoRuta.cantidad == null ? "" : numero(impactoRuta.cantidad)} cartones</b></div>
           </div>
         </div>
 
