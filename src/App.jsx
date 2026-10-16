@@ -30,6 +30,10 @@ import { resolverVistaSegura, vistasPermitidas } from "./permisos";
 import { DEFAULT_PREFERENCES, completarOrdenNavegacion, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
 import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAlertas } from "./alertasRevision";
+import { calcularSaldoAlimentoComprado, disponibilidadAlimentoComprado, esConsumoAlimentoComprado } from "./alimentoComprado";
+import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
+import { AlimentoCompradoForm } from "./features/formulas/AlimentoCompradoForm";
+import { AlimentoCompradoPlanta } from "./features/planta/AlimentoCompradoPlanta";
 import "./v10.css";
 
 const PreferenciasView = lazy(() => import("./views/PreferenciasView"));
@@ -59,6 +63,7 @@ const K = {
   insumos: "granja2:insumos", insumosMovs: "granja2:insumosMovs",
   plantaCfg: "granja2:plantaCfg", bodegaCfg: "granja2:bodegaCfg",
   costos: "granja2:costos",
+  alimentoCompradoCfg: "granja2:alimentoCompradoCfg",
   advAjustes: "granja2:advertenciasAjustes",
   nombresUsuarios: "granja2:nombresUsuarios",
   plantillasTarea: "granja2:plantillasTarea",
@@ -200,6 +205,7 @@ const NOMBRE_BASCULA = { 1: "BÁSCULA 1 — MACROS", 2: "BÁSCULA 2 — LÍQUIDO
 const BACHE_KG_DEFAULT = 690;
 const SEED_RECETAS = {
   bacheKg: BACHE_KG_DEFAULT,
+  productosComprados: [],
   formulas: Object.fromEntries(Object.entries(RECETAS_MP).map(([n, r]) => [n, {
     uso: ["Cría", "Desarrollo", "Engorde"].includes(n) ? "Ganado" : "Aves",
     items: Object.fromEntries(Object.entries(r).map(([c, pct]) => [c, +(pct * BACHE_KG_DEFAULT).toFixed(2)])),
@@ -283,6 +289,7 @@ function KPI({ etiqueta, valor, unidad, tono, sub }) {
 }
 
 function BarraPostura({ actual, meta }) {
+  if (actual == null) return <div style={{ marginTop: 10, padding: "7px 9px", borderRadius: 7, background: C.fondo, color: C.textoSuave, fontSize: 11.5 }}>Postura no aplica por edad o estado productivo</div>;
   const pct = Math.min(actual, 100);
   const brecha = meta == null ? null : +(meta - actual).toFixed(1);
   return (
@@ -364,13 +371,13 @@ function MigasPan({ vista, tabs, gruposMenu, lotes, galponActivo, fechaCaptura, 
   } else if (vista === "reporte") {
     subdetalle = ({ resumen: "Resumen", comparativo: "Comparativo", decisiones: "Decisiones", bitacora: "Bitácora", auditoria: "Auditoría", kpis: "KPIs técnicos", economia: "Economía", todo: "Ver todo" })[subReporte] || "Ver todo";
   } else if (vista === "planta") {
-    const nomSub = { baches: "Baches producidos", nucleo: "Núcleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
+    const nomSub = { baches: "Baches producidos", nucleo: "Núcleo", ganado: "Servido a ganado", ajustes: "Conteo y ajustes", comprado: "Alimento comprado", facturas: "Facturas MP", historial: "Historial", apertura: "Apertura", todo: "Todo" }[subPlanta] || "Planta";
     subdetalle = nomSub;
   } else if (vista === "pedidomp") {
     const nomSub = { kardex: "Kardex MP", consumo: "Consumo proyectado", inventario: "Conteo físico", ajustes: "Ajustes físicos", calculado: "Pedido calculado", proveedor: "Orden proveedor", pedidos: "Historial", todo: "Todo" }[subPedidoMP] || "Materia Prima";
     subdetalle = nomSub;
   } else if (vista === "formulas") {
-    const nomSub = { recetas: `Fórmulas (${recActiva || "activas"})`, nueva: "Crear fórmula", catalogo: "Catálogo MP", todo: "Todo" }[subFormulas] || "Fórmulas";
+    const nomSub = { recetas: `Fórmulas (${recActiva || "activas"})`, nueva: "Crear fórmula", comprados: "Alimento comprado", catalogo: "Catálogo MP", todo: "Todo" }[subFormulas] || "Fórmulas";
     subdetalle = nomSub;
   } else if (vista === "insumos") {
     const nomSub = { catalogo: "Inventario por categoría", conteo: "Conteo general", movimiento: "Registrar movimiento", nuevo: "Agregar insumo", todo: "Todo" }[subInsumos] || "Insumos";
@@ -593,6 +600,7 @@ export default function App({ onCerrarSesion }) {
   const [subPesaje, setSubPesaje] = useState("resumen");
   const [subHistorial, setSubHistorial] = useState("dia");
   const [subReporte, setSubReporte] = useState("todo");
+  const [alimentoCompradoCfg, setAlimentoCompradoCfg] = useState({ cerrado: false, historial: [] });
   const [editarAjustePlanta, setEditarAjustePlanta] = useState(null);
   const [subBodega, setSubBodega] = useState("producido");
   const [fechaBodega, setFechaBodega] = useState(hoyISO());
@@ -875,11 +883,26 @@ export default function App({ onCerrarSesion }) {
     if (!formLote.galpon || !formLote.raza || !formLote.nac) { avisar("⚠ Galpón, raza y fecha de nacimiento son obligatorios"); return; }
     setGuardando(true);
     let nuevos;
+    const existente = formLote.id ? lotes.find(l => l.id === formLote.id) : null;
+    const edadPostura = Number(formLote.edadInicioPosturaSemanas || existente?.edadInicioPosturaSemanas || EDAD_POSTURA_SEMANAS_DEFAULT);
+    const edadEnSemanas = (Date.now() - new Date(`${formLote.nac}T00:00:00`).getTime()) / (7 * 24 * 60 * 60 * 1000);
+    const estadoProductivo = formLote.estadoProd || (edadEnSemanas < edadPostura ? "Levante / pre-postura" : "Producción normal");
+    const historialEstadoBase = existente?.historialEstadoProd?.length
+      ? [...existente.historialEstadoProd]
+      : existente
+        ? [{ estado: existente.estadoProd || "Producción normal", desde: existente.estadoProdDesde || (existente.estadoProd && existente.estadoProd !== "Producción normal" ? hoyISO() : existente.nac) }]
+        : [{ estado: estadoProductivo, desde: formLote.nac }];
+    const historialEstadoProd = historialEstadoBase.at(-1)?.estado === estadoProductivo
+      ? historialEstadoBase
+      : [...historialEstadoBase, { estado: estadoProductivo, desde: hoyISO(), por: window.__usuarioEmail || completadoPor }];
     const campos = {
       galpon: Number(formLote.galpon), lote: formLote.lote || "01", raza: formLote.raza, nac: formLote.nac,
       formula: formLote.formula || "", racionGAve: Number(formLote.racionGAve || 0),
       posturaIdeal: Number(formLote.posturaIdeal || 90), pesoMeta: Number(formLote.pesoMeta || 0),
-      proveedor: formLote.proveedor || "", estadoProd: formLote.estadoProd || "Producción normal",
+      proveedor: formLote.proveedor || "", estadoProd: estadoProductivo, historialEstadoProd,
+      edadInicioPosturaSemanas: edadPostura,
+      origenAlimento: formLote.origenAlimento === "comprado" ? "comprado" : "propio",
+      productoCompradoId: formLote.origenAlimento === "comprado" ? formLote.productoCompradoId || "" : "",
     };
     if (formLote.id) {
       nuevos = lotes.map(l => l.id === formLote.id ? { ...l, ...campos, avesIniciales: Number(formLote.avesIniciales || l.avesIniciales), aves: Number(formLote.aves ?? l.aves) } : l);
@@ -941,18 +964,19 @@ export default function App({ onCerrarSesion }) {
       baseLista = true;
       if (!silencioso) { setCargando(false); setCargandoFondo(true); }
 
-      const [ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0, adv0, nombres0] = await Promise.all([
+      const [ms, fs, mv, pl, pcfg, bcfg, fa, va, en, ne, pv0, bi, cs, mi, mc, pedidos, rc0, mcat0, ins0, insMovs, nuc0, cxp0, kdx0, adm0, fav0, mih0, adv0, nombres0, compradoCfg] = await Promise.all([
         leer(K.meds, []), leer(K.fums, []), leer(K.movs, []), leer(K.planta, []),
         leer(K.plantaCfg, null), leer(K.bodegaCfg, null), leer(K.facturas, []), leer(K.vacunas, []),
         leer(K.enfermedades, []), leer(K.necropsias, []), leer(K.planVac, null), leer(K.bitacora, []),
         leer(K.costos, SEED_COSTOS), leer(K.mpInv, null), leer(K.mpConfig, null), leer(K.mpPedidos, []),
         leer(K.recetas, null), leer(K.mpCat, null), leer(K.insumos, null), leer(K.insumosMovs, []),
         leer(K.nucleo, {}), leer(K.cxp, null), leer(K.kardex, []), leer(K.admins, []), leer(K.favoritos, []), leer(K.mpInvHist, []),
-        leer(K.advAjustes, []), leer(K.nombresUsuarios, {}),
+        leer(K.advAjustes, []), leer(K.nombresUsuarios, {}), leer(K.alimentoCompradoCfg, { cerrado: false, historial: [] }),
       ]);
       const ps = ps0;
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
       let rc = rc0 ?? (siembras.push(escribir(K.recetas, SEED_RECETAS)), SEED_RECETAS);
+      rc = { ...rc, productosComprados: Array.isArray(rc.productosComprados) ? rc.productosComprados : [] };
       const v651 = rc.formulas?.["651 Impulsor VYMISA"];
       if (v651 && v651.items?.MP007 > 46.2 && v651.items?.MP007 < 46.3) {
         rc = { ...rc, formulas: { ...rc.formulas, "651 Impulsor VYMISA": JSON.parse(JSON.stringify(SEED_RECETAS.formulas["651 Impulsor VYMISA"])) } };
@@ -982,6 +1006,7 @@ export default function App({ onCerrarSesion }) {
       setKardex(ordenarPorFecha(kdx0 || []));
       setCfgAdmins(adm0 || []);
       setNombresUsuarios(nombres0 || {});
+      setAlimentoCompradoCfg(compradoCfg || { cerrado: false, historial: [] });
       leer(K.plantillasTarea, []).then(setPlantillasTarea).catch(console.error);
       const responsableSesion = nombreResponsableSesion(window.__usuarioEmail, nombres0 || {}, window.__usuarioNombre);
       if (responsableSesion) {
@@ -1142,6 +1167,41 @@ export default function App({ onCerrarSesion }) {
     if (aGuardar.some(l => vigentes.filter(r => r.fecha === fecha && r.lote === l.id).length > 1)) {
       avisar("⚠ Hay controles duplicados para esta fecha. Corrígelos desde Historial antes de guardar."); setGuardando(false); return;
     }
+    const lotesConCompra = aGuardar.filter(l => l.origenAlimento === "comprado");
+    if (lotesConCompra.some(l => !productoCompradoDelLote(l))) {
+      avisar("⚠ Este lote está configurado con alimento comprado, pero no tiene un producto asignado. Corrige el lote antes de guardar."); setGuardando(false); return;
+    }
+    if (lotesConCompra.length) {
+      const [configCompraVigente, movimientosCompraVigentes] = await Promise.all([
+        leer(K.alimentoCompradoCfg, { cerrado: false, historial: [] }),
+        leer(K.planta, null),
+      ]);
+      if (!Array.isArray(movimientosCompraVigentes)) { avisar("⚠ No pude sincronizar el inventario de alimento comprado. No se guardó el consumo."); setGuardando(false); return; }
+      const anterioresCompra = aGuardar.map(l => vigentes.find(r => r.fecha === fecha && r.lote === l.id)).filter(Boolean);
+      const fechaISORegistro = fechaHistorialISO(fecha);
+      const fechaCierre = fechaHistorialISO(configCompraVigente?.cerradoEl);
+      if (configCompraVigente?.cerrado && lotesConCompra.some(l => !vigentes.some(r => r.fecha === fecha && r.lote === l.id) || !fechaCierre || fechaISORegistro > fechaCierre)) {
+        avisar("⚠ El inventario temporal de alimento comprado está cerrado. Reábrelo antes de registrar consumo nuevo."); setGuardando(false); return;
+      }
+      const consumosPorProducto = new Map();
+      lotesConCompra.forEach(l => {
+        const producto = productoCompradoDelLote(l);
+        const captura = capturas[l.id] || {};
+        const kilos = n2Dec(Number(captura.alimento6am || 0) + Number(captura.alimento1pm || 0));
+        const previo = vigentes.find(r => r.fecha === fecha && r.lote === l.id);
+        const actual = consumosPorProducto.get(String(producto.id)) || { producto, kg: 0 };
+        actual.kg += kilos;
+        consumosPorProducto.set(String(producto.id), actual);
+        if (previo && !anterioresCompra.some(r => r.lote === previo.lote && r.fecha === previo.fecha)) anterioresCompra.push(previo);
+      });
+      for (const [productoId, consumo] of consumosPorProducto) {
+        const disponible = disponibilidadAlimentoComprado({ productoId, fecha, movimientos: movimientosCompraVigentes, registros: vigentes, reemplazar: anterioresCompra });
+        if (consumo.kg > disponible + 0.01) {
+          avisar(`⚠ Inventario insuficiente de ${consumo.producto.nombre}: hay ${f2Dec(disponible)} kg disponibles y el control requiere ${f2Dec(consumo.kg)} kg. Registra una compra o revisa el conteo.`);
+          setGuardando(false); return;
+        }
+      }
+    }
     if (aGuardar.some(l => {
       const actual = vigentes.find(r => r.fecha === fecha && r.lote === l.id);
       const clave = `${fechaCaptura}|${l.id}`;
@@ -1207,13 +1267,21 @@ export default function App({ onCerrarSesion }) {
           acumMasaKg: l.acumMasaKg - Number(previo.pesoKg || 0),
         };
       }
+      const productoComprado = l.origenAlimento === "comprado"
+        ? (recetas.productosComprados || []).find(producto => String(producto.id) === String(l.productoCompradoId))
+        : null;
+      const alimentoComprado = l.origenAlimento === "comprado";
       nuevos.push({
         ...(previo?.id ? { id: previo.id } : {}),
-        formulaConcentrado: previo?.formulaConcentrado || (recetas.formulas[l.formula] ? l.formula : mpConfig.formulaLote[l.id]) || "Impulsor",
+        formulaConcentrado: alimentoComprado ? productoComprado?.nombre || "Alimento comprado" : (recetas.formulas[l.formula] ? l.formula : mpConfig.formulaLote[l.id]) || "Impulsor",
+        origenAlimento: alimentoComprado ? "comprado" : "propio",
+        productoCompradoId: alimentoComprado ? productoComprado?.id || l.productoCompradoId : "",
+        alimentoCompradoNombre: alimentoComprado ? productoComprado?.nombre || "Alimento comprado" : "",
         registradoEl: previo?.registradoEl || new Date().toISOString(),
         fecha, lote: l.id, cartones: +t.cartones.toFixed(2), quebrados: Number(c.quebrados || 0),
         pesoKg: +t.pesoKg.toFixed(1), muertas: Number(c.muertas || 0), dx: c.dx || "",
         alimentoKg: alimTotal, alimento6am: Number(c.alimento6am || 0), alimento1pm: Number(c.alimento1pm || 0), obsAlimento: c.obsAlimento || "",
+        posturaAplica: loteCuentaPostura(l, fecha), estadoProdCapturado: estadoProductivoEnFecha(l, fecha),
         alimentoEsperadoKg: l.racionGAve && l.aves ? n2Dec((l.racionGAve * l.aves) / 1000) : 0,
         aguaL: Number(c.aguaL || 0),
         chequeo: c.chequeo && Object.values(c.chequeo).some(v => v !== "") ? { ...c.chequeo } : null,
@@ -1501,13 +1569,16 @@ export default function App({ onCerrarSesion }) {
 
   // ── Planta de concentrado ──
   const usoFormula = (f) => recetas.formulas[f]?.uso || "Aves";
+  const productosComprados = Array.isArray(recetas.productosComprados) ? recetas.productosComprados : [];
+  const productoCompradoDelLote = (lote) => productosComprados.find(producto => String(producto.id) === String(lote?.productoCompradoId));
+  const alimentoCompradoDelLote = (lote) => lote?.origenAlimento === "comprado";
   const movsPlanta = plantaMovs.map(m => m.tipo ? m : { ...m, tipo: "bache", categoria: usoFormula(m.formula) });
   const entregadoHoyKg = regsHoy.reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
   const plantaHoy = movsPlanta.filter(m => m.fecha === hoyStr());
   const producidoPlantaHoy = plantaHoy.filter(m => m.tipo === "bache").reduce((s, m) => s + Number(m.kg || 0), 0);
   const aperturaP = plantaCfg.inicialFecha ? aDate(plantaCfg.inicialFecha.split("-").reverse().join("/")) : null;
   const desdeApertura = (fechaDmy) => !aperturaP || aDate(fechaDmy) >= aperturaP;
-  const servidoAvesTotal = registros.filter(r => desdeApertura(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
+  const servidoAvesTotal = registros.filter(r => desdeApertura(r.fecha) && !esConsumoAlimentoComprado(r)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
   const sumaMovs = (cat, tipo) => movsPlanta.filter(m => m.categoria === cat && m.tipo === tipo && desdeApertura(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0);
 
   const extraerKilosConteo = (m, fKey) => {
@@ -1520,6 +1591,7 @@ export default function App({ onCerrarSesion }) {
 
   const formulasAves = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Aves").map(([n]) => n);
   const formulasGanado = Object.entries(recetas.formulas).filter(([, f]) => f.uso === "Ganado").map(([n]) => n);
+  const puedeAdministrarComprado = esAdmin || miRol === "encargado";
 
   const saldosAvesFormula = (() => {
     const res = saldosFormulasDesdeConteo("Aves", formulasAves, movsPlanta, registros) || {};
@@ -1530,7 +1602,7 @@ export default function App({ onCerrarSesion }) {
       const base = extraerKilosConteo(conteo, f);
       const fechaBase = aDate(conteo.fecha);
       const bachesPosteriores = movsPlanta.filter(m => m.tipo === "bache" && m.formula === f && aDate(m.fecha) > fechaBase).reduce((s, m) => s + Number(m.kg || 0), 0);
-      const consumoPosterior = registros.filter(r => r.formulaConcentrado === f && aDate(r.fecha) > fechaBase).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
+      const consumoPosterior = registros.filter(r => !esConsumoAlimentoComprado(r) && r.formulaConcentrado === f && aDate(r.fecha) > fechaBase).reduce((s, r) => s + Number(r.alimentoKg || 0), 0);
       res[f] = Math.max(0, +(base + bachesPosteriores - consumoPosterior).toFixed(1));
     });
     return res;
@@ -2065,6 +2137,26 @@ export default function App({ onCerrarSesion }) {
   const guardarCostos = async (nuevos) => { setCostos(nuevos); await escribir(K.costos, nuevos); };
   // ── Editor de fórmulas ──
   const persistirRecetas = async (nuevo) => { setRecetas(nuevo); await escribir(K.recetas, nuevo); };
+  const guardarCatalogoComprado = async (productos) => {
+    const base = await leer(K.recetas, null);
+    const nuevo = { ...(base || recetas), productosComprados: productos };
+    if (!await escribir(K.recetas, nuevo)) throw new Error("No se pudo guardar el catálogo. Actualiza y vuelve a intentar.");
+    setRecetas(nuevo);
+  };
+  const registrarMovimientoComprado = async (movimiento) => {
+    const actuales = await leer(K.planta, null);
+    if (!Array.isArray(actuales)) throw new Error("No se pudo sincronizar Planta. No guardé la compra; revisa la conexión.");
+    if (actuales.some(item => String(item.id) === String(movimiento.id))) throw new Error("El movimiento ya existe; actualiza antes de reintentar.");
+    const nuevos = [movimiento, ...actuales];
+    if (!await escribir(K.planta, nuevos)) throw new Error("Otro usuario cambió el inventario al mismo tiempo. Actualiza y vuelve a registrar.");
+    setPlantaMovs(ordenarPorFecha(nuevos));
+  };
+  const guardarEstadoComprado = async (nuevo) => {
+    const actual = await leer(K.alimentoCompradoCfg, { cerrado: false, historial: [] });
+    const guardado = { ...(actual || {}), ...nuevo, actualizadoEl: new Date().toISOString(), actualizadoPor: window.__usuarioEmail || completadoPor };
+    if (!await escribir(K.alimentoCompradoCfg, guardado)) throw new Error("No se pudo guardar el estado del apartado.");
+    setAlimentoCompradoCfg(guardado);
+  };
   const setKgIngrediente = (formula, mpc, kg) => {
     const f = recetas.formulas[formula];
     persistirRecetas({ ...recetas, formulas: { ...recetas.formulas, [formula]: { ...f, items: { ...f.items, [mpc]: kg === "" ? "" : Number(kg) } } } });
@@ -2185,8 +2277,11 @@ export default function App({ onCerrarSesion }) {
 
   // ── Pedido de Materia Prima ──
   const consumoAvesFormulas = {};
-  const formulaDelLote = (l) => (recetas.formulas[l.formula] ? l.formula : null) || mpConfig.formulaLote[l.id] || "Impulsor";
+  const formulaDelLote = (l) => alimentoCompradoDelLote(l)
+    ? (productoCompradoDelLote(l)?.nombre || "Alimento comprado sin asignar")
+    : (recetas.formulas[l.formula] ? l.formula : null) || mpConfig.formulaLote[l.id] || "Impulsor";
   activos.forEach(l => {
+    if (alimentoCompradoDelLote(l)) return;
     const f = formulaDelLote(l);
     const kgDia = l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0;
     consumoAvesFormulas[f] = (consumoAvesFormulas[f] || 0) + kgDia;
@@ -2364,8 +2459,10 @@ export default function App({ onCerrarSesion }) {
   const fechas = [...new Set(registros.map(r => r.fecha))];
   const ultDia = fechas[0] || "—";
   const regsUlt = registros.filter(r => r.fecha === ultDia);
-  const huevosDia = regsUlt.reduce((s, r) => s + r.cartones * HXC, 0);
-  const posturaDia = totalAves ? (huevosDia / totalAves) * 100 : 0;
+  const resumenPosturaUlt = resumenPostura({ registros, lotes, fecha: ultDia });
+  const huevosDia = resumenPosturaUlt.huevos;
+  const avesPosturaDia = resumenPosturaUlt.aves;
+  const posturaDia = resumenPosturaUlt.postura;
 
   const f7 = fechas.slice(0, 7);
   const regs7 = registros.filter(r => f7.includes(r.fecha));
@@ -2380,9 +2477,8 @@ export default function App({ onCerrarSesion }) {
   const consumoGAve = totalAves && f7.length ? (alim7 * 1000) / (totalAves * f7.length) : 0;
 
   const tendencia = fechas.slice(0, 14).reverse().map(f => {
-    const rs = registros.filter(r => r.fecha === f);
-    const h = rs.reduce((s, r) => s + r.cartones * HXC, 0);
-    return { dia: f.slice(0, 5), postura: +((h / totalAves) * 100).toFixed(1) };
+    const resumen = resumenPostura({ registros, lotes, fecha: f });
+    return { dia: f.slice(0, 5), postura: resumen.postura == null ? null : +resumen.postura.toFixed(1) };
   });
 
   const statsPesaje = (p) => {
@@ -2489,8 +2585,9 @@ export default function App({ onCerrarSesion }) {
     const masa = rs.reduce((s, r) => s + Number(r.pesoKg || 0), 0);
     const muertas = rs.reduce((s, r) => s + Number(r.muertas || 0), 0);
     const queb = rs.reduce((s, r) => s + Number(r.quebrados || 0), 0);
+    const postura = resumenPostura({ registros, lotes, fecha: f });
     return {
-      cartones: huevos / HXC, postura: (huevos / totalAves) * 100,
+      cartones: huevos / HXC, postura: postura.postura, avesPostura: postura.aves,
       consumo: (alim * 1000) / totalAves, conv: masa > 0 ? alim / masa : 0,
       muertas, pctQueb: huevos + queb > 0 ? (queb / (huevos + queb)) * 100 : 0,
       pesoH: huevos > 0 ? (masa * 1000) / huevos : 0,
@@ -2529,7 +2626,7 @@ export default function App({ onCerrarSesion }) {
       dFechaCercana = resumenDia(fechaComparacion);
     }
   }
-  const avesConMeta = activos.filter(l => metaPosturaLote(l, fHoy) != null);
+  const avesConMeta = lotes.filter(l => loteCuentaPostura(l, fHoy) && metaPosturaLote(l, fHoy) != null);
   const totalConMeta = avesConMeta.reduce((s, l) => s + l.aves, 0);
   const metaGenetica = totalConMeta ? avesConMeta.reduce((s, l) => s + metaPosturaLote(l, fHoy) * l.aves, 0) / totalConMeta : null;
   const decisiones = [];
@@ -2553,11 +2650,14 @@ export default function App({ onCerrarSesion }) {
     activos.forEach(l => {
       const r = registros.find(x => x.fecha === fHoy && x.lote === l.id);
       if (r) {
-        const p = (r.cartones * HXC / l.aves) * 100;
-        const metaPost = metaPosturaLote(l, r.fecha);
-        const brecha = metaPost == null ? 0 : metaPost - p;
-        if (brecha > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon} (${l.raza}): postura ${p.toFixed(1)}% — ${brecha.toFixed(0)} pts bajo la tabla. Revisar consumo, agua, sanidad y peso corporal.` });
-        else if (brecha > 8) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: brecha de ${brecha.toFixed(0)} pts vs genética (${p.toFixed(1)}% vs ${metaPost.toFixed(1)}%).` });
+        if (registroCuentaPostura(r, l) && loteCuentaPostura(l, r.fecha)) {
+          const avesPostura = resumenPostura({ registros, lotes: [l], fecha: r.fecha }).aves;
+          const p = avesPostura ? (r.cartones * HXC / avesPostura) * 100 : null;
+          const metaPost = p == null ? null : metaPosturaLote(l, r.fecha);
+          const brecha = metaPost == null || p == null ? 0 : metaPost - p;
+          if (brecha > 15) decisiones.push({ nivel: "rojo", texto: `Gallinero ${l.galpon} (${l.raza}): postura ${p.toFixed(1)}% — ${brecha.toFixed(0)} pts bajo la tabla. Revisar consumo, agua, sanidad y peso corporal.` });
+          else if (brecha > 8) decisiones.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: brecha de ${brecha.toFixed(0)} pts vs genética (${p.toFixed(1)}% vs ${metaPost.toFixed(1)}%).` });
+        }
         const gAve = l.aves ? (Number(r.alimentoKg || 0) * 1000) / l.aves : 0;
         const espKg = Number(r.alimentoEsperadoKg || 0) || (l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0);
         if (espKg > 0 && r.alimentoKg > 0) {
@@ -2569,7 +2669,7 @@ export default function App({ onCerrarSesion }) {
     if (dAyer && dHoy.muertas > Math.max(3, dAyer.muertas * 2)) decisiones.push({ nivel: "rojo", texto: `Mortalidad de ${dHoy.muertas} aves, más del doble de ayer (${dAyer.muertas}). Revisar diagnósticos y considerar necropsia.` });
     if (dHoy.pctQueb > 3) decisiones.push({ nivel: "amarillo", texto: `Huevo quebrado en ${dHoy.pctQueb.toFixed(1)}% — sobre el 3%. Revisar calcio, recolección y manejo de cartones.` });
     if (dHoy.conv > 2.3) decisiones.push({ nivel: "amarillo", texto: `Conversión del día en ${dHoy.conv.toFixed(2)} kg/kg — el alimento está rindiendo poco.` });
-    if (dAyer && dHoy.postura - dAyer.postura < -3) decisiones.push({ nivel: "rojo", texto: `La postura cayó ${(dAyer.postura - dHoy.postura).toFixed(1)} pts en un día. Verificar registro, agua, alimento y estrés.` });
+    if (dAyer?.postura != null && dHoy.postura != null && dHoy.postura - dAyer.postura < -3) decisiones.push({ nivel: "rojo", texto: `La postura cayó ${(dAyer.postura - dHoy.postura).toFixed(1)} pts en un día. Verificar registro, agua, alimento y estrés.` });
     activos.forEach(l => {
       const rH = registros.find(x => x.fecha === fHoy && x.lote === l.id);
       const rA = fAyer ? registros.find(x => x.fecha === fAyer && x.lote === l.id) : null;
@@ -2930,7 +3030,7 @@ export default function App({ onCerrarSesion }) {
     }
     irA(destino.vista || "inicio");
   };
-  const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta, filtroPlanta);
+  const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta.filter(m => !esConsumoAlimentoComprado(m)), filtroPlanta);
   const discrepanciasFechaPlanta = movimientosConFechaFutura(plantaMovs, hoyISO());
   const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, plantaMovs, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
@@ -3857,7 +3957,6 @@ export default function App({ onCerrarSesion }) {
         })()}
 
         {printDoc.tipo === "reporte" && (() => {
-          const avesTot = activos.reduce((a, x) => a + x.aves, 0);
           const colorNivel = { rojo: "#B3402A", amarillo: "#9A6605" };
           const seccion = printDoc.seccion || "todo";
           const incluye = (...ids) => seccion === "todo" || ids.includes(seccion);
@@ -3878,10 +3977,10 @@ export default function App({ onCerrarSesion }) {
               {!dHoy && <div style={{ fontSize: 13.5, marginBottom: 14 }}>Sin registro de producción para hoy — el reporte muestra el último estado disponible.</div>}
               {incluye("resumen") && dHoy && (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Resumen del día ({fHoy}) — {avesTot.toLocaleString()} aves en {activos.length} gallineros</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Resumen del día ({fHoy}) — {dHoy.avesPostura.toLocaleString()} aves elegibles para postura</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                     <tbody>
-                      <tr><td style={celda}>% de postura granja</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.postura.toFixed(1)}%</td>
+                      <tr><td style={celda}>% de postura granja</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.postura == null ? "— · sin lotes elegibles" : `${dHoy.postura.toFixed(1)}%`}</td>
                           <td style={celda}>Cartones producidos</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.cartones.toFixed(1)}</td></tr>
                       <tr><td style={celda}>Consumo (g/ave)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.consumo.toFixed(0)}</td>
                           <td style={celda}>Peso prom. huevo</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pesoH ? dHoy.pesoH.toFixed(1) + " g" : "—"}</td></tr>
@@ -3895,10 +3994,10 @@ export default function App({ onCerrarSesion }) {
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Comparativo del día</div>
                 <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                   <thead><tr><th style={th}>Indicador</th><th style={th}>{fHoy}</th><th style={th}>{fAyer || "Anterior"}</th><th style={th}>{fechaComparacion || "Comparación"}</th></tr></thead>
-                  <tbody>{filasComparativo.map(([nombre, actual, anterior, otra, unidad]) => <tr key={nombre}><td style={{ ...celda, fontWeight: 600 }}>{nombre}</td><td style={celda}>{f2Dec(actual)}{unidad}</td><td style={celda}>{anterior == null ? "—" : `${f2Dec(anterior)}${unidad}`}</td><td style={celda}>{otra == null ? "—" : `${f2Dec(otra)}${unidad}`}</td></tr>)}</tbody>
+                  <tbody>{filasComparativo.map(([nombre, actual, anterior, otra, unidad]) => <tr key={nombre}><td style={{ ...celda, fontWeight: 600 }}>{nombre}</td><td style={celda}>{actual == null ? "—" : `${f2Dec(actual)}${unidad}`}</td><td style={celda}>{anterior == null ? "—" : `${f2Dec(anterior)}${unidad}`}</td><td style={celda}>{otra == null ? "—" : `${f2Dec(otra)}${unidad}`}</td></tr>)}</tbody>
                 </table>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Postura vs genética por gallinero</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}><thead><tr><th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta genética</th><th style={th}>Brecha</th></tr></thead><tbody>{activos.map(l2 => { const r = registros.find(x => x.fecha === fHoy && x.lote === l2.id); const postura = r && l2.aves ? (r.cartones * HXC / l2.aves) * 100 : null; const meta = metaPosturaLote(l2, fHoy); return <tr key={l2.id}><td style={celda}>G{l2.galpon} · {l2.raza}</td><td style={celda}>{postura == null ? "—" : `${f2Dec(postura)}%`}</td><td style={celda}>{meta == null ? "—" : `${f2Dec(meta)}%`}</td><td style={celda}>{postura == null || meta == null ? "—" : `${postura - meta > 0 ? "+" : ""}${f2Dec(postura - meta)} pts`}</td></tr>; })}</tbody></table>
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}><thead><tr><th style={th}>Gallinero</th><th style={th}>Postura</th><th style={th}>Meta genética</th><th style={th}>Brecha</th></tr></thead><tbody>{lotes.map(l2 => { const r = registros.find(x => x.fecha === fHoy && x.lote === l2.id); const resumenLote = resumenPostura({ registros, lotes: [l2], fecha: fHoy }); const postura = r && registroCuentaPostura(r, l2) && resumenLote.aves ? (r.cartones * HXC / resumenLote.aves) * 100 : null; const meta = postura == null ? null : metaPosturaLote(l2, fHoy); return <tr key={l2.id}><td style={celda}>G{l2.galpon} · {l2.raza}</td><td style={celda}>{postura == null ? "—" : `${f2Dec(postura)}%`}</td><td style={celda}>{meta == null ? "—" : `${f2Dec(meta)}%`}</td><td style={celda}>{postura == null || meta == null ? "—" : `${postura - meta > 0 ? "+" : ""}${f2Dec(postura - meta)} pts`}</td></tr>; })}</tbody></table>
               </>}
               {incluye("kpis") && <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>KPIs técnicos y semáforo por gallinero</div>
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
@@ -3907,8 +4006,9 @@ export default function App({ onCerrarSesion }) {
                   {activos.map(l2 => {
                     const regsL = registros.filter(r => r.lote === l2.id).slice(0, 7);
                     const rU = regsL[0];
-                    const post = rU && l2.aves ? ((rU.cartones * HXC) / l2.aves) * 100 : null;
-                    const metaPost = metaPosturaLote(l2, rU?.fecha);
+                    const avesDiaPostura = rU ? resumenPostura({ registros, lotes: [l2], fecha: rU.fecha }).aves : 0;
+                    const post = rU && registroCuentaPostura(rU, l2) && avesDiaPostura ? ((rU.cartones * HXC) / avesDiaPostura) * 100 : null;
+                    const metaPost = post == null ? null : metaPosturaLote(l2, rU?.fecha);
                     const dPost = post != null && metaPost != null ? post - metaPost : null;
                     const gReal = rU && Number(rU.alimentoKg || 0) > 0 && l2.aves ? (rU.alimentoKg * 1000) / l2.aves : null;
                     const dCons = gReal != null && l2.racionGAve > 0 ? ((gReal - l2.racionGAve) / l2.racionGAve) * 100 : null;
@@ -3955,10 +4055,11 @@ export default function App({ onCerrarSesion }) {
                 const precioCarton = Number(costos._precioVenta || 0);
                 const registrosDia = ultDia ? registros.filter(r => r.fecha === ultDia) : [];
                 const cartones = registrosDia.reduce((a, r) => a + Number(r.cartones || 0), 0);
-                const costoAlimento = registrosDia.reduce((a, r) => { const lote = lotes.find(x => x.id === r.lote); return a + Number(r.alimentoKg || 0) * Number(costos[lote?.formula] || 0); }, 0);
+                const compradoSinCosto = registrosDia.some(r => esConsumoAlimentoComprado(r) && Number(r.alimentoKg || 0) > 0);
+                const costoAlimento = registrosDia.reduce((a, r) => { const lote = lotes.find(x => x.id === r.lote); return a + (esConsumoAlimentoComprado(r) ? 0 : Number(r.alimentoKg || 0) * Number(costos[lote?.formula] || 0)); }, 0);
                 const ingreso = precioCarton * cartones;
-                const margen = precioCarton > 0 && costoAlimento > 0 ? ingreso - costoAlimento : null;
-                return <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Economía — margen sobre alimento</div><table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr><td style={celda}>Cartones del día</td><td style={celda}>{f2Dec(cartones, "0")}</td></tr><tr><td style={celda}>Ingreso estimado</td><td style={celda}>{precioCarton > 0 ? colones(ingreso) : "Falta precio de venta"}</td></tr><tr><td style={celda}>Costo de alimento</td><td style={celda}>{costoAlimento > 0 ? colones(costoAlimento) : "Faltan costos por fórmula"}</td></tr><tr><td style={{ ...celda, fontWeight: 700 }}>Margen sobre alimento</td><td style={{ ...celda, fontWeight: 700 }}>{margen == null ? "—" : colones(margen)}</td></tr></tbody></table></>;
+                const margen = precioCarton > 0 && costoAlimento > 0 && !compradoSinCosto ? ingreso - costoAlimento : null;
+                return <><div style={{ fontSize: 13, fontWeight: 700, margin: "14px 0 6px" }}>Economía — margen sobre alimento</div><table style={{ width: "100%", borderCollapse: "collapse" }}><tbody><tr><td style={celda}>Cartones del día</td><td style={celda}>{f2Dec(cartones, "0")}</td></tr><tr><td style={celda}>Ingreso estimado</td><td style={celda}>{precioCarton > 0 ? colones(ingreso) : "Falta precio de venta"}</td></tr><tr><td style={celda}>Costo de alimento</td><td style={celda}>{compradoSinCosto ? "Incluye alimento comprado sin costo configurado" : costoAlimento > 0 ? colones(costoAlimento) : "Faltan costos por fórmula"}</td></tr><tr><td style={{ ...celda, fontWeight: 700 }}>Margen sobre alimento</td><td style={{ ...celda, fontWeight: 700 }}>{margen == null ? "—" : colones(margen)}</td></tr></tbody></table></>;
               })()}
               <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span>_______________________________<br />Encargado de granja</span>
@@ -4079,7 +4180,8 @@ export default function App({ onCerrarSesion }) {
                   {activos.map(l2 => {
                     const regsL = registros.filter(r => r.lote === l2.id).slice(0, 30);
                     const ult = regsL[0];
-                    const post = ult && l2.aves ? ((ult.cartones * HXC) / l2.aves) * 100 : null;
+                    const avesDiaPostura = ult ? resumenPostura({ registros, lotes: [l2], fecha: ult.fecha }).aves : 0;
+                    const post = ult && registroCuentaPostura(ult, l2) && avesDiaPostura ? ((ult.cartones * HXC) / avesDiaPostura) * 100 : null;
                     const gAveReal = ult && Number(ult.alimentoKg || 0) > 0 && l2.aves ? (Number(ult.alimentoKg) * 1000) / l2.aves : null;
                     const mDia = ult ? Number(ult.muertas || 0) : null;
                     const mSem = regsL.slice(0, 7).reduce((a, r) => a + Number(r.muertas || 0), 0);
@@ -4088,8 +4190,8 @@ export default function App({ onCerrarSesion }) {
                       <tr key={l2.id}>
                         <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
                         <td style={{ ...celda, fontWeight: 600 }}>{post != null ? `${post.toFixed(1)}%` : "—"}</td>
-                        <td style={celda}>{metaPosturaLote(l2, ult?.fecha) != null ? `${metaPosturaLote(l2, ult?.fecha).toFixed(1)}%` : "—"}</td>
-                        <td style={celda}>{l2.formula || "—"}</td>
+                        <td style={celda}>{post != null && metaPosturaLote(l2, ult?.fecha) != null ? `${metaPosturaLote(l2, ult?.fecha).toFixed(1)}%` : "—"}</td>
+                        <td style={celda}>{formulaDelLote(l2) || "—"}</td>
                         <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "—"}</td>
                         <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "—"}</td>
                         <td style={celda}>{mDia != null && l2.aves ? `${mDia} (${((mDia / l2.aves) * 100).toFixed(2)}%)` : "—"}</td>
@@ -4157,7 +4259,7 @@ export default function App({ onCerrarSesion }) {
                     <tr key={l2.id}>
                       <td style={{ ...celda, fontWeight: 700 }}>G{l2.galpon}</td>
                       <td style={celda}>{l2.aves.toLocaleString()}</td>
-                      <td style={celda}>{l2.formula || "—"}</td>
+                      <td style={celda}>{formulaDelLote(l2) || "—"}</td>
                       <td style={celda}>{l2.racionGAve ? `${l2.racionGAve} g/ave` : "—"}</td>
                       <td style={celda}>{gAveReal ? `${gAveReal.toFixed(0)} g/ave` : "—"}</td>
                     </tr>
@@ -4183,12 +4285,15 @@ export default function App({ onCerrarSesion }) {
           const pesUlt = pesajes.find(p2 => p2.lote === l.id);
           const promP = pesUlt ? pesUlt.pesos.reduce((a, b) => a + b, 0) / pesUlt.pesos.length : null;
           const unif = pesUlt && promP ? (pesUlt.pesos.filter(x => Math.abs(x - promP) <= 0.1 * promP).length / pesUlt.pesos.length) * 100 : null;
+          const posturaAplica = registroCuentaPostura(reg, l) && loteCuentaPostura(l, reg.fecha);
+          const avesPostura = posturaAplica ? resumenPostura({ registros, lotes: [l], fecha: reg.fecha }).aves : 0;
+          const porcentajePostura = posturaAplica && avesPostura ? (huevos / avesPostura) * 100 : null;
           const filas = [
             ["Edad del lote (semanas)", semanasDe(l.nac).toFixed(1), ""],
             ["Genética", l.raza, ""],
             ["Aves vivas", l.aves.toLocaleString(), ""],
             ["Mortalidad del día", reg.muertas ?? "—", "0–2 aves/1000"],
-            ["% de postura", huevos > 0 ? `${((huevos / l.aves) * 100).toFixed(1)}%` : "—", metaPosturaLote(l, reg.fecha) != null ? `${metaPosturaLote(l, reg.fecha).toFixed(1)}% (tabla)` : "—"],
+            ["% de postura", porcentajePostura == null ? "— (no aplica)" : `${porcentajePostura.toFixed(1)}%`, porcentajePostura != null && metaPosturaLote(l, reg.fecha) != null ? `${metaPosturaLote(l, reg.fecha).toFixed(1)}% (tabla)` : "—"],
             ["Huevos buenos", huevos > 0 ? (huevos - (reg.quebrados || 0)).toFixed(0) : "—", ""],
             ["Huevos quebrados", reg.quebrados ?? "—", "<3%"],
             ["Peso promedio del huevo (g)", pesoHuevo ? pesoHuevo.toFixed(1) : "—", "Según edad"],
@@ -4824,7 +4929,7 @@ export default function App({ onCerrarSesion }) {
               <button onClick={() => cargarTodo(false)} title="Actualizar" style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, color: "#fff", padding: "9px 12px", fontSize: 16, cursor: "pointer", opacity: cargandoFondo ? 0.5 : 1 }}>{cargandoFondo ? "…" : "⟳"}</button>
               <button className="v10-search-action" onClick={() => setBuscadorAbierto(true)} aria-label="Buscar en la granja">⌕</button>
               <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 12px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, color: "#F5B845" }}>{posturaDia.toFixed(1)}%</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, color: "#F5B845" }}>{posturaDia == null ? "—" : `${posturaDia.toFixed(1)}%`}</div>
                 <div style={{ fontSize: 10, opacity: 0.75 }}>postura</div>
               </div>
             </div>
@@ -5303,7 +5408,7 @@ export default function App({ onCerrarSesion }) {
               </button>
             </Seccion>
 
-            <Seccion accion={<BotonGuardaMini />} num="7" titulo="Consumo de alimento" sub={`Fórmula: ${loteActivo?.formula || ""}${loteActivo?.racionGAve ? ` · ración definida: ${loteActivo.racionGAve} g/ave/día (40% a las 6 am, 60% a la 1 pm)` : ""}`}>
+            <Seccion accion={<BotonGuardaMini />} num="7" titulo="Consumo de alimento" sub={`Fórmula: ${loteActivo ? formulaDelLote(loteActivo) : ""}${loteActivo?.racionGAve ? ` · ración definida: ${loteActivo.racionGAve} g/ave/día (40% a las 6 am, 60% a la 1 pm)` : ""}`}>
               {(() => {
                 const espDia = loteActivo?.racionGAve && loteActivo?.aves ? (loteActivo.racionGAve * loteActivo.aves) / 1000 : 0;
                 const esp6 = espDia * 0.4, esp1 = espDia * 0.6;
@@ -5509,7 +5614,7 @@ export default function App({ onCerrarSesion }) {
         )}
         {vista === "reporte" && dHoy && (() => {
           const Delta = ({ hoy, contra, invertir, unidad = "", dec = 1 }) => {
-            if (contra == null || !isFinite(contra)) return <span style={{ color: C.textoSuave }}>—</span>;
+            if (hoy == null || contra == null || !isFinite(contra)) return <span style={{ color: C.textoSuave }}>—</span>;
             const d = hoy - contra;
             const mejora = invertir ? d < 0 : d > 0;
             const igual = Math.abs(d) < 0.05;
@@ -5518,21 +5623,21 @@ export default function App({ onCerrarSesion }) {
           };
           const filas = [
             { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dFechaCercana?.cartones, hoy: dHoy.cartones, u: "" },
-            { n: "% Postura", v: `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dFechaCercana?.postura, hoy: dHoy.postura, u: " pts" },
+            { n: "% Postura", v: dHoy.postura == null ? "—" : `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dFechaCercana?.postura, hoy: dHoy.postura, u: " pts" },
             { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: dFechaCercana?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
             { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: dFechaCercana?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
             { n: "Mortalidad", v: `${dHoy.muertas} aves`, a: dAyer?.muertas, m: dFechaCercana?.muertas, hoy: dHoy.muertas, u: "", inv: true, dec: 0 },
             { n: "% Quebrado", v: `${dHoy.pctQueb.toFixed(1)}%`, a: dAyer?.pctQueb, m: dFechaCercana?.pctQueb, hoy: dHoy.pctQueb, u: " pts", inv: true },
             { n: "Peso huevo", v: dHoy.pesoH ? `${dHoy.pesoH.toFixed(1)} g` : "—", a: dAyer?.pesoH, m: dFechaCercana?.pesoH, hoy: dHoy.pesoH, u: " g" },
           ];
-          const brechaGen = metaGenetica == null ? null : metaGenetica - dHoy.postura;
+          const brechaGen = metaGenetica == null || dHoy.postura == null ? null : metaGenetica - dHoy.postura;
           return (
             <>
               {verReporte("resumen") && <div style={{ background: C.verde, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 14 }}>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>Reporte del día · {fHoy}</div>
                 <div style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.6, opacity: 0.95 }}>
-                  Se produjeron <b>{dHoy.cartones.toFixed(1)} cartones</b> con postura de <b>{dHoy.postura.toFixed(1)}%</b>
-                  {dAyer && <> ({dHoy.postura >= dAyer.postura ? "▲" : "▼"} {Math.abs(dHoy.postura - dAyer.postura).toFixed(1)} pts vs ayer)</>},
+                  Se produjeron <b>{dHoy.cartones.toFixed(1)} cartones</b>{dHoy.postura == null ? <>; no hay lotes elegibles para calcular postura por edad o estado</> : <> con postura de <b>{dHoy.postura.toFixed(1)}%</b></>}
+                  {dAyer?.postura != null && dHoy.postura != null && <> ({dHoy.postura >= dAyer.postura ? "▲" : "▼"} {Math.abs(dHoy.postura - dAyer.postura).toFixed(1)} pts vs ayer)</>},
                   {brechaGen != null && <> a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta genética ({metaGenetica.toFixed(1)}%).</>}
                   Mortalidad: <b>{dHoy.muertas}</b>. Quebrado: <b>{dHoy.pctQueb.toFixed(1)}%</b>. Concentrado en planta: <b>{saldoPlanta.toFixed(0)} kg</b>.
                 </div>
@@ -5566,14 +5671,16 @@ export default function App({ onCerrarSesion }) {
               {verReporte("comparativo") && <Seccion titulo="vs Genética — por gallinero" sub="Postura del día contra la tabla de la casa genética">
                 {activos.map(l => {
                   const r = registros.find(x => x.fecha === fHoy && x.lote === l.id);
-                  const p = r ? (r.cartones * HXC / l.aves) * 100 : null;
+                  const posturaAplicable = r && registroCuentaPostura(r, l) && loteCuentaPostura(l, fHoy);
+                  const avesPostura = posturaAplicable ? resumenPostura({ registros, lotes: [l], fecha: fHoy }).aves : 0;
+                  const p = posturaAplicable && avesPostura ? (r.cartones * HXC / avesPostura) * 100 : null;
                   return (
                     <div key={l.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.borde}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: p != null ? 0 : 4 }}>
                         <b>Gallinero {l.galpon} · {l.raza} ({semanasDe(l.nac).toFixed(0)} sem){l.estadoProd && l.estadoProd !== "Producción normal" ? <span style={{ color: "#9A6605", fontWeight: 700 }}> · {l.estadoProd}</span> : null}</b>
-                        {p == null && <span style={{ color: C.textoSuave }}>sin registro hoy</span>}
+                        {p == null && <span style={{ color: C.textoSuave }}>{r ? "no aplica por edad o estado" : "sin registro hoy"}</span>}
                       </div>
-                      {p != null && <BarraPostura actual={p} meta={metaPosturaLote(l, fHoy)} />}
+                      <BarraPostura actual={p} meta={p == null ? null : metaPosturaLote(l, fHoy)} />
                     </div>
                   );
                 })}
@@ -6017,6 +6124,7 @@ export default function App({ onCerrarSesion }) {
                 { id: "nucleo", nombre: "2. Núcleo (micros)", icono: "🧪" },
                 { id: "ganado", nombre: "3. Servido a ganado", icono: "🐄" },
                 { id: "ajustes", nombre: "4. Conteo y ajustes", icono: "⚖️" },
+                { id: "comprado", nombre: "Alimento comprado", icono: "🛒" },
                 { id: "facturas", nombre: "5. Facturas MP", icono: "🧾" },
                 { id: "historial", nombre: "Historial", icono: "📋" },
                 { id: "apertura", nombre: "Apertura", icono: "⚙️" },
@@ -6025,6 +6133,19 @@ export default function App({ onCerrarSesion }) {
               activo={subPlanta}
               onChange={setSubPlanta}
             />
+
+            {(subPlanta === "comprado" || subPlanta === "todo") && <AlimentoCompradoPlanta
+              productos={productosComprados}
+              movimientos={plantaMovs}
+              registros={registros}
+              lotes={lotes}
+              estadoInventario={alimentoCompradoCfg}
+              responsable={completadoPor}
+              puedeAdministrar={puedeAdministrarComprado}
+              onRegistrarMovimiento={registrarMovimientoComprado}
+              onCambiarEstado={guardarEstadoComprado}
+              onAbrirFormulas={() => { setVista("formulas"); setSubFormulas("comprados"); }}
+            />}
 
             {(subPlanta === "baches" || subPlanta === "todo") && (
             <Seccion titulo="A. Registrar baches producidos" sub="La categoría (Aves/Ganado) se asigna sola según el uso de la fórmula">
@@ -6339,24 +6460,31 @@ export default function App({ onCerrarSesion }) {
             )}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <KPI etiqueta="Consumo diario total" valor={Object.values(consumoFormulas).reduce((a, b) => a + b, 0).toFixed(0)} unidad="kg" sub="Aves (desde Lotes) + ganado" />
+              <KPI etiqueta="Consumo propio + ganado" valor={Object.values(consumoFormulas).reduce((a, b) => a + b, 0).toFixed(0)} unidad="kg" sub="No incluye alimento comprado" />
               <KPI etiqueta="Cobertura" valor={mpConfig.cobertura} unidad="días" sub="Jueves → lunes de entrega" />
               <KPI etiqueta="Último conteo" valor={mpFechaConteo ? mpFechaConteo.slice(0, 5) : "—"} unidad="" sub={mpResponsable || "sin responsable"} />
             </div>
 
             {(subPedidoMP === "consumo" || subPedidoMP === "todo") && (
               <Seccion titulo="1 · Consumo proyectado" sub="Las aves se calculan solas desde Lotes (aves vivas × ración). Asigna la fórmula de receta de cada lote.">
-              {activos.map(l => {
+              {activos.filter(l => !alimentoCompradoDelLote(l)).map(l => {
                 const kgDia = l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0;
                 return (
                   <div key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
                     <span style={{ flex: "1 1 150px", fontSize: 13.5 }}><b>G{l.galpon}</b> · {l.aves.toLocaleString()} aves · <b>{l.racionGAve || 0} g/ave</b> · {kgDia.toFixed(0)} kg/día</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: recetas.formulas[l.formula] ? C.verde : C.alerta, background: recetas.formulas[l.formula] ? C.verdeSuave : C.alertaSuave, padding: "6px 12px", borderRadius: 16 }}>
-                      {formulaDelLote(l)}{!recetas.formulas[l.formula] && " (asigna la fórmula en Lotes)"}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: alimentoCompradoDelLote(l) || recetas.formulas[l.formula] ? C.verde : C.alerta, background: alimentoCompradoDelLote(l) || recetas.formulas[l.formula] ? C.verdeSuave : C.alertaSuave, padding: "6px 12px", borderRadius: 16 }}>
+                      {formulaDelLote(l)}{!alimentoCompradoDelLote(l) && !recetas.formulas[l.formula] && " (asigna la fórmula en Lotes)"}
                     </span>
                   </div>
                 );
               })}
+              {activos.some(alimentoCompradoDelLote) && <>
+                <div style={{ fontSize: 13.5, fontWeight: 700, margin: "12px 0 8px", color: C.verde }}>Alimento comprado · separado del pedido de materia prima</div>
+                {activos.filter(alimentoCompradoDelLote).map(l => {
+                  const kgDia = l.racionGAve && l.aves ? (l.racionGAve * l.aves) / 1000 : 0;
+                  return <div key={l.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "6px 0", fontSize: 13 }}><span><b>G{l.galpon}</b> · {l.aves.toLocaleString()} aves · {l.racionGAve || 0} g/ave/día · {formulaDelLote(l)}</span><b>{kgDia.toFixed(2)} kg/día · no descuenta Planta propia</b></div>;
+                })}
+              </>}
               <div style={{ fontSize: 13.5, fontWeight: 700, margin: "12px 0 8px", color: C.verde }}>Ganado</div>
               {(mpConfig.ganado || []).map((g, i) => (
                 <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
@@ -6639,12 +6767,19 @@ export default function App({ onCerrarSesion }) {
               subsecciones={[
                 { id: "recetas", nombre: "Fórmulas activas", icono: "🥣" },
                 { id: "nueva", nombre: "Crear fórmula", icono: "➕" },
+                { id: "comprados", nombre: "Alimento comprado", icono: "🛒" },
                 { id: "catalogo", nombre: "Catálogo MP", icono: "📦" },
                 { id: "todo", nombre: "Ver todo", icono: "☰" },
               ]}
               activo={subFormulas}
               onChange={setSubFormulas}
             />
+
+            {(subFormulas === "comprados" || subFormulas === "todo") && <AlimentoCompradoForm
+              productos={productosComprados}
+              onGuardar={guardarCatalogoComprado}
+              bloqueado={Boolean(alimentoCompradoCfg.cerrado) && !puedeAdministrarComprado}
+            />}
 
             {(subFormulas === "recetas" || subFormulas === "todo") && (
               <><Seccion titulo="Fórmulas de concentrado" sub={`Definidas en kg por bache — capacidad del mixer: ${recetas.bacheKg} kg. Todo el cálculo de consumo y pedido sale de aquí.`}>
@@ -7007,8 +7142,9 @@ export default function App({ onCerrarSesion }) {
                       {activos.map(l => {
                         const regsL = registros.filter(r => r.lote === l.id).slice(0, 7);
                         const rU = regsL[0];
-                        const post = rU && l.aves ? ((rU.cartones * HXC) / l.aves) * 100 : null;
-                        const metaPost = metaPosturaLote(l, rU?.fecha);
+                        const avesDiaPostura = rU ? resumenPostura({ registros, lotes: [l], fecha: rU.fecha }).aves : 0;
+                        const post = rU && registroCuentaPostura(rU, l) && avesDiaPostura ? ((rU.cartones * HXC) / avesDiaPostura) * 100 : null;
+                        const metaPost = post == null ? null : metaPosturaLote(l, rU?.fecha);
                         const dPost = post != null && metaPost != null ? post - metaPost : null;
                         const cPost = dPost == null ? C.textoSuave : dPost <= -15 ? C.alerta : dPost <= -8 ? "#9A6605" : C.verde;
                         const gReal = rU && Number(rU.alimentoKg || 0) > 0 && l.aves ? (rU.alimentoKg * 1000) / l.aves : null;
@@ -7050,7 +7186,7 @@ export default function App({ onCerrarSesion }) {
           <>
             {verReporte("kpis") && <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <KPI etiqueta="% Postura" valor={posturaDia.toFixed(1)} unidad="%" tono={posturaDia < 80 ? "alerta" : "ok"} sub={`${huevosDia.toLocaleString()} huevos · Est.: ≥85%`} />
+              <KPI etiqueta="% Postura" valor={posturaDia == null ? "—" : posturaDia.toFixed(1)} unidad={posturaDia == null ? "" : "%"} tono={posturaDia != null && posturaDia < 80 ? "alerta" : "ok"} sub={avesPosturaDia ? `${huevosDia.toLocaleString()} huevos · Est.: ≥85%` : "Sin lotes elegibles por edad o estado"} />
               <KPI etiqueta="Conversión (7d)" valor={conversion ? conversion.toFixed(2) : "—"} unidad="kg/kg" tono={conversion > 2.2 ? "alerta" : "ok"} sub="Est. industria: ≤2.2" />
               <KPI etiqueta="Conv. por cartón (7d)" valor={convCarton ? convCarton.toFixed(2) : "—"} unidad="kg" tono={convCarton > 4.6 ? "alerta" : "ok"} sub="Est.: 4.1–4.6 kg/cartón" />
               <KPI etiqueta="Consumo (7d)" valor={consumoGAve.toFixed(0)} unidad="g/ave" tono={consumoGAve > 120 || (consumoGAve > 0 && consumoGAve < 100) ? "alerta" : "ok"} sub="Est. café adulta: 105–120 g" />
@@ -7088,22 +7224,31 @@ export default function App({ onCerrarSesion }) {
                   </thead>
                   <tbody>
                     {activos.map(l => {
-                      const haa = l.acumHuevos / l.avesIniciales;
-                      const viab = (l.aves / l.avesIniciales) * 100;
-                      const convLote = l.acumMasaKg > 0 ? l.acumAlimentoKg / l.acumMasaKg : 0;
-                      const costoKg = Number(costos[l.formula] || 0);
-                      const costoCarton = costoKg > 0 && l.acumHuevos > 0 ? (l.acumAlimentoKg * costoKg) / (l.acumHuevos / HXC) : 0;
                       const regsL = registros.filter(r => r.lote === l.id);
+                      const regsPostura = regsL.filter(r => registroCuentaPostura(r, l));
+                      const huevosPostura = regsPostura.reduce((total, r) => total + Number(r.cartones || 0) * HXC, 0);
+                      const haa = l.avesIniciales ? huevosPostura / l.avesIniciales : 0;
+                      const viab = (l.aves / l.avesIniciales) * 100;
+                      const alimentoPostura = regsPostura.reduce((total, r) => total + Number(r.alimentoKg || 0), 0);
+                      const masaPostura = regsPostura.reduce((total, r) => total + Number(r.pesoKg || 0), 0);
+                      const convLote = masaPostura > 0 ? alimentoPostura / masaPostura : 0;
+                      const costoKg = Number(costos[l.formula] || 0);
+                      const compradoSinCosto = regsPostura.some(esConsumoAlimentoComprado);
+                      const costoAlimentoPostura = compradoSinCosto ? 0 : regsPostura.reduce((total, r) => total + Number(r.alimentoKg || 0) * costoKg, 0);
+                      const costoCarton = costoKg > 0 && huevosPostura > 0 && !compradoSinCosto ? costoAlimentoPostura / (huevosPostura / HXC) : 0;
+                      const regsElegibles = regsPostura.filter(r => loteCuentaPostura(l, r.fecha));
                       let pico = null, picoIdx = -1;
-                      for (let i = 0; i + 7 <= regsL.length || (i === 0 && regsL.length > 0); i++) {
-                        const ven = regsL.slice(i, i + 7);
+                      for (let i = 0; i + 7 <= regsElegibles.length || (i === 0 && regsElegibles.length > 0); i++) {
+                        const ven = regsElegibles.slice(i, i + 7);
                         if (!ven.length) break;
-                        const pm = ven.reduce((a, r) => a + (r.cartones * HXC), 0) / ven.length / l.aves * 100;
+                        const avesDia = ven.reduce((total, r) => total + resumenPostura({ registros, lotes: [l], fecha: r.fecha }).aves, 0);
+                        const pm = avesDia > 0 ? ven.reduce((a, r) => a + (r.cartones * HXC), 0) / avesDia * 100 : 0;
                         if (pico == null || pm > pico) { pico = pm; picoIdx = i; }
-                        if (i + 7 > regsL.length) break;
+                        if (i + 7 > regsElegibles.length) break;
                       }
-                      const rU = regsL[0];
-                      const postAct = rU && l.aves ? ((rU.cartones * HXC) / l.aves) * 100 : null;
+                      const rU = regsElegibles[0];
+                      const avesUltimoDia = rU ? resumenPostura({ registros, lotes: [l], fecha: rU.fecha }).aves : 0;
+                      const postAct = rU && avesUltimoDia ? ((rU.cartones * HXC) / avesUltimoDia) * 100 : null;
                       const persist = pico != null && postAct != null ? postAct - pico : null;
                       const cPico = pico == null ? C.textoSuave : pico >= 90 ? C.verde : pico >= 82 ? "#9A6605" : C.alerta;
                       const cPers = persist == null ? C.textoSuave : persist >= -6 ? C.verde : persist >= -12 ? "#9A6605" : C.alerta;
@@ -7131,14 +7276,15 @@ export default function App({ onCerrarSesion }) {
                 const precioCart = Number(costos._precioVenta || 0);
                 const rsU = ultDia ? registros.filter(r => r.fecha === ultDia) : [];
                 let costoAlimDia = 0, hayCostos = false;
+                const hayCompradoSinCosto = rsU.some(r => esConsumoAlimentoComprado(r) && Number(r.alimentoKg || 0) > 0);
                 rsU.forEach(r => {
                   const ll = lotes.find(x => x.id === r.lote);
-                  const ck = Number(costos[ll?.formula] || 0);
+                  const ck = esConsumoAlimentoComprado(r) ? 0 : Number(costos[ll?.formula] || 0);
                   if (ck > 0) { hayCostos = true; costoAlimDia += Number(r.alimentoKg || 0) * ck; }
                 });
                 const cartDia = rsU.reduce((a, r) => a + Number(r.cartones || 0), 0);
                 const ingreso = precioCart > 0 ? cartDia * precioCart : 0;
-                const iofc = ingreso > 0 && hayCostos ? ingreso - costoAlimDia : null;
+                const iofc = ingreso > 0 && hayCostos && !hayCompradoSinCosto ? ingreso - costoAlimDia : null;
                 const iofcCart = iofc != null && cartDia > 0 ? iofc / cartDia : null;
                 return (
                   <>
@@ -7152,7 +7298,7 @@ export default function App({ onCerrarSesion }) {
                         <KPI etiqueta="Margen por cartón" valor={`₡${iofcCart.toFixed(0)}`} unidad="" tono={iofcCart > 0 ? "ok" : "alerta"} sub="Sobre costo de alimento" />
                       </div>
                     ) : (
-                      <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 12 }}>Llena el precio de venta y los costos ₡/kg de abajo para activar el margen.</div>
+                      <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 12 }}>{hayCompradoSinCosto ? "El control incluye alimento comprado cuyo costo no está configurado; no muestro un margen parcial como si fuera el total." : "Llena el precio de venta y los costos ₡/kg de abajo para activar el margen."}</div>
                     )}
                   </>
                 );
@@ -7442,7 +7588,12 @@ export default function App({ onCerrarSesion }) {
             const masa = rs.reduce((s, r) => s + Number(r.pesoKg || 0), 0);
             const muertas = rs.reduce((s, r) => s + Number(r.muertas || 0), 0);
             const dias = new Set(rs.map(r => r.fecha)).size;
-            return { l, cart, huevos: cart * HXC, alim, muertas, dias, conv: masa > 0 ? alim / masa : 0, postura: dias && l.aves ? (cart * HXC / (l.aves * dias)) * 100 : 0 };
+            const diasPostura = [...new Set(rs.map(r => r.fecha))].filter(f => loteCuentaPostura(l, f));
+            const posturaPeriodo = diasPostura.reduce((total, f) => {
+              const resumenDiaLote = resumenPostura({ registros, lotes: [l], fecha: f });
+              return { huevos: total.huevos + resumenDiaLote.huevos, avesDia: total.avesDia + resumenDiaLote.aves };
+            }, { huevos: 0, avesDia: 0 });
+            return { l, cart, huevos: cart * HXC, alim, muertas, dias, conv: masa > 0 ? alim / masa : 0, postura: posturaPeriodo.avesDia ? (posturaPeriodo.huevos / posturaPeriodo.avesDia) * 100 : null };
           });
           const totMes = {
             cart: resMesLote.reduce((s, x) => s + x.cart, 0),
@@ -7741,7 +7892,7 @@ export default function App({ onCerrarSesion }) {
           <>
             <button onClick={() => setPrintDoc({ tipo: "lotes" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir estado de lotes</button>
             {!formLote && (
-              <button onClick={() => setFormLote({ galpon: "", lote: "", raza: "", nac: "", avesIniciales: "", formula: Object.keys(costos)[0] || "", racionGAve: "", posturaIdeal: "", pesoMeta: "", proveedor: "" })}
+              <button onClick={() => setFormLote({ galpon: "", lote: "", raza: "", nac: "", avesIniciales: "", formula: Object.keys(costos)[0] || "", racionGAve: "", posturaIdeal: "", pesoMeta: "", proveedor: "", edadInicioPosturaSemanas: EDAD_POSTURA_SEMANAS_DEFAULT, estadoProd: "", origenAlimento: "propio", productoCompradoId: "" })}
                 style={{ ...btnStyle, marginBottom: 14 }}>+ Crear lote nuevo</button>
             )}
 
@@ -7760,7 +7911,7 @@ export default function App({ onCerrarSesion }) {
                   <Campo mitad etiqueta="Proveedor de pollonas" type="text" placeholder="opcional" value={formLote.proveedor} onChange={e => setFormLote({ ...formLote, proveedor: e.target.value })} />
                   <label style={{ display: "block", marginBottom: 12, flex: "1 1 45%", minWidth: 150 }}>
                     <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Estado productivo</span>
-                    <select value={formLote.estadoProd || "Producción normal"} onChange={e => setFormLote({ ...formLote, estadoProd: e.target.value })} style={inputStyle}>
+                    <select value={formLote.estadoProd || (formLote.nac && semanasDe(formLote.nac) >= Number(formLote.edadInicioPosturaSemanas || EDAD_POSTURA_SEMANAS_DEFAULT) ? "Producción normal" : "Levante / pre-postura")} onChange={e => setFormLote({ ...formLote, estadoProd: e.target.value })} style={inputStyle}>
                       <option>Producción normal</option>
                       <option>Pelecha (muda)</option>
                       <option>En tratamiento</option>
@@ -7769,17 +7920,35 @@ export default function App({ onCerrarSesion }) {
                     </select>
                   </label>
                 </div>
-                {formLote.nac && <div style={{ fontSize: 13, color: C.verde, fontWeight: 600, marginBottom: 10 }}>Edad actual: {semanasDe(formLote.nac).toFixed(1)} semanas</div>}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <Campo mitad etiqueta="Edad desde la que cuenta postura (semanas)" type="number" min="1" value={formLote.edadInicioPosturaSemanas ?? EDAD_POSTURA_SEMANAS_DEFAULT} onChange={e => setFormLote({ ...formLote, edadInicioPosturaSemanas: e.target.value })} />
+                  {formLote.nac && <div style={{ fontSize: 12.5, color: C.verde, fontWeight: 600, marginBottom: 13 }}>Edad actual: {semanasDe(formLote.nac).toFixed(1)} semanas. Antes de {Number(formLote.edadInicioPosturaSemanas || EDAD_POSTURA_SEMANAS_DEFAULT)} semanas, la postura no se incluye en KPIs ni alertas.</div>}
+                </div>
+                {formLote.nac && semanasDe(formLote.nac) < Number(formLote.edadInicioPosturaSemanas || EDAD_POSTURA_SEMANAS_DEFAULT) && <div role="status" style={{ padding: 9, borderRadius: 8, background: C.verdeSuave, color: C.verde, marginBottom: 10, fontSize: 12 }}>Etapa de levante: no se exigirá producción de huevo en la matriz. La edad de inicio es editable por lote; usa la guía de la línea o el plan del proveedor.</div>}
 
                 <div style={{ fontSize: 13.5, fontWeight: 700, margin: "6px 0 8px", color: C.verde }}>Alimentación</div>
                 <label style={{ display: "block", marginBottom: 12 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Origen del alimento</span>
+                  <select value={formLote.origenAlimento || "propio"} onChange={e => setFormLote({ ...formLote, origenAlimento: e.target.value, productoCompradoId: "" })} style={inputStyle}>
+                    <option value="propio">Producción propia en Planta</option>
+                    <option value="comprado" disabled={Boolean(alimentoCompradoCfg.cerrado)}>Comprado · inventario temporal</option>
+                  </select>
+                </label>
+                {formLote.origenAlimento === "comprado" ? <label style={{ display: "block", marginBottom: 12 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Producto comprado asignado a este lote</span>
+                  <select value={formLote.productoCompradoId || ""} onChange={e => setFormLote({ ...formLote, productoCompradoId: e.target.value })} style={inputStyle}>
+                    <option value="">— elegir alimento comprado —</option>
+                    {productosComprados.filter(producto => producto.activo !== false).map(producto => <option key={producto.id} value={producto.id}>{producto.nombre} · {producto.etapa || "General"}</option>)}
+                  </select>
+                  {!productosComprados.some(producto => producto.activo !== false) && <div style={{ marginTop: 5, fontSize: 12, color: C.alerta }}>Primero crea el producto en Fórmulas → Alimento comprado.</div>}
+                </label> : <label style={{ display: "block", marginBottom: 12 }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>Tipo de concentrado a servir</span>
                   <select value={formLote.formula} onChange={e => setFormLote({ ...formLote, formula: e.target.value })} style={inputStyle}>
                     <option value="">— elegir fórmula —</option>
                     {formulasAves.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                   <datalist id="formulas">{Object.keys(costos).map(f => <option key={f} value={f} />)}</datalist>
-                </label>
+                </label>}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <Campo mitad etiqueta="Ración a servir (g/ave/día)" type="text" inputMode="decimal" placeholder="ej. 115" value={formLote.racionGAve} onChange={e => setFormLote({ ...formLote, racionGAve: e.target.value })} />
                 </div>
@@ -7851,7 +8020,9 @@ export default function App({ onCerrarSesion }) {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
               {activos.map(l => {
                 const ult = registros.find(r => r.lote === l.id);
-                const postura = ult ? (ult.cartones * HXC / l.aves) * 100 : 0;
+                const posturaAplicable = ult && registroCuentaPostura(ult, l) && loteCuentaPostura(l, ult.fecha);
+                const avesPostura = posturaAplicable ? resumenPostura({ registros, lotes: [l], fecha: ult.fecha }).aves : 0;
+                const postura = posturaAplicable && avesPostura ? (ult.cartones * HXC / avesPostura) * 100 : null;
                 const mortPct = ((l.mortAcum / (l.avesIniciales || 1)) * 100).toFixed(1);
                 return (
                   <div key={l.id} style={{ background: C.superficie, border: `1px solid ${C.borde}`, borderRadius: 16, padding: 17 }}>
@@ -7871,7 +8042,7 @@ export default function App({ onCerrarSesion }) {
                     <BarraPostura actual={postura} meta={metaPosturaLote(l, ult?.fecha)} />
                     <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 20, background: C.yemaSuave, color: "#9A6605", fontWeight: 500 }}>
-                        {l.formula || "sin fórmula"}{l.racionGAve ? ` · ${l.racionGAve} g/ave` : ""}
+                        {formulaDelLote(l)}{l.racionGAve ? ` · ${l.racionGAve} g/ave` : ""}
                       </span>
                       {(() => {
                         const rUlt = registros.find(r => r.lote === l.id && Number(r.alimentoKg || 0) > 0);

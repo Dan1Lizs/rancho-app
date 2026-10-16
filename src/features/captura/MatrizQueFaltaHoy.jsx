@@ -4,6 +4,8 @@ import { estadosCapturaDelDia } from "./estadoCaptura";
 const C = { superficie: "var(--v10-surface, #FFFFFF)", borde: "var(--v10-border, #E4E4DC)", verde: "var(--v10-green, #14432A)", verdeSuave: "var(--v10-green-soft, #E7EFE8)", yema: "var(--v10-amber, #E8940A)", yemaSuave: "var(--v10-amber-soft, #FDF3E0)", texto: "var(--v10-text, #1C1F1A)", textoSuave: "var(--v10-muted, #6B7266)" };
 const badge = (estado) => estado === "guardado"
   ? { fondo: C.verdeSuave, color: C.verde, texto: "✓ Listo" }
+  : estado === "no_aplica"
+    ? { fondo: C.verdeSuave, color: C.verde, texto: "No aplica" }
   : estado === "borrador"
     ? { fondo: C.yemaSuave, color: "#9A6605", texto: "En borrador" }
     : { fondo: "var(--v10-control, #F1F1EA)", color: C.textoSuave, texto: "Pendiente" };

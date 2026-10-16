@@ -1,12 +1,17 @@
+import { loteCuentaPostura } from "../../etapaProductiva.js";
+
 const tieneValor = (valor) => valor !== "" && valor !== null && valor !== undefined;
 
-export function evaluarEstadoCaptura({ lote, registro, captura = {} }) {
+export function evaluarEstadoCaptura({ lote, registro, captura = {}, fecha }) {
   const cartones = (captura.tiquetes || []).reduce((total, tiquete) => total + Number(tiquete.cartones || 0), 0);
   const alimento = Number(captura.alimento6am || 0) + Number(captura.alimento1pm || 0);
   const chequeoBorrador = Object.values(captura.chequeo || {}).some(tieneValor);
   const chequeoGuardado = Object.values(registro?.chequeo || {}).some(tieneValor);
 
-  const produccion = registro ? "guardado" : cartones > 0 ? "borrador" : "pendiente";
+  const produccionAplica = typeof registro?.posturaAplica === "boolean"
+    ? registro.posturaAplica
+    : loteCuentaPostura(lote, fecha);
+  const produccion = !produccionAplica ? "no_aplica" : registro ? "guardado" : cartones > 0 ? "borrador" : "pendiente";
   const alimentacion = registro && Number(registro.alimentoKg || 0) > 0
     ? "guardado"
     : alimento > 0 ? "borrador" : "pendiente";
@@ -17,7 +22,7 @@ export function evaluarEstadoCaptura({ lote, registro, captura = {} }) {
     ? "guardado"
     : (tieneValor(captura.aguaL) || chequeoBorrador) ? "borrador" : "pendiente";
 
-  const estados = [produccion, alimentacion, mortalidad, agua];
+  const estados = [produccion, alimentacion, mortalidad, agua].filter(estado => estado !== "no_aplica");
   return {
     lote,
     prod: produccion,
@@ -35,5 +40,6 @@ export function estadosCapturaDelDia({ lotes, registros, capturas, fecha }) {
     lote,
     registro: (registros || []).find((item) => item.fecha === fecha && item.lote === lote.id),
     captura: capturas?.[lote.id] || {},
+    fecha,
   }));
 }

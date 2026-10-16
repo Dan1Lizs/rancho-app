@@ -1,4 +1,5 @@
 import { fechaHistorialISO } from "./historial.js";
+import { esConsumoAlimentoComprado } from "./alimentoComprado.js";
 
 const posterior = (item, conteo) => {
   if (item.registradoEl) return item.registradoEl > conteo.registradoEl;
@@ -31,6 +32,7 @@ export function saldosFormulasDesdeConteo(categoria, formulas, movimientos, regi
       if (m.tipo === "servido") saldo -= Number(m.kg || 0);
     }
     if (categoria === "Aves") for (const r of registros) {
+      if (esConsumoAlimentoComprado(r)) continue;
       if (r.formulaConcentrado === formula && posterior(r, conteo)) saldo -= Number(r.alimentoKg || 0);
     }
     return [formula, +saldo.toFixed(2)];
@@ -111,6 +113,7 @@ export function calcularSaldoPlantaCategoria({
       if (movimiento.tipo === "servido") saldo -= numeroSeguro(movimiento.kg);
     });
     if (categoria === "Aves") registros.forEach(registro => {
+      if (esConsumoAlimentoComprado(registro)) return;
       const fecha = fechaHistorialISO(registro.fecha);
       if (fecha > fechaHistorialISO(base.fecha) && fecha <= hasta) {
         saldo -= numeroSeguro(registro.alimentoKg ?? (numeroSeguro(registro.alimento6am) + numeroSeguro(registro.alimento1pm)));
@@ -136,6 +139,7 @@ export function calcularSaldoPlantaCategoria({
     // A physical count is absolute; never add its delta as another batch.
   });
   if (categoria === "Aves") registros.forEach(registro => {
+    if (esConsumoAlimentoComprado(registro)) return;
     const fecha = fechaHistorialISO(registro.fecha);
     if (fecha >= apertura && fecha <= hasta) {
       saldo -= numeroSeguro(registro.alimentoKg ?? (numeroSeguro(registro.alimento6am) + numeroSeguro(registro.alimento1pm)));
