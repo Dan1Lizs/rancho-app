@@ -12,9 +12,14 @@ test("Historial queda reservado a admin y encargado", () => {
   }
 });
 
-test("admin recibe todas las vistas y encargado no recibe cuentas por pagar", () => {
+test("solo admin ve Cuentas por Pagar; los roles con Revisión no reciben esa vista", () => {
   assert.deepEqual(vistasPermitidas("admin", todas), todas);
-  assert.equal(puedeAccederVista("encargado", "cxp", todas), false);
+  for (const rol of ["encargado", "bodega", "planta", "bienestar", "consulta"]) {
+    assert.equal(puedeAccederVista(rol, "cxp", todas), false);
+  }
+  for (const rol of ["encargado", "planta", "bienestar"]) {
+    assert.equal(puedeAccederVista(rol, "revision", todas), true);
+  }
 });
 
 test("un enlace profundo se conserva mientras carga el rol", () => {

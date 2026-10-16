@@ -29,9 +29,9 @@ import { baseDeRegistro, registroCambioDesdeBase } from "./concurrencia";
 import { resolverVistaSegura, vistasPermitidas } from "./permisos";
 import { DEFAULT_PREFERENCES, completarOrdenNavegacion, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
-import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAlertas } from "./alertasRevision";
+import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAlertas, filtrarAlertasCuentaPorPagarPorRol } from "./alertasRevision";
 import { calcularSaldoAlimentoComprado, disponibilidadAlimentoComprado, esConsumoAlimentoComprado } from "./alimentoComprado";
-import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
+import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, loteEnLevante, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
 import { AlimentoCompradoForm } from "./features/formulas/AlimentoCompradoForm";
 import { AlimentoCompradoPlanta } from "./features/planta/AlimentoCompradoPlanta";
 import "./v10.css";
@@ -3333,6 +3333,8 @@ export default function App({ onCerrarSesion }) {
   // ── Auditoría de gestión: lo que NO está pasando ──
   const auditoria = [];
   tareasProgramadas.forEach(t => {
+    const loteObjetivo = t.lote ? lotes.find(l => String(l.id) === String(t.lote)) : null;
+    if (loteObjetivo && loteEnLevante(loteObjetivo, hoyISO())) return;
     const proxima = proximaTarea(t);
     if (!proxima) return;
     const dias = diasHastaTarea(proxima, hoyISO());
@@ -3341,7 +3343,7 @@ export default function App({ onCerrarSesion }) {
   const diasDesde = (dmy) => Math.round((hoyD - aDate(dmy)) / 86400000);
   TRABAJOS.forEach((t, i) => {
     let peor = null;
-    activos.forEach(l => {
+    activos.filter(l => !loteEnLevante(l, hoyISO())).forEach(l => {
       const regsL = registros.filter(r => r.lote === l.id);
       if (!regsL.length) return;
       const conTrabajo = regsL.find(r => r.trabajos && r.trabajos[i]);
@@ -3357,6 +3359,7 @@ export default function App({ onCerrarSesion }) {
     }
   });
   activos.forEach(l => {
+    if (loteEnLevante(l, hoyISO())) return;
     const ult = fumigaciones.find(m => m.galpon === l.galpon);
     if (!ult) { auditoria.push({ nivel: "amarillo", texto: `Gallinero ${l.galpon}: sin fumigaciones registradas aún.` }); return; }
     const dias = diasDesde(ult.fecha);
@@ -3391,7 +3394,7 @@ export default function App({ onCerrarSesion }) {
       auditoria.push({ nivel: "amarillo", texto: `Materias primas: el inventario tiene ${diasDesde(mpFechaConteo)} días (conteo del ${mpFechaConteo.slice(0, 5)}). El pedido del jueves necesita conteo fresco.` });
     }
   }
-  facturasAbiertas.forEach(f => {
+  if (miRol === "admin") facturasAbiertas.forEach(f => {
     const d = diasVence(f);
     if (d < 0) auditoria.push({ nivel: "rojo", texto: `Factura VENCIDA hace ${-d} día(s): ${f.proveedor} #${f.numero || "s/n"} — saldo ${colones(saldoDe(f))} (vencía ${f.vence.slice(0, 5)}).` });
     else if (d <= 3) auditoria.push({ nivel: "amarillo", texto: `Factura por vencer en ${d === 0 ? "HOY" : d + " día(s)"}: ${f.proveedor} #${f.numero || "s/n"} — saldo ${colones(saldoDe(f))}.` });
@@ -3495,7 +3498,7 @@ export default function App({ onCerrarSesion }) {
 
   const decisionesVisibles = procesarAdvertencias(decisiones, "decisiones");
   const auditoriaVisibles = procesarAdvertencias(auditoria, "auditoria");
-  const ajustesAuditoria = ordenarEventosAlertas(advAjustes);
+  const ajustesAuditoria = filtrarAlertasCuentaPorPagarPorRol(ordenarEventosAlertas(advAjustes), miRol);
   const consumoCobertura = (categoria, formula) => categoria === "Aves"
     ? registros.filter(r => r.formulaConcentrado === formula && fechas.slice(0, 7).includes(r.fecha)).reduce((s, r) => s + Number(r.alimentoKg || 0), 0) / Math.max(1, fechas.slice(0, 7).length)
     : plantaMovs.filter(m => m.tipo === "servido" && m.formula === formula && [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].sort().reverse().slice(0, 7).includes(m.fecha)).reduce((s, m) => s + Number(m.kg || 0), 0) / Math.max(1, [...new Set(plantaMovs.filter(x => x.tipo === "servido").map(x => x.fecha))].slice(0, 7).length);

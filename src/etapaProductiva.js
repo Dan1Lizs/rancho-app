@@ -23,14 +23,21 @@ export function estadoProductivoEnFecha(lote, fecha) {
   return lote?.estadoProd || "Producción normal";
 }
 
+export function loteEnLevante(lote, fecha) {
+  if (!lote) return false;
+  const edadSemanas = semanasDelLoteEnFecha(lote, fecha);
+  const inicio = Number(lote.edadInicioPosturaSemanas || EDAD_POSTURA_SEMANAS_DEFAULT);
+  return (Number.isFinite(edadSemanas) && edadSemanas < inicio)
+    || estadoProductivoEnFecha(lote, fecha) === "Levante / pre-postura";
+}
+
 export function loteCuentaPostura(lote, fecha) {
   if (!lote) return false;
   const dia = fechaHistorialISO(fecha);
   const cierre = fechaHistorialISO(lote.cerradoFecha);
   if (lote.estado === "cerrado" && (!dia || !cierre || dia > cierre)) return false;
-  const edadSemanas = semanasDelLoteEnFecha(lote, fecha);
-  const inicio = Number(lote.edadInicioPosturaSemanas || EDAD_POSTURA_SEMANAS_DEFAULT);
-  if (!Number.isFinite(edadSemanas) || edadSemanas < inicio) return false;
+  if (loteEnLevante(lote, fecha)) return false;
+  if (!Number.isFinite(semanasDelLoteEnFecha(lote, fecha))) return false;
   return estadoProductivoEnFecha(lote, fecha) === "Producción normal";
 }
 

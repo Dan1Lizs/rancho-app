@@ -1,11 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loteCuentaPostura, resumenPostura } from "../src/etapaProductiva.js";
+import { loteCuentaPostura, loteEnLevante, resumenPostura } from "../src/etapaProductiva.js";
 
 test("pollitas menores a la edad configurada no entran en los KPIs de postura", () => {
   const lote = { id: "P1", nac: "2026-10-15", aves: 1000 };
   assert.equal(loteCuentaPostura(lote, "2026-10-16"), false);
+  assert.equal(loteEnLevante(lote, "2026-10-16"), true);
   assert.equal(resumenPostura({ fecha: "16/10/2026", lotes: [lote], registros: [] }).postura, null);
+});
+test("la etapa de levante se puede fechar aunque ya alcanzó la edad mínima, si sigue marcada pre-postura", () => {
+  const lote = { id: "P1", nac: "2025-01-01", aves: 1000, estadoProd: "Producción normal", historialEstadoProd: [{ desde: "2026-10-01", estado: "Levante / pre-postura" }] };
+  assert.equal(loteEnLevante(lote, "2026-10-16"), true);
+  assert.equal(loteCuentaPostura(lote, "2026-10-16"), false);
 });
 test("muda y estados especiales no cuentan como postura, pero la etapa se puede fechar", () => {
   const lote = {

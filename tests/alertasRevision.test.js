@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { alertaEstaSuprimida, claveAlerta, normalizarTextoAlerta, ultimoEventoAlerta } from "../src/alertasRevision.js";
+import { alertaEstaSuprimida, claveAlerta, normalizarTextoAlerta, ultimoEventoAlerta, esAlertaCuentaPorPagar, filtrarAlertasCuentaPorPagarPorRol } from "../src/alertasRevision.js";
 
 test("la identidad de una alerta ignora números que cambian cada día", () => {
   assert.equal(
@@ -39,5 +39,17 @@ test("mantiene descartes antiguos aunque cambien las cifras de la alerta", () =>
   };
   assert.equal(ultimoEventoAlerta([evento], item, "auditoria"), evento);
   assert.equal(alertaEstaSuprimida(ultimoEventoAlerta([evento], item, "auditoria")), true);
+});
+
+test("los detalles de cuentas por pagar solo se muestran a administradores, incluidos eventos históricos", () => {
+  const alertas = [
+    { texto: "Factura VENCIDA hace 3 días: Proveedor X #123 — saldo ₡500" },
+    { texto: "Gallinero 4: revisar consumo de agua" },
+  ];
+  const historial = [{ textoOriginal: alertas[0].texto, razon: "Revisado" }];
+  assert.equal(esAlertaCuentaPorPagar(alertas[0]), true);
+  assert.deepEqual(filtrarAlertasCuentaPorPagarPorRol(alertas, "planta"), [alertas[1]]);
+  assert.deepEqual(filtrarAlertasCuentaPorPagarPorRol(historial, "encargado"), []);
+  assert.deepEqual(filtrarAlertasCuentaPorPagarPorRol(alertas, "admin"), alertas);
 });
 

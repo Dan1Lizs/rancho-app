@@ -50,3 +50,12 @@ export function ordenarEventosAlertas(eventos) {
   });
 }
 
+export function esAlertaCuentaPorPagar(item) {
+  const texto = [item?.texto, item?.textoAjustado, item?.textoOriginal, item?.nuevoTexto].filter(Boolean).join(" ");
+  return /\bfactura\s+(?:vencida|por vencer)\b/i.test(texto);
+}
+
+export function filtrarAlertasCuentaPorPagarPorRol(items, rol) {
+  return rol === "admin" ? [...(items || [])] : (items || []).filter(item => !esAlertaCuentaPorPagar(item));
+}
+
