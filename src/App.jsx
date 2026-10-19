@@ -51,7 +51,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.0.5";
+const VERSION_APP = "10.0.6";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -554,6 +554,7 @@ export default function App({ onCerrarSesion }) {
   // Advertencias ajustadas / eliminadas
   const [advAjustes, setAdvAjustes] = useState([]);
   const [modalAdv, setModalAdv] = useState(null);
+  const [modalMotivoRequerido, setModalMotivoRequerido] = useState(false);
 
   const [galponActivo, setGalponActivo] = useState("G1");
   const suciosRef = useRef({});
@@ -3425,8 +3426,8 @@ export default function App({ onCerrarSesion }) {
   };
 
   const guardarAjusteAdvertencia = async () => {
-    if (!modalAdv.razon.trim()) {
-      avisar("⚠ La razón o justificación es obligatoria");
+    if (!String(modalAdv?.razon || "").trim()) {
+      setModalMotivoRequerido(true);
       return;
     }
     const dmy = modalAdv.fecha.split("-").reverse().join("/");
@@ -4835,6 +4836,19 @@ export default function App({ onCerrarSesion }) {
           </div>
         </div>
       )}
+      <ModalDialog
+        abierto={modalMotivoRequerido}
+        titulo="No se guardaron los cambios"
+        subtitulo="La advertencia no se modificó ni se descartó."
+        onClose={() => setModalMotivoRequerido(false)}
+        ancho={460}
+        tono="alerta"
+        pie={<button type="button" autoFocus onClick={() => setModalMotivoRequerido(false)} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>Entendido</button>}
+      >
+        <p style={{ margin: 0 }}>
+          Para guardar esta acción debes escribir una razón o justificación. Es un dato obligatorio de auditoría. Cierra este aviso, completa el campo «Razón o justificación» y vuelve a tocar <b>{modalAdv?.accion === "eliminar" ? "Confirmar eliminación" : "Guardar modificación"}</b>.
+        </p>
+      </ModalDialog>
 
       {modalFav && (
         <div onClick={() => setModalFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
