@@ -36,7 +36,32 @@ export function observacionesCaptura(capturas, lotes, tiquetesGlobales = []) {
   return avisos;
 }
 
-export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas, plantaMovs = [], hoy = new Date() }) {
+export function erroresCaptura(capturas, lotes) {
+  const errores = [];
+  const campos = [
+    ["muertas", "muertas", true], ["quebrados", "huevos quebrados", true],
+    ["alimento6am", "alimento de la mañana", false], ["alimento1pm", "alimento de la tarde", false], ["aguaL", "agua", false],
+  ];
+  for (const lote of lotes || []) {
+    const captura = capturas?.[lote.id];
+    if (!captura) continue;
+    for (const [campo, etiqueta, entero] of campos) {
+      const valor = String(captura[campo] ?? "").trim();
+      if (!valor) continue;
+      const numero = Number(valor.replace(",", "."));
+      if (!Number.isFinite(numero) || numero < 0 || (entero && !Number.isInteger(numero))) {
+        errores.push(`G${lote.galpon}: ${etiqueta} debe ser ${entero ? "un entero" : "un número"} mayor o igual a cero.`);
+      }
+    }
+    const muertas = Number(String(captura.muertas ?? "0").replace(",", "."));
+    if (Number.isFinite(muertas) && muertas > Number(lote.aves || 0)) {
+      errores.push(`G${lote.galpon}: las muertas (${muertas}) no pueden superar las aves del lote (${Number(lote.aves || 0)}).`);
+    }
+  }
+  return errores;
+}
+
+export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, tareas, plantaMovs = [], pesajes = [], hoy = new Date() }) {
   const hallazgos = [];
   const grupos = new Map();
   for (const r of registros) {
@@ -46,6 +71,26 @@ export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado,
   for (const [k, n] of grupos) if (n > 1) {
     const [fecha, lote] = k.split("|");
     hallazgos.push({ tipo: "Duplicado", texto: `${fecha} · ${lote} tiene ${n} controles`, destino: { vista: "historial", fecha: fechaHistorialISO(fecha), lote } });
+  }
+  const isoHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  for (const registro of registros) {
+    const fechaRegistro = fechaHistorialISO(registro.fecha);
+    const destino = { vista: "historial", fecha: fechaRegistro, lote: registro.lote, id: registro.id };
+    if (fechaRegistro && fechaRegistro > isoHoy) {
+      hallazgos.push({ tipo: "Fecha futura", texto: `Control diario ${registro.fecha} · ${registro.lote} está fechado después de hoy`, destino });
+    }
+    const negativos = ["cartones", "pesoKg", "alimentoKg", "aguaL", "muertas", "quebrados"]
+      .filter(campo => registro[campo] != null && registro[campo] !== "" && Number.isFinite(Number(registro[campo])) && Number(registro[campo]) < 0);
+    if (negativos.length) hallazgos.push({ tipo: "Cantidad inválida", texto: `Control ${registro.fecha} · ${registro.lote}: valores negativos en ${negativos.join(", ")}`, destino });
+  }
+  for (const pesaje of pesajes) {
+    const fechaPesaje = fechaHistorialISO(pesaje.fecha);
+    if (fechaPesaje && fechaPesaje > isoHoy) {
+      hallazgos.push({ tipo: "Fecha futura", texto: `Pesaje ${pesaje.fecha} · ${pesaje.lote} está fechado después de hoy`, destino: { vista: "pesaje", sub: "histpesajes", fecha: fechaPesaje, lote: pesaje.lote, id: pesaje.id } });
+    }
+    if ((pesaje.pesos || []).some(peso => Number.isFinite(Number(peso)) && Number(peso) < 0)) {
+      hallazgos.push({ tipo: "Cantidad inválida", texto: `Pesaje ${pesaje.fecha} · ${pesaje.lote}: contiene pesos negativos`, destino: { vista: "pesaje", sub: "histpesajes", fecha: fechaPesaje, lote: pesaje.lote, id: pesaje.id } });
+    }
   }
   for (const [nombre, saldo] of [["Aves", saldoAves], ["Ganado", saldoGanado]]) {
     if (saldo < 0) hallazgos.push({ tipo: "Saldo negativo", texto: `Concentrado ${nombre}: ${saldo.toFixed(1)} kg`, destino: { vista: "planta", categoria: nombre } });
@@ -60,7 +105,7 @@ export function excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado,
       hallazgos.push({ tipo: "Sin conciliar", texto: `${categoria}: ${resto.toFixed(1)} kg sin distribuir o con diferencia`, destino: { vista: "planta", categoria } });
     }
   }
-  const iso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  const iso = isoHoy;
   const fecha = `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
   for (const m of movimientosConFechaFutura(plantaMovs, iso)) {
     const movimiento = m.tipo || "bache";

@@ -22,6 +22,14 @@ test("solo admin ve Cuentas por Pagar; los roles con Revisión no reciben esa vi
   }
 });
 
+test("Administración y sus respaldos quedan reservados al rol administrador", () => {
+  const vistas = [...todas, "administracion"];
+  assert.equal(puedeAccederVista("admin", "administracion", vistas), true);
+  for (const rol of ["encargado", "bodega", "planta", "bienestar", "consulta", "sin_acceso"]) {
+    assert.equal(puedeAccederVista(rol, "administracion", vistas), false);
+  }
+});
+
 test("un enlace profundo se conserva mientras carga el rol", () => {
   assert.equal(resolverVistaSegura("cargando", "reporte", todas), "reporte");
   assert.equal(resolverVistaSegura("encargado", "historial", todas), "historial");

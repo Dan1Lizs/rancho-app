@@ -1,5 +1,7 @@
 # Revisión del proyecto — septiembre de 2026
 
+> **Documento histórico:** describe una revisión de la versión 8.5 y hallazgos que fueron posteriormente atendidos. Para el estado actual, usar [AUDITORIA-PUNTOS-SELECCIONADOS.md](AUDITORIA-PUNTOS-SELECCIONADOS.md) y la secuencia vigente de `supabase/migrations/`. No ejecutar las recomendaciones antiguas de este archivo sin volver a comprobarlas.
+
 Alcance: archivos versionados en `main`, flujo de bodega, persistencia, esquema SQL, autenticación, historiales, documentación, pruebas y compilación. Esta revisión es estática: no incluye una consulta autenticada a la base de producción ni confirma los valores concretos de los movimientos del 25.
 
 ## Resuelto en v8.5

@@ -31,14 +31,22 @@ export function loteEnLevante(lote, fecha) {
     || estadoProductivoEnFecha(lote, fecha) === "Levante / pre-postura";
 }
 
-export function loteCuentaPostura(lote, fecha) {
-  if (!lote) return false;
+export function motivoExclusionPostura(lote, fecha) {
+  if (!lote) return "lote no disponible";
   const dia = fechaHistorialISO(fecha);
   const cierre = fechaHistorialISO(lote.cerradoFecha);
-  if (lote.estado === "cerrado" && (!dia || !cierre || dia > cierre)) return false;
-  if (loteEnLevante(lote, fecha)) return false;
-  if (!Number.isFinite(semanasDelLoteEnFecha(lote, fecha))) return false;
-  return estadoProductivoEnFecha(lote, fecha) === "Producción normal";
+  const nacimiento = fechaHistorialISO(lote.nac);
+  if (lote.estado === "cerrado" && (!dia || !cierre || dia > cierre)) return "lote cerrado";
+  if (!dia || !nacimiento) return "falta fecha válida de control o nacimiento";
+  if (dia < nacimiento) return "control anterior al nacimiento";
+  if (loteEnLevante(lote, fecha)) return "levante / pre-postura";
+  if (!Number.isFinite(semanasDelLoteEnFecha(lote, fecha))) return "edad no disponible";
+  const estado = estadoProductivoEnFecha(lote, fecha);
+  return estado === "Producción normal" ? null : `etapa especial: ${estado}`;
+}
+
+export function loteCuentaPostura(lote, fecha) {
+  return motivoExclusionPostura(lote, fecha) === null;
 }
 
 export function registroCuentaPostura(registro, lote) {
@@ -48,6 +56,9 @@ export function registroCuentaPostura(registro, lote) {
 
 export function resumenPostura({ registros = [], lotes = [], fecha }) {
   const elegibles = (lotes || []).filter(lote => loteCuentaPostura(lote, fecha));
+  const elegiblesIds = new Set(elegibles.map(lote => String(lote.id)));
+  const excluidos = (lotes || []).filter(lote => !elegiblesIds.has(String(lote.id)))
+    .map(lote => ({ lote, motivo: motivoExclusionPostura(lote, fecha) }));
   const ids = new Set(elegibles.map(lote => String(lote.id)));
   const dia = fechaHistorialISO(fecha);
   const avesPorLote = new Map(elegibles.map(lote => {
@@ -65,6 +76,7 @@ export function resumenPostura({ registros = [], lotes = [], fecha }) {
   const cartones = relevantes.reduce((total, registro) => total + Number(registro.cartones || 0), 0);
   return {
     lotes: elegibles,
+    excluidos,
     aves,
     avesPorLote,
     cartones,

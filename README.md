@@ -10,15 +10,15 @@ Aplicación React/Vite para la operación de la granja. Los datos se guardan en 
 
 Verificación: `node --test tests/*.test.js` y `npm run build`. Vercel publica los cambios integrados en `main`.
 
-## Versión 10.0
+## Versión 10.1.1
 
-La interfaz usa navegación lateral por áreas en computadora y navegación inferior en teléfono. Incluye inicio operativo, búsqueda global, recuperación de contraseña y filtros e impresión del historial de planta. La corrección guiada de planta modifica únicamente detalle, número y responsable, con motivo e historial; los kilos, fórmulas y porciones requieren ajuste físico para conservar el inventario.
+La interfaz usa navegación lateral por áreas en computadora y navegación inferior en teléfono. Incluye inicio operativo, búsqueda global, reportes segmentados, historial de Planta y control diario imprimible. La importación JSON ahora ofrece vista previa y confirmación explícita; el guardado evita pisar configuraciones editadas en paralelo y bloquea secciones con lecturas fallidas. Los enlaces restauran filtros y resaltan registros concretos cuando hay un identificador disponible.
 
-La administración de usuarios por invitación requiere dos pasos de despliegue adicionales **antes de utilizar sus botones**:
+La administración de usuarios por invitación usa roles con RLS en Supabase. Para preparar otro entorno:
 
-1. Revisar y ejecutar `MIGRACION-V10-USUARIOS.sql` en el proyecto Supabase. El script conserva los accesos existentes, crea roles y sustituye políticas RLS; comprobar en un proyecto de prueba que el usuario administrador conserva acceso y que una cuenta de consulta no puede escribir. La lista anterior `cfgAdmins` solo sirve para asignar roles iniciales.
-2. Desplegar `supabase/functions/invite-user` en Supabase Edge Functions con verificación JWT activa y configurar `APP_ORIGIN` con la URL exacta de producción. La clave `SUPABASE_SERVICE_ROLE_KEY` queda exclusivamente en los secretos de Supabase. Añadir la URL de producción a los redirect URLs de Supabase Auth para invitaciones y recuperación de contraseña.
+1. Aplicar las migraciones versionadas de `supabase/migrations/` en orden. En el proyecto conectado, el historial de migraciones ya está aplicado.
+2. Para invitar usuarios, desplegar `supabase/functions/invite-user` con verificación JWT activa y configurar `APP_ORIGIN` como secreto de la función. `SUPABASE_SERVICE_ROLE_KEY` debe quedar exclusivamente en los secretos de Supabase.
 
-Si la migración no se ha aplicado, la interfaz conserva la lista anterior de administradores y muestra que las invitaciones aún no están configuradas. No se debe anunciar la administración de usuarios como activa hasta verificar esos pasos en Supabase.
+Las copias JSON incluyen información operativa y financiera. Solo un administrador puede acceder a **Administración → Datos y respaldos**; conserva los archivos en un lugar privado. La exportación mensual a Excel permanece en Historial.
 
-Los archivos `README-INSTALACION.md` y `README-MIGRACION-V6.md` describen pasos históricos de puesta en marcha; la fuente actual del esquema es `supabase_v2_actualizado.sql`.
+La matriz vigente de puntos revisados está en `AUDITORIA-PUNTOS-SELECCIONADOS.md`. `MIGRACION-V10-USUARIOS.sql`, `README-INSTALACION.md`, `README-MIGRACION-V6.md` y `supabase_v2_actualizado.sql` conservan valor histórico; el historial actual de cambios de base está en `supabase/migrations/`.

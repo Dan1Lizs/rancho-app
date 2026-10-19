@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "../src/mejorasUX.js";
+import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, erroresCaptura, excepcionesOperacion, csvAuditoria } from "../src/mejorasUX.js";
 
 test("los saltos de tiquete se avisan sin presumir que son una duplicación", () => {
   assert.deepEqual(saltosTiquetes([{ num: "6076" }, { num: "6077" }, { num: "6079" }]), [6078]);
@@ -12,6 +12,21 @@ test("la revisión de captura señala pesos atípicos e incompletos", () => {
   const mensajes = observacionesCaptura(c, [{ id: "G3", galpon: 3 }], c.G3.tiquetes);
   assert.equal(mensajes.length, 3);
   assert.ok(mensajes.some(x => x.includes("6077")));
+});
+
+test("el guardado detiene cantidades negativas, no numéricas, fraccionadas o superiores al saldo de aves", () => {
+  const errores = erroresCaptura({
+    lote1: { muertas: "2.5", quebrados: "-1", alimento6am: "abc", alimento1pm: "4.25", aguaL: "-3" },
+    lote2: { muertas: "11" },
+  }, [
+    { id: "lote1", galpon: 1, aves: 10 },
+    { id: "lote2", galpon: 2, aves: 10 },
+  ]);
+  assert.equal(errores.length, 5);
+  assert.ok(errores.some(x => x.includes("huevos quebrados")));
+  assert.ok(errores.some(x => x.includes("alimento de la mañana")));
+  assert.ok(errores.some(x => x.includes("un entero")));
+  assert.ok(errores.some(x => x.includes("superar las aves")));
 });
 
 test("la secuencia se comparte entre gallineros, incluso con un registro guardado", () => {
@@ -77,4 +92,21 @@ test("las excepciones enlazan movimientos de planta fechados en el futuro", () =
   const alerta = h.find(x => x.tipo === "Fecha futura");
   assert.ok(alerta.texto.includes("30/10/2026"));
   assert.deepEqual(alerta.destino, { vista: "planta", sub: "historial", categoria: "Aves", formula: "651 Impulsor VYMISA", id: "bache-futuro", fecha: "2026-10-30" });
+});
+
+test("los controles y pesajes futuros o con cantidades negativas llevan al registro exacto", () => {
+  const h = excepcionesOperacion({
+    registros: [{ id: "r-futuro", fecha: "20/10/2026", lote: "G1", alimentoKg: -2 }],
+    pesajes: [{ id: "p-futuro", fecha: "21/10/2026", lote: "G1", pesos: [1800, -1] }],
+    lotes: [], saldoAves: 0, saldoGanado: 0, saldosAvesFormula: null, saldosGanadoFormula: null,
+    bodegaMovs: [], retirosActivos: [], tareas: [], hoy: new Date(2026, 9, 18),
+  });
+  const fechaRegistro = h.find(x => x.tipo === "Fecha futura" && x.destino.id === "r-futuro");
+  const cantidadRegistro = h.find(x => x.tipo === "Cantidad inválida" && x.destino.id === "r-futuro");
+  const fechaPesaje = h.find(x => x.tipo === "Fecha futura" && x.destino.id === "p-futuro");
+  const cantidadPesaje = h.find(x => x.tipo === "Cantidad inválida" && x.destino.id === "p-futuro");
+  assert.deepEqual(fechaRegistro.destino, { vista: "historial", fecha: "2026-10-20", lote: "G1", id: "r-futuro" });
+  assert.equal(cantidadRegistro.texto.includes("alimentoKg"), true);
+  assert.deepEqual(fechaPesaje.destino, { vista: "pesaje", sub: "histpesajes", fecha: "2026-10-21", lote: "G1", id: "p-futuro" });
+  assert.match(cantidadPesaje.texto, /pesos negativos/);
 });

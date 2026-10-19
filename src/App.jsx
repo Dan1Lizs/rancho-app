@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirMovimientoPlanta } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
@@ -17,7 +16,7 @@ import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
 import { saldosFormulasDesdeConteo, deltaConteoFormula, calcularSaldoPlantaCategoria } from "./inventarioFormulas";
 import { kgNucleoEnFormula, nucleosDisponibles, resolverNucleoFormula } from "./plantaNucleos";
 import { correccionesInventarioPlanta } from "./plantaCorrecciones";
-import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
+import { saltosTiquetes, tiquetesDelDia, observacionesCaptura, erroresCaptura, excepcionesOperacion, csvAuditoria } from "./mejorasUX";
 import { filtroPlantaInicial, filtrarMovimientosPlanta, movimientosConFechaFutura } from "./plantaHistorial";
 import { Campo } from "./components/Campo";
 import { ModalDialog } from "./components/ModalDialog";
@@ -31,6 +30,8 @@ import { DEFAULT_PREFERENCES, completarOrdenNavegacion, normalizarPreferencias, 
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
 import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAlertas, filtrarAlertasCuentaPorPagarPorRol } from "./alertasRevision";
 import { calcularSaldoAlimentoComprado, disponibilidadAlimentoComprado, esConsumoAlimentoComprado } from "./alimentoComprado";
+import { nombreColeccionRespaldo, resumenArchivoRespaldo } from "./respaldo.js";
+import { analizarRuta, serializarRuta } from "./rutas.js";
 import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, loteEnLevante, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
 import { AlimentoCompradoForm } from "./features/formulas/AlimentoCompradoForm";
 import { AlimentoCompradoPlanta } from "./features/planta/AlimentoCompradoPlanta";
@@ -38,6 +39,7 @@ import "./v10.css";
 
 const PreferenciasView = lazy(() => import("./views/PreferenciasView"));
 const AdministracionView = lazy(() => import("./views/AdministracionView"));
+const TendenciaPostura = lazy(() => import("./features/reportes/TendenciaPostura"));
 
 // ─── Tokens ─────────────────────────────────────────────────────
 const C = {
@@ -51,7 +53,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.0.7";
+const VERSION_APP = "10.1.1";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -483,24 +485,22 @@ export default function App({ onCerrarSesion }) {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(false);
   const [cargandoFondo, setCargandoFondo] = useState(false);
-  const leerHashRuta = () => {
-    if (typeof window === "undefined" || !window.location.hash) return null;
-    const raw = window.location.hash.replace(/^#\/?/, "");
-    if (!raw) return null;
-    const [ruta, queryStr] = raw.split("?");
-    const params = new URLSearchParams(queryStr || "");
-    return { ruta, params };
+  const leerHashRuta = () => typeof window === "undefined" ? null : analizarRuta(window.location.hash);
+  const valorRutaInicial = (ruta, clave, defecto) => {
+    const hash = leerHashRuta();
+    return hash?.vista === ruta ? (hash.params.get(clave) || defecto) : defecto;
   };
   const rutaInicialExplicitaRef = useRef(typeof window !== "undefined" && !!window.location.hash);
   const [vista, setVista] = useState(() => {
     const h = leerHashRuta();
-    if (h && h.ruta) return h.ruta;
+    if (h && h.vista) return h.vista;
     return localStorage.getItem(`rancho:ultimaVista:${window.__usuarioEmail || "local"}`) || "inicio";
   });
   const [busquedaGlobal, setBusquedaGlobal] = useState("");
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [menuMovil, setMenuMovil] = useState(false);
   const [salidaPendiente, setSalidaPendiente] = useState(null);
+  const [alertaEnlaceId, setAlertaEnlaceId] = useState(() => leerHashRuta()?.params.get("id") || "");
   // Consulta de historial con captura pendiente: antes de cambiar de sección
   // guardamos una copia local para que consultar nunca borre lo que se estaba
   // digitando. La copia es por usuario y no modifica los datos compartidos.
@@ -535,7 +535,7 @@ export default function App({ onCerrarSesion }) {
   const [fumigaciones, setFumigaciones] = useState([]);
   const [bodegaMovs, setBodegaMovs] = useState([]);
   const [plantaMovs, setPlantaMovs] = useState([]);
-  const [filtroPlanta, setFiltroPlanta] = useState(filtroPlantaInicial);
+  const [filtroPlanta, setFiltroPlanta] = useState(() => ({ ...filtroPlantaInicial(), categoria: valorRutaInicial("planta", "categoria", ""), formula: valorRutaInicial("planta", "formula", "") }));
   const [editarDetallePlanta, setEditarDetallePlanta] = useState(null);
   const [motivoDetallePlanta, setMotivoDetallePlanta] = useState("");
   const [facturas, setFacturas] = useState([]);
@@ -557,7 +557,7 @@ export default function App({ onCerrarSesion }) {
   const [modalMotivoRequerido, setModalMotivoRequerido] = useState(false);
   const [avisoMotivoGuardar, setAvisoMotivoGuardar] = useState("");
 
-  const [galponActivo, setGalponActivo] = useState("G1");
+  const [galponActivo, setGalponActivo] = useState(() => valorRutaInicial("captura", "lote", valorRutaInicial("captura", "galpon", "G1")));
   const suciosRef = useRef({});
   // Conserva la versión exacta que cada formulario tenía al empezar a editarse.
   // Realtime puede refrescar la pantalla, pero esta base no cambia hasta guardar
@@ -573,14 +573,22 @@ export default function App({ onCerrarSesion }) {
   const [pasosBodega, setPasosBodega] = useState({ salidas: false, devoluciones: false, conteo: false });
   const [revisionGuardado, setRevisionGuardado] = useState(null);
   const [estadoSync, setEstadoSync] = useState("Sincronizado");
+  const [erroresLecturaDatos, setErroresLecturaDatos] = useState([]);
+  const [errorEscrituraDatos, setErrorEscrituraDatos] = useState(false);
   const [filtroExcepciones, setFiltroExcepciones] = useState("Todas");
   const [conflictoEdicion, setConflictoEdicion] = useState("");
   useEffect(() => {
     const actualizar = () => setEstadoSync(navigator.onLine ? "Sincronizado" : "Sin conexión");
     const sincronizar = e => setEstadoSync(e.detail);
+    const lecturaFallida = e => setErroresLecturaDatos(actuales => [...new Set([...actuales, e.detail?.key || "datos"])]);
+    const lecturaCorrecta = e => setErroresLecturaDatos(actuales => actuales.filter(key => key !== e.detail?.key));
+    const conflictoEscritura = () => setErrorEscrituraDatos(true);
     addEventListener("online", actualizar); addEventListener("offline", actualizar);
     addEventListener("granja:sync", sincronizar);
-    actualizar(); return () => { removeEventListener("online", actualizar); removeEventListener("offline", actualizar); removeEventListener("granja:sync", sincronizar); };
+    addEventListener("granja:read-error", lecturaFallida);
+    addEventListener("granja:read-success", lecturaCorrecta);
+    addEventListener("granja:write-conflict", conflictoEscritura);
+    actualizar(); return () => { removeEventListener("online", actualizar); removeEventListener("offline", actualizar); removeEventListener("granja:sync", sincronizar); removeEventListener("granja:read-error", lecturaFallida); removeEventListener("granja:read-success", lecturaCorrecta); removeEventListener("granja:write-conflict", conflictoEscritura); };
   }, []);
   const [notaDia, setNotaDia] = useState("");
 
@@ -594,18 +602,18 @@ export default function App({ onCerrarSesion }) {
   const [ajusteBodega, setAjusteBodega] = useState("");
   const [bodegaBorradorConsulta, setBodegaBorradorConsulta] = useState(null);
   const bodegaBorradorCargadoRef = useRef(false);
-    const [subPlanta, setSubPlanta] = useState("baches");
-  const [subPedidoMP, setSubPedidoMP] = useState("kardex");
-  const [subFormulas, setSubFormulas] = useState("recetas");
-  const [subInsumos, setSubInsumos] = useState("catalogo");
-  const [subRevision, setSubRevision] = useState("alertas");
-  const [subPesaje, setSubPesaje] = useState("resumen");
-  const [subHistorial, setSubHistorial] = useState("dia");
-  const [subReporte, setSubReporte] = useState("todo");
+    const [subPlanta, setSubPlanta] = useState(() => valorRutaInicial("planta", "sub", "baches"));
+  const [subPedidoMP, setSubPedidoMP] = useState(() => valorRutaInicial("pedidomp", "sub", "kardex"));
+  const [subFormulas, setSubFormulas] = useState(() => valorRutaInicial("formulas", "sub", "recetas"));
+  const [subInsumos, setSubInsumos] = useState(() => valorRutaInicial("insumos", "sub", "catalogo"));
+  const [subRevision, setSubRevision] = useState(() => valorRutaInicial("revision", "sub", "alertas"));
+  const [subPesaje, setSubPesaje] = useState(() => valorRutaInicial("pesaje", "sub", "resumen"));
+  const [subHistorial, setSubHistorial] = useState(() => valorRutaInicial("historial", "sub", "dia"));
+  const [subReporte, setSubReporte] = useState(() => valorRutaInicial("reporte", "sub", "todo"));
   const [alimentoCompradoCfg, setAlimentoCompradoCfg] = useState({ cerrado: false, historial: [] });
   const [editarAjustePlanta, setEditarAjustePlanta] = useState(null);
   const [subBodega, setSubBodega] = useState("producido");
-  const [fechaBodega, setFechaBodega] = useState(hoyISO());
+  const [fechaBodega, setFechaBodega] = useState(() => valorRutaInicial("bodega", "fecha", hoyISO()));
   const [movBodegaId, setMovBodegaId] = useState(null);
   const fechaBodegaRef = useRef(hoyISO());
   const movBodegaIdRef = useRef(null);
@@ -650,12 +658,13 @@ export default function App({ onCerrarSesion }) {
   const [racionesGanado, setRacionesGanado] = useState({});
   const [fFactura, setFFactura] = useState({ proveedor: "", producto: "", numero: "", cantidad: "", monto: "", recibidoPor: "", fecha: hoyISO() });
 
-  const [fPeso, setFPeso] = useState({ lote: "G1", pesos: "", fecha: hoyISO() });
+  const [fPeso, setFPeso] = useState(() => ({ lote: valorRutaInicial("pesaje", "lote", "G1"), pesos: "", fecha: hoyISO() }));
   const [excelPesajes, setExcelPesajes] = useState([]);
   const [excelAbierto, setExcelAbierto] = useState(-1);
   const [importandoPesajes, setImportandoPesajes] = useState(false);
   const [conflictosPesaje, setConflictosPesaje] = useState(null);
   const [conflictosRespaldo, setConflictosRespaldo] = useState(null);
+  const [respaldoPreview, setRespaldoPreview] = useState(null);
   const [filtroExcel, setFiltroExcel] = useState(filtroVacio);
   const [filtroHistPesajes, setFiltroHistPesajes] = useState(filtroVacio);
   const [filtroConfPesajes, setFiltroConfPesajes] = useState(filtroVacio);
@@ -669,7 +678,7 @@ export default function App({ onCerrarSesion }) {
   const [guardandoTarea, setGuardandoTarea] = useState(false);
   const [fVac, setFVac] = useState({ lote: "G1", vacuna: "", cepa: "", via: "", proveedor: "" });
   const [fechasAplicar, setFechasAplicar] = useState({});
-  const [fechaCaptura, setFechaCaptura] = useState(hoyISO());
+  const [fechaCaptura, setFechaCaptura] = useState(() => valorRutaInicial("captura", "fecha", hoyISO()));
   useEffect(() => {
     if (!preferenciasCargadas) return;
     let activo = true;
@@ -846,7 +855,7 @@ export default function App({ onCerrarSesion }) {
   const [insumosMovs, setInsumosMovs] = useState([]);
   const [fMovIns, setFMovIns] = useState({ tipo: "entrada", itemId: "", cantidad: "", detalle: "", fecha: hoyISO() });
   const [fNuevoIns, setFNuevoIns] = useState({ nombre: "", categoria: "Medicinas", unidad: "ml", saldo: "", presentacion: "", dosis: "", proveedor: "" });
-  const [recActiva, setRecActiva] = useState("Impulsor");
+  const [recActiva, setRecActiva] = useState(() => valorRutaInicial("formulas", "formula", "Impulsor"));
   const [fNuevaRec, setFNuevaRec] = useState({ nombre: "", uso: "Aves" });
   const [fIng, setFIng] = useState({ mp: "MP001", kg: "" });
   const [fEnf, setFEnf] = useState({ lote: "G1", enfermedad: "", tratamiento: "", estado: "En tratamiento" });
@@ -873,7 +882,7 @@ export default function App({ onCerrarSesion }) {
       if (vigente) setBodegaBorradorConsulta(vigente);
     }).catch(() => {});
   }, [preferenciasCargadas]);
-  const [histFecha, setHistFecha] = useState(() => hoyISO());
+  const [histFecha, setHistFecha] = useState(() => valorRutaInicial("historial", "fecha", hoyISO()));
   const [histMes, setHistMes] = useState(() => hoyISO().slice(0, 7));
   const [correccionesProduccion, setCorreccionesProduccion] = useState([]);
   const [editarProduccion, setEditarProduccion] = useState(null);
@@ -1174,7 +1183,13 @@ export default function App({ onCerrarSesion }) {
     const fecha = (fechaCaptura || hoyISO()).split("-").reverse().join("/");
     const vigentes = await leer(K.registros, null);
     if (!vigentes) { avisar("⚠ No se pudo comprobar la producción actual. Intenta de nuevo."); setGuardando(false); return; }
-    const aGuardar = lotes.filter(l => (!soloLoteId || l.id === soloLoteId) && capturas[l.id] && (totalesGalpon(capturas[l.id]).huevos || capturas[l.id].muertas || capturas[l.id].alimento6am || capturas[l.id].alimento1pm));
+    const aGuardar = lotes.filter(l => {
+      if ((soloLoteId && l.id !== soloLoteId) || !capturas[l.id]) return false;
+      const captura = capturas[l.id];
+      return Boolean(totalesGalpon(captura).huevos || captura.quebrados || captura.muertas || captura.alimento6am || captura.alimento1pm || captura.aguaL || captura.dx || captura.trabajos && Object.values(captura.trabajos).some(Boolean));
+    });
+    const erroresFormulario = erroresCaptura(capturas, aGuardar);
+    if (erroresFormulario.length) { avisar(`⚠ No se guardó: ${erroresFormulario[0]}${erroresFormulario.length > 1 ? ` (+${erroresFormulario.length - 1} más)` : ""}`); setGuardando(false); return; }
     if (aGuardar.some(l => vigentes.filter(r => r.fecha === fecha && r.lote === l.id).length > 1)) {
       avisar("⚠ Hay controles duplicados para esta fecha. Corrígelos desde Historial antes de guardar."); setGuardando(false); return;
     }
@@ -1938,6 +1953,41 @@ export default function App({ onCerrarSesion }) {
     setGuardando(false);
   };
 
+  const importarRespaldoJSON = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file) return;
+    if (cargandoFondo || guardando) { avisar("⏳ Espera a que termine la operación actual"); return; }
+    setGuardando(true); avisar("⏳ Revisando el respaldo sin modificar datos…");
+    try {
+      const doc = JSON.parse(await file.text());
+      const datos = doc.datos || doc;
+      if (!datos || typeof datos !== "object" || Array.isArray(datos)) throw new Error("Formato de respaldo inválido");
+      const respaldo = Object.fromEntries(Object.entries(datos).filter(([, v]) => v !== null && v !== undefined));
+      const conflictos = await detectarFechasRespaldo(respaldo);
+      setRespaldoPreview({ nombre: file.name, datos: respaldo, conflictos, resumen: resumenArchivoRespaldo(respaldo, conflictos) });
+      avisar("✓ Respaldo leído. Todavía no se modificó ningún dato.");
+    } catch (error) { console.error(error); avisar(`⚠ No se pudo revisar el respaldo: ${error.message}. La base no fue modificada.`); }
+    setGuardando(false);
+  };
+
+  const confirmarImportacionRespaldo = async () => {
+    if (!respaldoPreview || guardando) return;
+    setGuardando(true); avisar("⏳ Aplicando el respaldo confirmado…");
+    try {
+      // Recalcular justo antes de escribir para evitar usar una vista previa vencida.
+      const conflictos = await detectarFechasRespaldo(respaldoPreview.datos);
+      const resultado = await agregarRespaldoFaltante(respaldoPreview.datos);
+      setRespaldoPreview(null);
+      if (conflictos.length) setConflictosRespaldo({ items: conflictos, elegidos: [] });
+      avisar(`✓ ${resultado.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar${resultado.futuros ? `; ${resultado.futuros} fechas futuras excluidas` : ""}.`);
+      if (!conflictos.length) setTimeout(() => { try { location.reload(); } catch {} }, 1600);
+    } catch (error) {
+      console.error(error);
+      avisar(`⚠ La importación se detuvo: ${error.message}. Si ya se agregaron registros antes del error, al repetir se omitirán automáticamente.`);
+    }
+    setGuardando(false);
+  };
+
   const guardarFactura = async () => {
     if (!fFactura.proveedor && !fFactura.producto) return;
     const nuevo = [{ ...fFactura, numero: (fFactura.numero || "").trim(), cantidad: (fFactura.cantidad || "").trim(), recibidoPor: (fFactura.recibidoPor || completadoPor).trim(), por: completadoPor, fecha: (fFactura.fecha || hoyISO()).split("-").reverse().join("/") }, ...facturas];
@@ -2481,6 +2531,8 @@ export default function App({ onCerrarSesion }) {
   const huevosDia = resumenPosturaUlt.huevos;
   const avesPosturaDia = resumenPosturaUlt.aves;
   const posturaDia = resumenPosturaUlt.postura;
+  const exclusionesPosturaUlt = Object.entries(resumenPosturaUlt.excluidos.reduce((conteo, item) => ({ ...conteo, [item.motivo]: (conteo[item.motivo] || 0) + 1 }), {}))
+    .map(([motivo, cantidad]) => `${cantidad} ${motivo}`).join(" · ");
 
   const f7 = fechas.slice(0, 7);
   const regs7 = registros.filter(r => f7.includes(r.fecha));
@@ -2911,8 +2963,8 @@ export default function App({ onCerrarSesion }) {
   useEffect(() => {
     const h = leerHashRuta();
     if (!h) return;
-    if (h.ruta && tabs.some(t => t.id === h.ruta) && h.ruta !== vista) {
-      irA(h.ruta);
+    if (h.vista && tabs.some(t => t.id === h.vista) && h.vista !== vista) {
+      irA(h.vista);
     }
     const g = h.params.get("galpon") || h.params.get("lote");
     if (g && lotes.some(l => l.id === g || String(l.galpon) === String(g))) {
@@ -2921,15 +2973,32 @@ export default function App({ onCerrarSesion }) {
     }
     const f = h.params.get("fecha");
     if (f) {
-      if (h.ruta === "captura") setFechaCaptura(f);
-      if (h.ruta === "bodega") cambiarFechaBodegaSegura(f);
+      if (h.vista === "captura") setFechaCaptura(f);
+      if (h.vista === "bodega") cambiarFechaBodegaSegura(f);
+      if (h.vista === "historial") setHistFecha(f);
     }
     const subParam = h.params.get("sub");
-    if (subParam && h.ruta === "bodega") {
+    if (subParam && h.vista === "bodega") {
       setSubBodega(subParam);
     }
-    if (subParam && h.ruta === "reporte") setSubReporte(subParam);
-    if (f && h.ruta === "historial") setHistFecha(f);
+    if (subParam && h.vista === "reporte") setSubReporte(subParam);
+    if (subParam && h.vista === "planta") setSubPlanta(subParam);
+    if (subParam && h.vista === "pedidomp") setSubPedidoMP(subParam);
+    if (subParam && h.vista === "formulas") setSubFormulas(subParam);
+    if (subParam && h.vista === "pesaje") setSubPesaje(subParam);
+    if (subParam && h.vista === "historial") setSubHistorial(subParam);
+    if (subParam && h.vista === "revision") setSubRevision(subParam);
+    if (subParam && h.vista === "insumos") setSubInsumos(subParam);
+    const categoria = h.params.get("categoria");
+    const formulaFiltro = h.params.get("formula");
+    if (h.vista === "planta" && (categoria || formulaFiltro)) setFiltroPlanta(v => ({ ...v, categoria: categoria || "", formula: formulaFiltro || "" }));
+    const id = h.params.get("id");
+    if (id) {
+      setAlertaEnlaceId(id);
+      if (h.vista === "bodega") setPeriodosHistorial(v => ({ ...v, bodega: "todo" }));
+      if (h.vista === "planta") setPeriodosHistorial(v => ({ ...v, planta: "todo" }));
+      if (h.vista === "pesaje") setPeriodosHistorial(v => ({ ...v, pesajes: "todo" }));
+    }
     const form = h.params.get("formula");
     if (form && recetas.formulas && recetas.formulas[form]) {
       setRecActiva(form);
@@ -2937,35 +3006,48 @@ export default function App({ onCerrarSesion }) {
   }, [lotes.length, miRol]);
 
   useEffect(() => {
-    const params = new URLSearchParams();
+    const params = {};
     if (vista === "captura") {
-      if (galponActivo) params.set("lote", galponActivo);
-      if (fechaCaptura && fechaCaptura !== hoyISO()) params.set("fecha", fechaCaptura);
+      if (galponActivo) params.lote = galponActivo;
+      if (fechaCaptura && fechaCaptura !== hoyISO()) params.fecha = fechaCaptura;
     } else if (vista === "bodega") {
-      if (fechaBodega && fechaBodega !== hoyISO()) params.set("fecha", fechaBodega);
-      if (subBodega && subBodega !== "producido") params.set("sub", subBodega);
+      if (fechaBodega && fechaBodega !== hoyISO()) params.fecha = fechaBodega;
+      if (subBodega && subBodega !== "producido") params.sub = subBodega;
     } else if (vista === "reporte") {
-      if (subReporte && subReporte !== "todo") params.set("sub", subReporte);
+      if (subReporte && subReporte !== "todo") params.sub = subReporte;
+    } else if (vista === "planta") {
+      if (subPlanta && subPlanta !== "baches") params.sub = subPlanta;
+      if (filtroPlanta.categoria) params.categoria = filtroPlanta.categoria;
+      if (filtroPlanta.formula) params.formula = filtroPlanta.formula;
     } else if (vista === "formulas") {
-      if (recActiva) params.set("formula", recActiva);
+      if (subFormulas && subFormulas !== "recetas") params.sub = subFormulas;
+      if (recActiva) params.formula = recActiva;
+    } else if (vista === "pedidomp") {
+      if (subPedidoMP && subPedidoMP !== "kardex") params.sub = subPedidoMP;
+    } else if (vista === "insumos") {
+      if (subInsumos && subInsumos !== "catalogo") params.sub = subInsumos;
     } else if (vista === "pesaje") {
-      if (fPeso.lote) params.set("lote", fPeso.lote);
+      if (subPesaje && subPesaje !== "resumen") params.sub = subPesaje;
+      if (fPeso.lote) params.lote = fPeso.lote;
     } else if (vista === "historial") {
-      if (histFecha && histFecha !== hoyISO()) params.set("fecha", histFecha);
+      if (subHistorial && subHistorial !== "dia") params.sub = subHistorial;
+      if (histFecha && histFecha !== hoyISO()) params.fecha = histFecha;
+    } else if (vista === "revision") {
+      if (subRevision && subRevision !== "alertas") params.sub = subRevision;
     }
-    const pStr = params.toString();
-    const nuevoHash = `#${vista}${pStr ? "?" + pStr : ""}`;
+    if (alertaEnlaceId) params.id = alertaEnlaceId;
+    const nuevoHash = serializarRuta(vista, params);
     if (window.location.hash !== nuevoHash) {
       window.history.replaceState(null, "", nuevoHash);
     }
-  }, [vista, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, recActiva, fPeso.lote, histFecha]);
+  }, [vista, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, subPlanta, filtroPlanta.categoria, filtroPlanta.formula, subFormulas, subPedidoMP, subInsumos, subPesaje, subHistorial, subRevision, recActiva, fPeso.lote, histFecha, alertaEnlaceId]);
 
   useEffect(() => {
     const onHashChange = () => {
       const h = leerHashRuta();
       if (!h) return;
-      if (h.ruta && tabs.some(t => t.id === h.ruta) && h.ruta !== vista) {
-        irA(h.ruta);
+      if (h.vista && tabs.some(t => t.id === h.vista) && h.vista !== vista) {
+        irA(h.vista);
       }
       const g = h.params.get("galpon") || h.params.get("lote");
       if (g) {
@@ -2974,19 +3056,52 @@ export default function App({ onCerrarSesion }) {
       }
       const f = h.params.get("fecha");
       if (f) {
-        if (h.ruta === "captura" && f !== fechaCaptura) setFechaCaptura(f);
-        if (h.ruta === "bodega" && f !== fechaBodega) cambiarFechaBodegaSegura(f);
+        if (h.vista === "captura" && f !== fechaCaptura) setFechaCaptura(f);
+        if (h.vista === "bodega" && f !== fechaBodega) cambiarFechaBodegaSegura(f);
+        if (h.vista === "historial" && f !== histFecha) setHistFecha(f);
       }
       const subParam = h.params.get("sub");
-      if (subParam && h.ruta === "bodega" && subParam !== subBodega) {
+      if (subParam && h.vista === "bodega" && subParam !== subBodega) {
         setSubBodega(subParam);
       }
-      if (subParam && h.ruta === "reporte" && subParam !== subReporte) setSubReporte(subParam);
-      if (f && h.ruta === "historial" && f !== histFecha) setHistFecha(f);
+      if (subParam && h.vista === "reporte" && subParam !== subReporte) setSubReporte(subParam);
+      if (subParam && h.vista === "planta") setSubPlanta(subParam);
+      if (subParam && h.vista === "pedidomp") setSubPedidoMP(subParam);
+      if (subParam && h.vista === "formulas") setSubFormulas(subParam);
+      if (subParam && h.vista === "pesaje") setSubPesaje(subParam);
+      if (subParam && h.vista === "historial") setSubHistorial(subParam);
+      if (subParam && h.vista === "revision") setSubRevision(subParam);
+      if (subParam && h.vista === "insumos") setSubInsumos(subParam);
+      if (h.vista === "planta") {
+        const categoria = h.params.get("categoria");
+        const formula = h.params.get("formula");
+        if (categoria || formula) setFiltroPlanta(v => ({ ...v, categoria: categoria || "", formula: formula || "" }));
+      }
+      if (h.vista === "formulas") {
+        const formula = h.params.get("formula");
+        if (formula) setRecActiva(formula);
+      }
+      const id = h.params.get("id");
+      if (id) {
+        if (id !== alertaEnlaceId) setAlertaEnlaceId(id);
+        if (h.vista === "bodega") setPeriodosHistorial(v => ({ ...v, bodega: "todo" }));
+        if (h.vista === "planta") setPeriodosHistorial(v => ({ ...v, planta: "todo" }));
+        if (h.vista === "pesaje") setPeriodosHistorial(v => ({ ...v, pesajes: "todo" }));
+      }
     };
+    onHashChange();
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, [vista, miRol, lotes, galponActivo, fechaCaptura, fechaBodega, subBodega, subReporte, histFecha]);
+  useEffect(() => {
+    if (!alertaEnlaceId) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const elemento = Array.from(document.querySelectorAll("[data-alerta-id]"))
+        .find(nodo => nodo.getAttribute("data-alerta-id") === String(alertaEnlaceId));
+      elemento?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [alertaEnlaceId, vista, registros.length, bodegaMovs.length, plantaMovs.length, pesajes.length]);
   const resultadosBusqueda = !buscadorAbierto || busquedaGlobal.trim().length < 2 ? [] : [
     ...lotes.map(l => ({ texto: `Gallinero G${l.galpon} · ${l.raza || ""} · ${l.lote || ""}`, vista: "captura", lote: l.id })),
     ...(idsPermitidos.includes("historial") ? registros.map(r => ({ texto: `Control ${r.fecha} · ${lotes.find(l => l.id === r.lote)?.galpon ? `G${lotes.find(l => l.id === r.lote).galpon}` : r.lote} · ${(r.tiquetes || []).map(t => `#${t.num}`).join(" ")}`, vista: "historial", fecha: fechaHistorialISO(r.fecha) })) : []),
@@ -3024,6 +3139,7 @@ export default function App({ onCerrarSesion }) {
   };
   const irAlError = item => {
     const destino = destinoAlertaRevision(item);
+    setAlertaEnlaceId(destino.id == null ? "" : String(destino.id));
     if (destino.vista === "historial") {
       setSubHistorial("dia"); setHistFecha(destino.fecha || hoyISO());
     } else if (destino.vista === "captura") {
@@ -3036,11 +3152,13 @@ export default function App({ onCerrarSesion }) {
       setFiltroPlanta({ ...filtroPlantaInicial(), categoria: destino.categoria || "", formula: destino.formula || "" });
     } else if (destino.vista === "bodega") {
       setSubBodega("historial");
+      setPeriodosHistorial(v => ({ ...v, bodega: "todo" }));
       const fecha = destino.fecha || hoyISO();
       cambiarFechaBodega(fecha, destino.id ?? null);
     } else if (destino.vista === "pesaje") {
-      setSubPesaje(destino.sub || "resumen");
+      setSubPesaje(destino.sub || "histpesajes");
       if (destino.lote) setFPeso(v => ({ ...v, lote: destino.lote }));
+      setPeriodosHistorial(v => ({ ...v, pesajes: "todo" }));
     } else if (destino.vista === "pedidomp") {
       setSubPedidoMP(destino.sub || "kardex");
     } else if (destino.vista === "revision") {
@@ -3050,7 +3168,7 @@ export default function App({ onCerrarSesion }) {
   };
   const plantaFiltrada = filtrarMovimientosPlanta(movsPlanta.filter(m => !esConsumoAlimentoComprado(m)), filtroPlanta);
   const discrepanciasFechaPlanta = movimientosConFechaFutura(plantaMovs, hoyISO());
-  const hallazgosOperacion = excepcionesOperacion({ registros, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, plantaMovs, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
+  const hallazgosOperacion = excepcionesOperacion({ registros, pesajes, lotes, saldoAves, saldoGanado, saldosAvesFormula, saldosGanadoFormula, bodegaMovs, retirosActivos, plantaMovs, tareas: tareasProgramadas.map(t => ({ ...t, vence: proximaTarea(t) })) });
   const descargarAuditoria = () => {
     const filas = [
       ...correccionesProduccion.map(c => ({ fecha: c.instante, area: "Producción", accion: c.accion, responsable: c.por, motivo: c.motivo, antes: `${c.anterior?.cartones} cart`, despues: c.nuevo ? `${c.nuevo.cartones} cart` : "Retirado" })),
@@ -5052,6 +5170,7 @@ export default function App({ onCerrarSesion }) {
           <Seccion titulo="Próximas actividades">{tareasProgramadas.slice(0, 8).map(t => <div key={t.id} className="v10-home-row">{t.nombre} · {proximaTarea(t) || "sin fecha"}</div>)}{!tareasProgramadas.length && <p>No hay actividades programadas.</p>}</Seccion>
         </>}
         {guardado && <div role={guardado.startsWith("⚠") ? "alert" : "status"} style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
+        {(erroresLecturaDatos.length > 0 || errorEscrituraDatos) && <div role="alert" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", background: C.alertaSuave, color: C.alerta, fontWeight: 600, fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 12 }}><span>{erroresLecturaDatos.length > 0 && <>No se pudo confirmar la lectura de {erroresLecturaDatos.join(", ")}. Esa sección queda protegida contra guardados hasta que la lectura se recupere. No tomes una lista vacía o un saldo en 0 como confirmado. </>}{errorEscrituraDatos && <> Un guardado no se completó; puede haber habido un cambio simultáneo o un problema de conexión.</>}</span><button type="button" onClick={() => { setErrorEscrituraDatos(false); cargarTodo(false); }} style={{ padding: "7px 11px", borderRadius: 8, border: `1px solid ${C.alerta}`, background: "#fff", color: C.alerta, fontWeight: 700, cursor: "pointer" }}>Actualizar y revisar</button></div>}
         {(() => {
           const conteo = new Map();
           registros.forEach(r => { const k = `${r.fecha}|${r.lote}`; conteo.set(k, (conteo.get(k) || 0) + 1); });
@@ -6122,7 +6241,7 @@ export default function App({ onCerrarSesion }) {
                 {historialVisible(bodegaMovs, "bodega").map(m => {
                   const duplicados = bodegaMovs.filter(x => fechaHistorialISO(x.fecha) === fechaHistorialISO(m.fecha)).length;
                   const impactoRutaMovimiento = presentacionRutaNeta(Number(m.rutaNeta || 0));
-                  return <div key={m.id} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
+                  return <div key={m.id} data-alerta-id={String(m.id)} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, outline: String(alertaEnlaceId) === String(m.id) ? `3px solid ${C.yema}` : undefined, outlineOffset: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 7 }}>
                       <span><b>{m.fecha}</b> · +{m.producido} prod · {impactoRutaMovimiento.etiqueta} ({impactoRutaMovimiento.signo}{impactoRutaMovimiento.cantidad.toFixed(1)}){duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> · cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
                       <b style={{ color: C.verde }}>= {f2Dec(m.saldoFinal)} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
@@ -6395,7 +6514,7 @@ export default function App({ onCerrarSesion }) {
                   </div>)}
                 </div>}
                 {historialVisible(plantaFiltrada, "planta").map((m, i) => (
-                  <div key={m.id || i} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6 }}>
+                  <div key={m.id || i} data-alerta-id={m.id == null ? undefined : String(m.id)} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, outline: String(alertaEnlaceId) === String(m.id) ? `3px solid ${C.yema}` : undefined, outlineOffset: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                     <span><b>{m.fecha.slice(0, 5)}</b> · {m.categoria} — {m.tipo === "bache" ? `${m.baches} bache(s) de ${m.formula}${m.nucleoFormula ? ` · núcleo ${m.nucleoFormula}` : ""}${m.numBache ? ` · #${m.numBache}` : ""}` : m.tipo === "nucleo" ? `Núcleo ${m.formula} · ${m.porciones} porción(es)${m.numNucleo ? ` · #${m.numNucleo}` : ""}` : m.tipo === "servido" ? `Servido${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}` : `Ajuste${m.formula ? ` de ${m.formula}` : ""}${m.detalle ? ` (${m.detalle})` : ""}`}{m.tipo === "ajuste" && ` · ${mostrarNombre(m.responsable || m.por)}`}</span>
                     <b style={{ color: m.tipo === "bache" ? C.verde : m.tipo === "nucleo" ? C.texto : m.tipo === "servido" ? C.alerta : "#9A6605" }}>{m.tipo === "nucleo" || (m.tipo === "ajuste" && m.categoria === "Núcleo") ? `${m.porciones > 0 ? "+" : ""}${m.porciones} porc.` : `${m.tipo === "bache" ? "+" : m.tipo === "servido" ? "−" : m.kg > 0 ? "+" : ""}${m.kg} kg`}</b>
@@ -7233,7 +7352,7 @@ export default function App({ onCerrarSesion }) {
           <>
             {verReporte("kpis") && <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <KPI etiqueta="% Postura" valor={posturaDia == null ? "—" : posturaDia.toFixed(1)} unidad={posturaDia == null ? "" : "%"} tono={posturaDia != null && posturaDia < 80 ? "alerta" : "ok"} sub={avesPosturaDia ? `${huevosDia.toLocaleString()} huevos · Est.: ≥85%` : "Sin lotes elegibles por edad o estado"} />
+              <KPI etiqueta="% Postura" valor={posturaDia == null ? "—" : posturaDia.toFixed(1)} unidad={posturaDia == null ? "" : "%"} tono={posturaDia != null && posturaDia < 80 ? "alerta" : "ok"} sub={`${avesPosturaDia ? `${huevosDia.toLocaleString()} huevos · ${resumenPosturaUlt.lotes.length} lote(s) incluidos` : "Sin lotes elegibles"}${exclusionesPosturaUlt ? ` · Excluidos: ${exclusionesPosturaUlt}` : ""} · Est.: ≥85%`} />
               <KPI etiqueta="Conversión (7d)" valor={conversion ? conversion.toFixed(2) : "—"} unidad="kg/kg" tono={conversion > 2.2 ? "alerta" : "ok"} sub="Est. industria: ≤2.2" />
               <KPI etiqueta="Conv. por cartón (7d)" valor={convCarton ? convCarton.toFixed(2) : "—"} unidad="kg" tono={convCarton > 4.6 ? "alerta" : "ok"} sub="Est.: 4.1–4.6 kg/cartón" />
               <KPI etiqueta="Consumo (7d)" valor={consumoGAve.toFixed(0)} unidad="g/ave" tono={consumoGAve > 120 || (consumoGAve > 0 && consumoGAve < 100) ? "alerta" : "ok"} sub="Est. café adulta: 105–120 g" />
@@ -7242,17 +7361,9 @@ export default function App({ onCerrarSesion }) {
             </div>
 
             <Seccion titulo="Postura — últimos 14 días" sub="Desde los controles diarios">
-              <div style={{ width: "100%", height: 200 }}>
-                <ResponsiveContainer>
-                  <LineChart data={tendencia} margin={{ top: 5, right: 8, bottom: 0, left: -22 }}>
-                    <XAxis dataKey="dia" tick={{ fontSize: 10.5, fill: C.textoSuave }} tickLine={false} axisLine={{ stroke: C.borde }} interval={2} />
-                    <YAxis domain={[50, 100]} tick={{ fontSize: 10.5, fill: C.textoSuave }} tickLine={false} axisLine={false} />
-                    <Tooltip formatter={(v) => [`${v}%`, "Postura"]} contentStyle={{ borderRadius: 10, border: `1px solid ${C.borde}`, fontSize: 13 }} />
-                    {metaGenetica != null && <ReferenceLine y={metaGenetica} stroke={C.verde} strokeDasharray="5 4" strokeWidth={1.5} />}
-                    <Line type="monotone" dataKey="postura" stroke={C.yema} strokeWidth={2.5} dot={{ r: 2.5, fill: C.yema }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <Suspense fallback={<div className="v10-loading-view" style={{ height: 200 }}>Cargando gráfico…</div>}>
+                <TendenciaPostura tendencia={tendencia} metaGenetica={metaGenetica} colores={C} />
+              </Suspense>
             </Seccion>
 
             <Seccion titulo="Indicadores por lote — con estándar de industria" sub="HAA: huevos por ave alojada · Pico: máximo % de postura alcanzado (promedio 7d) · Persist.: postura actual vs pico">
@@ -7718,7 +7829,7 @@ export default function App({ onCerrarSesion }) {
                       </thead>
                       <tbody>
                         {rsDia.map((r, i) => (
-                          <tr key={i} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
+                          <tr key={i} data-alerta-id={r.id == null ? undefined : String(r.id)} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right", outline: String(alertaEnlaceId) === String(r.id) ? `3px solid ${C.yema}` : undefined, outlineOffset: -3 }}>
                             <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>{r.lote}{r.dx && <div style={{ fontSize: 11, color: C.alerta, fontWeight: 400 }}>Dx: {r.dx}</div>}</td>
                             <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{r.cartones}</td>
                             <td style={{ padding: "8px 4px" }}>{r.quebrados}</td>
@@ -7823,34 +7934,6 @@ export default function App({ onCerrarSesion }) {
                 <button onClick={exportar} style={{ ...btnStyle, marginTop: 14 }}>
                   Exportar {fechasMes.length ? `${nombreMes} ${anioM}` : "todo"} a Excel
                 </button>
-                <button onClick={exportarTodoJSON} disabled={guardando} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>
-                  💾 Exportar TODOS los datos (respaldo / migración)
-                </button>
-                <label style={{ display: "block", marginTop: 8 }}>
-                  <span style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, display: "block", textAlign: "center", cursor: "pointer" }}>📥 Importar respaldo JSON</span>
-                  <small style={{ color: C.textoSuave }}>Solo agrega registros faltantes; conserva los registros y ajustes que ya existen. Selecciona dos veces el mismo archivo para confirmar.</small>
-                  <input type="file" accept="application/json" style={{ display: "none" }}
-                    onChange={async e => {
-                      const file = e.target.files?.[0]; e.target.value = "";
-                      if (!file) return;
-                      if (cargandoFondo || guardando) { avisar("⏳ Espera a que termine la operación actual"); return; }
-                      if (preferencias.confirmaciones.reemplazos && confirmar !== "importar") { setConfirmar("importar"); avisar("Revisa el archivo: se agregarán solo registros faltantes. Los existentes conservarán sus valores. Selecciona el archivo otra vez para confirmar."); setTimeout(() => setConfirmar(c2 => c2 === "importar" ? null : c2), 15000); return; }
-                      setConfirmar(null); setGuardando(true); avisar("⏳ Leyendo el respaldo…");
-                      try {
-                        const doc = JSON.parse(await file.text());
-                        const datos = doc.datos || doc;
-                        if (!datos || typeof datos !== "object" || Array.isArray(datos)) throw new Error("Formato de respaldo inválido");
-                        const respaldo = Object.fromEntries(Object.entries(datos).filter(([, v]) => v !== null && v !== undefined));
-                        const conflictos = await detectarFechasRespaldo(respaldo);
-                        const r = await agregarRespaldoFaltante(respaldo);
-                        if (conflictos.length) setConflictosRespaldo({ items: conflictos, elegidos: [] });
-                        avisar(`✓ ${r.agregados} registros nuevos agregados; ${conflictos.length} fechas existentes para revisar${r.futuros ? `; ${r.futuros} fechas futuras excluidas` : ""}.`);
-                        if (!conflictos.length) setTimeout(() => { try { location.reload(); } catch {} }, 1600);
-                      } catch (error) { console.error(error); avisar(`⚠ Importación interrumpida: ${error.message}. Lo ya agregado permanece; al reintentar se omite.`); }
-                      setGuardando(false);
-                    }} />
-                </label>
-
                 {false && esAdmin && <div className="v10-user-admin">
                   <h3>Usuarios y acceso</h3>
                   {miRol !== "admin" ? <p>La administración segura de usuarios se activa al aplicar MIGRACION-V10-USUARIOS.sql y desplegar la función invite-user. Hasta entonces, los accesos existentes siguen como antes.</p> : <>
@@ -7908,16 +7991,6 @@ export default function App({ onCerrarSesion }) {
                     </div>
                   </div>
                 )}
-                <button onClick={async () => {
-                  if (confirmar !== "undoimport") { setConfirmar("undoimport"); avisar("⚠ Restaura TODO al estado previo a la última importación — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undoimport" ? null : c2), 8000); return; }
-                  setConfirmar(null); setGuardando(true);
-                  const bak = await leer("granja2:preImport", null);
-                  if (!bak?.datos) { avisar("— No hay respaldo de importación previa"); setGuardando(false); return; }
-                  let n = 0;
-                  for (const [k, v] of Object.entries(bak.datos)) { if (v !== null && v !== undefined) { await escribir(k, v); n++; } }
-                  avisar(`✓ Restaurado el estado previo a la importación (${n} conjuntos) — recarga la app`);
-                  setGuardando(false);
-                }} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 8 }}>↩ Deshacer la última importación</button>
                 <button onClick={async () => {
                   if (confirmar !== "undocxp") { setConfirmar("undocxp"); avisar("⚠ Restaura Por Pagar al estado ANTERIOR al último cambio — toca otra vez para confirmar"); setTimeout(() => setConfirmar(c2 => c2 === "undocxp" ? null : c2), 8000); return; }
                   setConfirmar(null);
@@ -8520,7 +8593,7 @@ export default function App({ onCerrarSesion }) {
                     {visibles.map(p => {
                       const l = lotes.find(x => x.id === p.lote);
                       const prom = p.pesos?.length ? Math.round(p.pesos.reduce((s, v) => s + Number(v), 0) / p.pesos.length) : 0;
-                      return <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}>
+                      return <div key={p.id} data-alerta-id={String(p.id)} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 13, outline: String(alertaEnlaceId) === String(p.id) ? `3px solid ${C.yema}` : undefined, outlineOffset: 1 }}>
                         <span style={{ flex: "1 1 230px" }}><b>{p.fecha} · G{l?.galpon ?? p.lote}</b> · {p.pesos?.length || 0} aves · {prom} g {p.estado === "Fecha futura" && <b style={{ color: C.alerta }}>⚠ Fecha futura</b>}</span>
                         <button onClick={() => abrirEdicionPesaje(p)}>Revisar / corregir</button>
                         <button onClick={() => setPesajeEliminar(p)} style={{ color: C.alerta }}>Eliminar</button>
@@ -8686,7 +8759,7 @@ export default function App({ onCerrarSesion }) {
           </>
         )}
         {vista === "preferencias" && <Suspense fallback={<div className="v10-loading-view">Cargando preferencias…</div>}><PreferenciasView preferencias={preferencias} tabs={tabsDisponibles} onGuardar={guardarMisPreferencias} guardando={guardandoPreferencias} /></Suspense>}
-        {vista === "administracion" && <Suspense fallback={<div className="v10-loading-view">Cargando administración…</div>}><AdministracionView nombresUsuarios={nombresUsuarios} onGuardarNombre={guardarNombreVisible} onBorrarNombre={borrarNombreVisible} avisar={avisar} onCerrarSesion={onCerrarSesion} /></Suspense>}
+        {vista === "administracion" && miRol === "admin" && <Suspense fallback={<div className="v10-loading-view">Cargando administración…</div>}><AdministracionView nombresUsuarios={nombresUsuarios} onGuardarNombre={guardarNombreVisible} onBorrarNombre={borrarNombreVisible} avisar={avisar} onCerrarSesion={onCerrarSesion} respaldoProps={{ onExportar: exportarTodoJSON, onImportar: importarRespaldoJSON, ocupado: guardando || cargandoFondo }} /></Suspense>}
       </main>
       <nav className="v10-mobile-nav" aria-label="Navegación móvil" style={{
         position: "fixed",
@@ -8952,9 +9025,40 @@ export default function App({ onCerrarSesion }) {
       </ModalDialog>
 
       <ModalDialog
+        abierto={!!respaldoPreview}
+        titulo="Vista previa del respaldo"
+        subtitulo="Nada se ha escrito todavía. Al confirmar, se agregarán únicamente los registros que falten; las fechas existentes no se reemplazan en este paso."
+        onClose={() => { if (!guardando) setRespaldoPreview(null); }}
+        ancho={700}
+        pie={
+          <>
+            <button type="button" disabled={guardando} onClick={() => setRespaldoPreview(null)} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.borde}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Cancelar sin cambios</button>
+            <button type="button" disabled={guardando || !respaldoPreview?.resumen.colecciones.length} onClick={confirmarImportacionRespaldo} style={{ ...btnStyle, width: "auto", padding: "10px 20px", margin: 0 }}>{guardando ? "Aplicando…" : "Confirmar importación aditiva"}</button>
+          </>
+        }
+      >
+        {respaldoPreview && <>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <KPI etiqueta="Archivo" valor={respaldoPreview.nombre} unidad="" />
+            <KPI etiqueta="Registros incluidos" valor={respaldoPreview.resumen.registros} unidad="" />
+            <KPI etiqueta="Configuraciones" valor={respaldoPreview.resumen.configuraciones} unidad="" />
+            <KPI etiqueta="Fechas con datos actuales" valor={respaldoPreview.resumen.conflictos} unidad="" tono={respaldoPreview.resumen.conflictos ? "alerta" : "ok"} />
+          </div>
+          <div style={{ padding: 10, background: C.yemaSuave, borderRadius: 9, fontSize: 12.5, marginBottom: 12 }}>
+            La vista previa identifica el contenido y los posibles reemplazos de controles/pesajes. Registros duplicados, ya existentes o posteriores a hoy se omiten durante la aplicación. La importación puede tardar; si la conexión se interrumpe, se puede repetir sin duplicar los registros que ya hayan entrado.
+          </div>
+          <div style={{ maxHeight: "38vh", overflowY: "auto" }}>
+            {respaldoPreview.resumen.colecciones.map(item => <div key={item.clave} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 2px", borderBottom: `1px solid ${C.borde}`, fontSize: 13 }}><span>{nombreColeccionRespaldo(item.clave)}</span><b>{item.configuracion ? "1 elemento" : `${item.cantidad} registros`}</b></div>)}
+            {!respaldoPreview.resumen.colecciones.length && <div style={{ color: C.alerta, fontSize: 13 }}>No se encontraron colecciones reconocidas para importar.</div>}
+          </div>
+          {respaldoPreview.resumen.conflictos > 0 && <p style={{ color: C.alerta, fontWeight: 600, fontSize: 12.5 }}>Después de agregar lo faltante, podrás decidir en otra pantalla si reemplazas cada fecha existente; por defecto se conserva lo que ya está en la base.</p>}
+        </>}
+      </ModalDialog>
+
+      <ModalDialog
         abierto={!!conflictosRespaldo}
         titulo="Fechas que ya tienen datos"
-        subtitulo="Los registros faltantes del respaldo ya se agregaron. Las fechas existentes conservan los datos actuales, a menos que marques cada reemplazo."
+        subtitulo="Los registros faltantes ya se agregaron con tu confirmación. Las fechas existentes conservan sus datos actuales, a menos que marques cada reemplazo."
         onClose={() => { setConflictosRespaldo(null); location.reload(); }}
         ancho={700}
         pie={

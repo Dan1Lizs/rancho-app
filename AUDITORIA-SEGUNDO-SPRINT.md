@@ -1,5 +1,7 @@
 # Segunda auditoría — propuesta de backlog
 
+Estado posterior: de esta lista se revisaron los puntos 6, 7, 9, 10, 11, 12, 13, 14, 15, 21, 23, 24, 25, 26, 28, 30, 35, 36, 37, 38, 39, 40, 43, 46, 47, 48, 52, 53, 54, 55, 56, 57, 58 y 59. Su estado actual está en [AUDITORIA-PUNTOS-SELECCIONADOS.md](AUDITORIA-PUNTOS-SELECCIONADOS.md); este documento conserva la propuesta original y no debe leerse como que los 60 puntos están pendientes.
+
 ## Alcance y hallazgos observables
 
 Esta revisión parte del código y las pruebas del repositorio; no es una prueba en campo ni una auditoría en vivo de la base de producción. En esta revisión, las 71 pruebas automatizadas pasan y la compilación termina correctamente. El paquete principal aún genera una advertencia de tamaño (aprox. 597 kB minificados), `src/App.jsx` tiene 8,761 líneas y la auditoría anterior todavía se presenta como versión 8.5, por lo que debe actualizarse contra el sistema vigente. El repositorio ya contiene políticas RLS por rol, pruebas de reglas de negocio y componentes extraídos; conviene comprobar que las migraciones desplegadas coincidan con las del repositorio.

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loteCuentaPostura, loteEnLevante, resumenPostura } from "../src/etapaProductiva.js";
+import { loteCuentaPostura, loteEnLevante, motivoExclusionPostura, resumenPostura } from "../src/etapaProductiva.js";
 
 test("pollitas menores a la edad configurada no entran en los KPIs de postura", () => {
   const lote = { id: "P1", nac: "2026-10-15", aves: 1000 };
@@ -57,4 +57,21 @@ test("un lote cerrado conserva postura hasta la fecha de cierre y se excluye des
   const lote = { id: "A1", nac: "2025-01-01", aves: 100, estado: "cerrado", cerradoFecha: "15/10/2026" };
   assert.equal(loteCuentaPostura(lote, "15/10/2026"), true);
   assert.equal(loteCuentaPostura(lote, "16/10/2026"), false);
+});
+
+test("el resumen explica cuáles lotes se incluyen y por qué excluye los demás", () => {
+  const lotes = [
+    { id: "adultas", nac: "2025-01-01", aves: 100 },
+    { id: "pollitas", nac: "2026-10-15", aves: 100 },
+    { id: "muda", nac: "2025-01-01", aves: 100, estadoProd: "Pelecha (muda)" },
+    { id: "cerrado", nac: "2025-01-01", aves: 100, estado: "cerrado", cerradoFecha: "2026-10-15" },
+  ];
+  const resumen = resumenPostura({ fecha: "16/10/2026", lotes, registros: [] });
+  assert.deepEqual(resumen.lotes.map(l => l.id), ["adultas"]);
+  assert.deepEqual(resumen.excluidos.map(x => [x.lote.id, x.motivo]), [
+    ["pollitas", "levante / pre-postura"],
+    ["muda", "etapa especial: Pelecha (muda)"],
+    ["cerrado", "lote cerrado"],
+  ]);
+  assert.equal(motivoExclusionPostura({ id: "sin-fecha" }, "2026-10-16"), "falta fecha válida de control o nacimiento");
 });

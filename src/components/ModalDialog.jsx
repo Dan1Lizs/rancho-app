@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useId, useRef } from "react";
 
 const C = {
   superficie: "var(--v10-surface, #FFFFFF)", fondo: "var(--v10-bg-soft, #F6F6F1)",
@@ -11,6 +11,7 @@ export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, anc
   const dialogoRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const inicioEnFondoRef = useRef(false);
+  const tituloId = useId();
   onCloseRef.current = onClose;
 
   useEffect(() => {
@@ -21,6 +22,28 @@ export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, anc
       if (evento.key === "Escape") {
         evento.stopPropagation();
         onCloseRef.current?.();
+        return;
+      }
+      if (evento.key !== "Tab") return;
+      const dialogo = dialogoRef.current;
+      if (!dialogo) return;
+      const enfocabes = dialogo.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      const visibles = Array.from(enfocabes).filter(elemento => elemento.getAttribute("aria-hidden") !== "true" && elemento.getClientRects().length > 0);
+      if (!visibles.length) {
+        evento.preventDefault();
+        dialogo.focus();
+        return;
+      }
+      const primero = visibles[0];
+      const ultimo = visibles[visibles.length - 1];
+      if (evento.shiftKey && (document.activeElement === primero || !dialogo.contains(document.activeElement))) {
+        evento.preventDefault();
+        ultimo.focus();
+      } else if (!evento.shiftKey && (document.activeElement === ultimo || !dialogo.contains(document.activeElement))) {
+        evento.preventDefault();
+        primero.focus();
       }
     };
     window.addEventListener("keydown", alTeclear);
@@ -46,10 +69,10 @@ export function ModalDialog({ abierto, titulo, subtitulo, onClose, children, anc
         if (inicioEnFondo && evento.target === evento.currentTarget) onClose?.();
       }}
       style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(20, 30, 24, 0.65)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)", display: "grid", placeItems: "center", padding: 16, overflowY: "auto" }}>
-      <div ref={dialogoRef} tabIndex={-1} className="v10-modal-box" role="dialog" aria-modal="true" aria-label={titulo || "Diálogo"} onClick={(evento) => evento.stopPropagation()} style={{ background: C.superficie, borderRadius: 18, border: `1px solid ${tono === "alerta" ? C.alerta : C.borde}`, boxShadow: "0 14px 38px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.12)", width: "100%", maxWidth: ancho, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div ref={dialogoRef} tabIndex={-1} className="v10-modal-box" role="dialog" aria-modal="true" aria-labelledby={tituloId} onClick={(evento) => evento.stopPropagation()} style={{ background: C.superficie, borderRadius: 18, border: `1px solid ${tono === "alerta" ? C.alerta : C.borde}`, boxShadow: "0 14px 38px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.12)", width: "100%", maxWidth: ancho, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "18px 20px 14px", borderBottom: `1px solid ${C.borde}`, background: tono === "alerta" ? C.alertaSuave : C.superficie }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 17, fontFamily: "'Space Grotesk', sans-serif", color: tono === "alerta" ? C.alerta : C.verde, fontWeight: 700 }}>{titulo}</h3>
+            <h3 id={tituloId} style={{ margin: 0, fontSize: 17, fontFamily: "'Space Grotesk', sans-serif", color: tono === "alerta" ? C.alerta : C.verde, fontWeight: 700 }}>{titulo}</h3>
             {subtitulo && <div style={{ fontSize: 12.5, color: C.textoSuave, marginTop: 4, lineHeight: 1.4 }}>{subtitulo}</div>}
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar ventana" style={{ background: "transparent", border: "none", color: C.textoSuave, fontSize: 20, lineHeight: 1, padding: "4px 8px", cursor: "pointer", borderRadius: 8 }}>×</button>

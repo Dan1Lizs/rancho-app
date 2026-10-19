@@ -20,6 +20,8 @@
 // el historial completo y el que guardaba último "ganaba", borrando al otro.
 // ═══════════════════════════════════════════════════════════════════════
 import { supabase } from "./supabase";
+import { lecturaBloqueada, registrarConflictoEscritura, registrarErrorLectura, registrarLecturaCorrecta } from "./estadoLecturas.js";
+import { decidirCambioColeccion, decidirEliminacionColeccion } from "./concurrencia.js";
 
 // Claves (las mismas de siempre, definidas en App.jsx como "K.xxx") que
 // representan una LISTA de registros independientes → cada una tiene su
@@ -59,7 +61,6 @@ const idNuevo = () =>
     : `id_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 const emailActual = () => (typeof window !== "undefined" && window.__usuarioEmail) || null;
-
 let avisoTabla = false;
 const revisarError = (error) => {
   if (!error) return;
@@ -74,6 +75,7 @@ const revisarError = (error) => {
 // Recordamos, por cada colección, el último arreglo que leímos/escribimos
 // con éxito — así al guardar solo enviamos lo que cambió de verdad.
 const ultimaVersion = new Map();
+const ultimaVersionConfig = new Map();
 // Colecciones que ya sabemos que existen con datos reales (para no volver a
 // "sembrar" datos de ejemplo si alguien de verdad vació la lista a propósito).
 const sembradas = new Set();
@@ -81,9 +83,11 @@ const sembradas = new Set();
 async function yaSembrada(tabla) {
   if (sembradas.has(tabla)) return true;
   try {
-    const { data } = await supabase.from("config").select("key").eq("key", `sembrado:${tabla}`).maybeSingle();
+    const { data, error } = await supabase.from("config").select("key").eq("key", `sembrado:${tabla}`).maybeSingle();
+    revisarError(error);
+    if (error) return null;
     if (data) { sembradas.add(tabla); return true; }
-  } catch { /* si falla, mejor sembrar de más que perder la pantalla */ }
+  } catch (error) { revisarError(error); return null; }
   return false;
 }
 async function marcarSembrada(tabla) {
@@ -129,42 +133,56 @@ async function escribirColeccion(claveCache, tabla, arregloNuevo) {
     usados.add(idStr);
     const previo = porId.get(idStr);
     const remoto = actualPorId.get(idStr);
-    const cambioLocal = !previo || JSON.stringify(previo) !== JSON.stringify(item);
-    const cambioRemoto = previo && (!remoto || JSON.stringify(previo) !== JSON.stringify(remoto));
-    if (cambioLocal && cambioRemoto && JSON.stringify(remoto) !== JSON.stringify(item)) {
+    const decision = decidirCambioColeccion({ base: previo, remoto, nuevo: item });
+    if (decision === "conflicto") {
       console.warn(`Conflicto de edición en ${tabla}/${idStr}`);
       return false;
     }
-    if (!previo && remoto && JSON.stringify(remoto) !== JSON.stringify(item)) {
-      console.warn(`Identificador duplicado en ${tabla}/${idStr}`);
-      return false;
-    }
-    if (cambioLocal && JSON.stringify(remoto) !== JSON.stringify(item)) {
-      filas.push({ id: idStr, data: item });
-    }
+    if (decision === "actualizar" || decision === "insertar") filas.push({ id: idStr, data: item });
   }
   const aBorrar = [...porId.keys()].filter((idb) => {
     if (usados.has(idb)) return false;
     const remoto = actualPorId.get(idb);
-    if (!remoto || JSON.stringify(remoto) === JSON.stringify(porId.get(idb))) return true;
+    const decision = decidirEliminacionColeccion({ base: porId.get(idb), remoto });
+    if (decision === "eliminar" || decision === "ya-eliminado") return true;
     console.warn(`No se eliminó ${tabla}/${idb}: cambió en otro dispositivo`);
     return false;
   });
   if ([...porId.keys()].some((idb) => !usados.has(idb) && actualPorId.has(idb) && !aBorrar.includes(idb))) return false;
 
   try {
-    // Se envía en bloques por si algún día una colección crece mucho
-    for (let i = 0; i < filas.length; i += 400) {
-      const { error } = await supabase.from(tabla).upsert(filas.slice(i, i + 400));
+    // Compare-and-set por fila: una actualización solo se aplica si el JSON
+    // remoto sigue siendo exactamente el que acabamos de leer. Las altas usan
+    // INSERT (nunca UPSERT), para que un reintento no sobrescriba otra sesión.
+    for (const fila of filas) {
+      const remoto = actualPorId.get(fila.id);
+      if (remoto) {
+        const { data, error } = await supabase.from(tabla).update({ data: fila.data })
+          .eq("id", fila.id).filter("data", "eq", JSON.stringify(remoto)).select("id");
+        revisarError(error);
+        if (error || data?.length !== 1) return false;
+        continue;
+      }
+      const { error } = await supabase.from(tabla).insert(fila);
+      if (error?.code === "23505") {
+        // Si la respuesta anterior se perdió después de que el servidor aceptó
+        // esta misma alta, el reintento es idempotente. Una fila diferente
+        // (incluida otra fila con la misma clave de negocio) queda en conflicto.
+        const { data: existente, error: errorLectura } = await supabase.from(tabla)
+          .select("id,data").eq("id", fila.id).maybeSingle();
+        revisarError(errorLectura);
+        if (!errorLectura && existente && JSON.stringify(existente.data) === JSON.stringify(fila.data)) continue;
+      }
       revisarError(error);
       if (error) return false;
     }
-    if (aBorrar.length) {
-      for (let i = 0; i < aBorrar.length; i += 400) {
-        const { error } = await supabase.from(tabla).delete().in("id", aBorrar.slice(i, i + 400));
-        revisarError(error);
-        if (error) return false;
-      }
+    for (const id of aBorrar) {
+      const visto = actualPorId.get(id);
+      if (!visto) continue;
+      const { data, error } = await supabase.from(tabla).delete().eq("id", id)
+        .filter("data", "eq", JSON.stringify(visto)).select("id");
+      revisarError(error);
+      if (error || data?.length !== 1) return false;
     }
     const finalPorId = new Map(actual.map((it) => [String(it.id), it]));
     aBorrar.forEach((id) => finalPorId.delete(id));
@@ -307,47 +325,68 @@ export async function leer(key, porDefecto) {
         leerColeccion(SUBTABLAS_CXP.pagos),
         leerColeccion(SUBTABLAS_CXP.notas),
       ]);
-      if (facturas === null || pagos === null || notas === null) return porDefecto;
+      if (facturas === null || pagos === null || notas === null) {
+        registrarErrorLectura(key);
+        return porDefecto;
+      }
       ultimaVersion.set("granja2:cxp:facturas", facturas);
       ultimaVersion.set("granja2:cxp:pagos", pagos);
       ultimaVersion.set("granja2:cxp:notas", notas);
       const vacio = !facturas.length && !pagos.length && !notas.length;
-      if (vacio && !(await yaSembrada(SUBTABLAS_CXP.facturas))) return porDefecto;
+      const sembrada = vacio ? await yaSembrada(SUBTABLAS_CXP.facturas) : true;
+      if (sembrada === null) { registrarErrorLectura(key); return porDefecto; }
+      if (vacio && !sembrada) { registrarLecturaCorrecta(key); return porDefecto; }
+      registrarLecturaCorrecta(key);
       return { facturas, pagos, notas };
     }
 
     const tabla = TABLA[key];
     if (tabla) {
       const arr = await leerColeccion(tabla);
-      if (arr === null) return porDefecto; // error de conexión / tabla inexistente
+      if (arr === null) {
+        registrarErrorLectura(key);
+        return porDefecto; // el consumidor recibe el valor de reserva, pero la app lo identifica como incompleto
+      }
       // Los datos operativos solo se recuperan mediante la migración explícita.
       // Un lote borrado no debe reaparecer desde config ni desde la semilla.
       if (tabla === "lotes" || tabla === "registros" || tabla === "pesajes") {
         ultimaVersion.set(key, arr);
+        registrarLecturaCorrecta(key);
         return arr;
       }
-      if (arr.length === 0 && !(await yaSembrada(tabla))) {
+      const sembrada = arr.length ? true : await yaSembrada(tabla);
+      if (sembrada === null) { registrarErrorLectura(key); return porDefecto; }
+      if (arr.length === 0 && !sembrada) {
         // Rescate: si esta colección vivía antes como un solo bloque (p.ej. una
         // lista nueva que se agregó a la app antes de tener su tabla propia),
         // la recuperamos de ahí una sola vez en vez de mostrarla vacía.
-        const { data: legado } = await supabase.from("config").select("data").eq("key", key).maybeSingle();
+        const { data: legado, error } = await supabase.from("config").select("data").eq("key", key).maybeSingle();
+        revisarError(error);
+        if (error) { registrarErrorLectura(key, error); return porDefecto; }
         if (Array.isArray(legado?.data) && legado.data.length) {
           const ok = await escribirColeccion(key, tabla, legado.data);
-          if (ok) return legado.data;
+          if (ok) { registrarLecturaCorrecta(key); return legado.data; }
         }
+        registrarLecturaCorrecta(key);
         return porDefecto; // nunca se ha creado nada aquí todavía
       }
       ultimaVersion.set(key, arr);
+      registrarLecturaCorrecta(key);
       return arr;
     }
 
     // Claves "de un solo bloque" (ajustes, catálogos, respaldos temporales, fotos de necropsias...)
     const { data, error } = await supabase.from("config").select("data").eq("key", key).maybeSingle();
     revisarError(error);
-    if (error || !data) return porDefecto;
+    if (error) registrarErrorLectura(key, error);
+    if (error) return porDefecto;
+    ultimaVersionConfig.set(key, data ? { existe: true, data: data.data } : { existe: false });
+    registrarLecturaCorrecta(key);
+    if (!data) return porDefecto;
     return data.data ?? porDefecto;
   } catch (e) {
     console.error("leer:", e);
+    registrarErrorLectura(key, e);
     return porDefecto;
   }
 }
@@ -361,6 +400,11 @@ export async function escribir(key, valor) {
   };
   estado("Guardando…");
   try {
+    if (lecturaBloqueada(key)) {
+      estado("Error al guardar");
+      registrarConflictoEscritura(key);
+      return false;
+    }
     if (ES_CXP(key)) {
       const obj = valor || {};
       const ok1 = await escribirColeccion("granja2:cxp:facturas", SUBTABLAS_CXP.facturas, Array.isArray(obj.facturas) ? obj.facturas : []);
@@ -373,11 +417,44 @@ export async function escribir(key, valor) {
     const tabla = TABLA[key];
     if (tabla) {
       const ok = await escribirColeccion(key, tabla, Array.isArray(valor) ? valor : []);
+      if (!ok) registrarConflictoEscritura(key);
       estado(ok ? "Sincronizado" : "Error al guardar"); return ok;
     }
 
-    const { error } = await supabase.from("config").upsert({ key, data: valor, updated_by: emailActual() });
+    let base = ultimaVersionConfig.get(key);
+    if (!ultimaVersionConfig.has(key)) {
+      // Una clave no leída puede ser una edición de configuración antigua.
+      // Si existe, no se reemplaza a ciegas: se pide refrescar primero.
+      const { data: vigente, error: lecturaError } = await supabase.from("config").select("key,data").eq("key", key).maybeSingle();
+      revisarError(lecturaError);
+      if (lecturaError) { registrarErrorLectura(key, lecturaError); estado("Error al guardar"); return false; }
+      if (vigente) {
+        ultimaVersionConfig.set(key, { existe: true, data: vigente.data });
+        registrarConflictoEscritura(key);
+        estado("Error al guardar");
+        return false;
+      }
+      base = { existe: false };
+      ultimaVersionConfig.set(key, base);
+    }
+    let error;
+    if (base?.existe) {
+      const { data, error: cambioError } = await supabase.from("config").update({ data: valor, updated_by: emailActual() })
+        .eq("key", key).filter("data", "eq", JSON.stringify(base.data)).select("key");
+      error = cambioError;
+      if (!error && data?.length !== 1) {
+        registrarConflictoEscritura(key);
+        estado("Error al guardar");
+        return false;
+      }
+    } else {
+      const resultado = await supabase.from("config").insert({ key, data: valor, updated_by: emailActual() });
+      error = resultado.error;
+      if (error?.code === "23505") registrarConflictoEscritura(key);
+    }
     revisarError(error);
+    if (error) registrarConflictoEscritura(key);
+    if (!error) ultimaVersionConfig.set(key, { existe: true, data: valor });
     estado(error ? "Error al guardar" : "Sincronizado"); return !error;
   } catch (e) {
     console.error("escribir:", e);
