@@ -4,6 +4,7 @@ import {
   capturasDiferentesDeBase,
   formularioBodegaDesdeMovimiento,
   formulariosIguales,
+  hayCambiosFormularioBodega,
   inventarioMPTieneDatos,
   valoresFormularioBodega,
 } from "../src/borradores.js";
@@ -30,6 +31,24 @@ test("saved Bodega values are not treated as changes", () => {
 
   assert.ok(formulariosIguales(iguales, base));
   assert.ok(!formulariosIguales({ ...iguales, obsInv: "Conteo corregido" }, base));
+});
+
+test("Bodega only offers a draft after a manual change that differs from the baseline", () => {
+  const base = formularioBodegaDesdeMovimiento(null, ["Andrés", "Bryan"]);
+  const vacio = valoresFormularioBodega({
+    movBodega: { comprado: "", vendGranja: "", destruido: "", regalado: "" },
+    repartos: [
+      { nombre: "Andrés", salida: "", devBueno: "", devMalo: "" },
+      { nombre: "Bryan", salida: "", devBueno: "", devMalo: "" },
+    ],
+    obsInv: "",
+    ajusteBodega: "",
+    pasosBodega: { salidas: false, devoluciones: false, conteo: false },
+  });
+  assert.equal(hayCambiosFormularioBodega(vacio, base, false), false);
+  assert.equal(hayCambiosFormularioBodega(vacio, base, true), false);
+  assert.equal(hayCambiosFormularioBodega({ ...vacio, obsInv: "corregir" }, base, false), false);
+  assert.equal(hayCambiosFormularioBodega({ ...vacio, obsInv: "corregir" }, base, true), true);
 });
 
 test("only captures that differ from saved values are kept as drafts", () => {

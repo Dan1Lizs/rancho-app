@@ -56,6 +56,10 @@ export function formulariosIguales(actual, base) {
   return JSON.stringify(normalizar(actual)) === JSON.stringify(normalizar(base));
 }
 
+export function hayCambiosFormularioBodega(actual, base, editadoManualmente = false) {
+  return Boolean(editadoManualmente) && !formulariosIguales(actual, base);
+}
+
 export function capturasDiferentesDeBase(capturas = {}, bases = {}) {
   return Object.fromEntries(Object.entries(capturas || {}).filter(([id, actual]) =>
     !formulariosIguales(actual, bases?.[id])

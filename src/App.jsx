@@ -10,7 +10,7 @@ import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } fr
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
 import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega } from "./historial";
-import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
+import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, hayCambiosFormularioBodega, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
 import { nombreVisible, nombreResponsableSesion } from "./nombresUsuarios";
@@ -51,7 +51,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.0.6";
+const VERSION_APP = "10.0.7";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -555,6 +555,7 @@ export default function App({ onCerrarSesion }) {
   const [advAjustes, setAdvAjustes] = useState([]);
   const [modalAdv, setModalAdv] = useState(null);
   const [modalMotivoRequerido, setModalMotivoRequerido] = useState(false);
+  const [avisoMotivoGuardar, setAvisoMotivoGuardar] = useState("");
 
   const [galponActivo, setGalponActivo] = useState("G1");
   const suciosRef = useRef({});
@@ -610,6 +611,7 @@ export default function App({ onCerrarSesion }) {
   const movBodegaIdRef = useRef(null);
   const movBodegaOriginalRef = useRef(null);
   const bodegaFormularioBaseRef = useRef(null);
+  const bodegaEditadaRef = useRef(false);
   const [motivoEdicionBodega, setMotivoEdicionBodega] = useState("");
   const [periodosHistorial, setPeriodosHistorial] = useState(() => { try { return JSON.parse(localStorage.getItem(`rancho:periodos:${window.__usuarioEmail || "local"}`) || "{}"); } catch { return {}; } });
   useEffect(() => { localStorage.setItem(`rancho:periodos:${window.__usuarioEmail || "local"}`, JSON.stringify(periodosHistorial)); }, [periodosHistorial]);
@@ -877,6 +879,13 @@ export default function App({ onCerrarSesion }) {
   const [editarProduccion, setEditarProduccion] = useState(null);
   const [motivoProduccion, setMotivoProduccion] = useState("");
   const [formLote, setFormLote] = useState(null);
+  const formLoteRef = useRef(null);
+  const abrirFormularioLote = (lote) => {
+    setFormLote(lote);
+    window.requestAnimationFrame(() => {
+      formLoteRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   const [razaReferencia, setRazaReferencia] = useState("isa");
   const [semanaReferencia, setSemanaReferencia] = useState(26);
 
@@ -1042,6 +1051,7 @@ export default function App({ onCerrarSesion }) {
         movBodegaIdRef.current = elegido?.id ?? null;
         movBodegaOriginalRef.current = elegido ? snapshotBodega(elegido) : null;
         bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(elegido, repartidoresBase, pasosBase);
+        bodegaEditadaRef.current = false;
         setPasosBodega(pasosBase);
         setMovBodegaId(elegido?.id ?? null);
         if (elegido) {
@@ -1408,6 +1418,7 @@ export default function App({ onCerrarSesion }) {
     movBodegaIdRef.current = mov?.id ?? null;
     movBodegaOriginalRef.current = mov ? snapshotBodega(mov) : null;
     bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(mov, repartidoresBase, pasosBase);
+    bodegaEditadaRef.current = false;
     setPasosBodega(pasosBase);
     setMotivoEdicionBodega("");
     if (mov) {
@@ -1425,7 +1436,12 @@ export default function App({ onCerrarSesion }) {
   const estadoFormularioBodega = valoresFormularioBodega({ movBodega, repartos, obsInv, ajusteBodega, pasosBodega });
   const baseFormularioBodega = bodegaFormularioBaseRef.current
     || formularioBodegaDesdeMovimiento(null, bodegaCfg.repartidores, { salidas: false, devoluciones: false, conteo: false });
-  const bodegaTieneCambios = !formulariosIguales(estadoFormularioBodega, baseFormularioBodega);
+  const bodegaTieneCambios = hayCambiosFormularioBodega(estadoFormularioBodega, baseFormularioBodega, bodegaEditadaRef.current);
+  const editarMovBodega = valor => { bodegaEditadaRef.current = true; setMovBodega(valor); };
+  const editarRepartosBodega = valor => { bodegaEditadaRef.current = true; setRepartos(valor); };
+  const editarObsBodega = valor => { bodegaEditadaRef.current = true; setObsInv(valor); };
+  const editarAjusteBodega = valor => { bodegaEditadaRef.current = true; setAjusteBodega(valor); };
+  const editarPasosBodega = valor => { bodegaEditadaRef.current = true; setPasosBodega(valor); };
   useEffect(() => {
     if (!bodegaBorradorConsulta || cargando || cargandoFondo) return;
     const movimiento = bodegaMovs.find(m => String(m.id) === String(bodegaBorradorConsulta.movimientoId))
@@ -1497,7 +1513,7 @@ export default function App({ onCerrarSesion }) {
     if (movBodegaIdRef.current != null && !elegido) { avisar("⚠ Este registro cambió en otro dispositivo. Actualiza y vuelve a elegirlo."); return; }
     if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("⚠ El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
     if (delDia.length && movBodegaIdRef.current == null) { avisar("⚠ Ya hay un movimiento para esta fecha. Cárgalo desde el historial antes de editarlo."); return; }
-    if (elegido && !motivoEdicionBodega.trim()) { avisar("⚠ Escribe el motivo de la modificación para dejar constancia."); return; }
+    if (elegido && !motivoEdicionBodega.trim()) { setAvisoMotivoGuardar("Escribe el motivo de la modificación en el campo indicado y vuelve a guardar. El movimiento no se ha cambiado."); return; }
     const ajusteHistoricoElegido = Number(
       bodegaMovs.find(m => String(m.id) === String(idMovimiento))?.ajusteHistoricoImplicito
       ?? elegido?.ajusteHistoricoImplicito ?? 0
@@ -1544,6 +1560,7 @@ export default function App({ onCerrarSesion }) {
       setBodegaMovs(nuevos); setMovBodegaId(nuevoMov.id); movBodegaIdRef.current = nuevoMov.id;
       movBodegaOriginalRef.current = snapshotBodega(nuevos.find(m => String(m.id) === String(nuevoMov.id)));
       bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(nuevos.find(m => String(m.id) === String(nuevoMov.id)), bodegaCfg.repartidores, pasosBodega);
+      bodegaEditadaRef.current = false;
       setMotivoEdicionBodega("");
       setAjusteBodega(nuevoMov.ajusteConteo == null ? "" : String(nuevoMov.ajusteConteo));
       await eliminarBorrador("consulta-bodega", "local").catch(() => {});
@@ -3247,7 +3264,7 @@ export default function App({ onCerrarSesion }) {
     const fechaCorte = fechaPesajeISO(fAjMP.fecha);
     if (!fAjMP.mp || fAjMP.saldoReal === "" || !Number.isFinite(real) || real < 0 || !fechaCorte || fechaCorte > hoyISO()) { avisar("⚠ Elige una materia prima e indica un saldo real y fecha válidos"); return; }
     if (!String(fAjMP.responsable || "").trim()) { avisar("⚠ Indica quién realizó el conteo"); return; }
-    if (!String(fAjMP.motivo || "").trim()) { avisar("⚠ Indica el motivo del ajuste"); return; }
+    if (!String(fAjMP.motivo || "").trim()) { setAvisoMotivoGuardar("Para registrar el ajuste físico, indica el motivo en el formulario. No se aplicó ningún cambio."); return; }
     setGuardando(true);
     try {
       const movimientos = await leer(K.kardex, []);
@@ -3271,7 +3288,7 @@ export default function App({ onCerrarSesion }) {
     const fechaCorte = fechaPesajeISO(fecha);
     if (!Number.isFinite(real) || real < 0 || !fechaCorte || fechaCorte > hoyISO()) { avisar("⚠ Indica un saldo real y fecha válidos"); return; }
     if (!String(editarAjusteMP.responsable || "").trim()) { avisar("⚠ Indica quién realizó el conteo"); return; }
-    if (!String(editarAjusteMP.motivoCambio || editarAjusteMP.motivo || "").trim()) { avisar("⚠ Indica el motivo de la corrección"); return; }
+    if (!String(editarAjusteMP.motivoCambio || editarAjusteMP.motivo || "").trim()) { setAvisoMotivoGuardar("Para corregir este ajuste, indica el motivo de la corrección. No se guardó ningún cambio."); return; }
     setGuardando(true);
     try {
       const movimientos = await leer(K.kardex, []);
@@ -3540,7 +3557,7 @@ export default function App({ onCerrarSesion }) {
   }, fecha);
   const historialVisible = (items, clave) => filtrarHistorial(items, periodosHistorial[clave] || "30");
   const guardarCorreccionProduccion = async (eliminar = false) => {
-    if (!editarProduccion || !motivoProduccion.trim()) { avisar("⚠ Escribe el motivo de la corrección."); return; }
+    if (!editarProduccion || !motivoProduccion.trim()) { setAvisoMotivoGuardar("Para guardar la corrección de producción, escribe el motivo en el formulario. No se aplicó ningún cambio."); return; }
     if (!eliminar && preferencias.confirmaciones.correcciones && !pideConfirm(`corregir-produccion-${editarProduccion.id}`, "⚠ Toca guardar corrección otra vez para confirmar")) return;
     const original = registros.find(r => String(r.id) === String(editarProduccion.id));
     if (!original) { avisar("⚠ Actualiza los datos antes de corregir."); return; }
@@ -4850,6 +4867,18 @@ export default function App({ onCerrarSesion }) {
         </p>
       </ModalDialog>
 
+      <ModalDialog
+        abierto={Boolean(avisoMotivoGuardar)}
+        titulo="No se guardaron los cambios"
+        subtitulo="Hace falta un motivo para continuar."
+        onClose={() => setAvisoMotivoGuardar("")}
+        ancho={460}
+        tono="alerta"
+        pie={<button type="button" autoFocus onClick={() => setAvisoMotivoGuardar("")} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0 }}>Entendido</button>}
+      >
+        <p style={{ margin: 0 }}>{avisoMotivoGuardar}</p>
+      </ModalDialog>
+
       {modalFav && (
         <div onClick={() => setModalFav(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,24,0.55)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 18, padding: "22px 20px", boxShadow: "0 10px 40px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
@@ -5844,6 +5873,7 @@ export default function App({ onCerrarSesion }) {
                     movBodegaOriginalRef.current = movOriginal ? snapshotBodega(movOriginal) : null;
                     const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
                     bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(movOriginal, repartidoresBase, { salidas: false, devoluciones: false, conteo: false });
+                    bodegaEditadaRef.current = true;
                     setPasosBodega(b.pasosBodega || { salidas: false, devoluciones: false, conteo: false });
                     setMovBodega(b.movBodega || { comprado: "", vendGranja: "", destruido: "", regalado: "" });
                     setRepartos(b.repartos || []);
@@ -5952,13 +5982,13 @@ export default function App({ onCerrarSesion }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                       <input type="text" value={r.nombre} placeholder="Nombre del repartidor"
                         onChange={e => {
-                          const rs = [...repartos]; rs[i] = { ...r, nombre: e.target.value }; setRepartos(rs);
+                          const rs = [...repartos]; rs[i] = { ...r, nombre: e.target.value }; editarRepartosBodega(rs);
                           guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });
                         }}
                         style={{ ...inputStyle, flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 700 }} />
                       <span style={{ color: C.verde, fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>{impactoRutaRepartidor.signo}{impactoRutaRepartidor.cantidad.toFixed(1)} {impactoRutaRepartidor.tipo === "devolucion" ? "entrada por devolución buena" : "reducción de saldo"}</span>
                       <button onClick={() => {
-                        const rs = repartos.filter((_, j) => j !== i); setRepartos(rs);
+                        const rs = repartos.filter((_, j) => j !== i); editarRepartosBodega(rs);
                         guardarCfgBodega({ ...bodegaCfg, repartidores: rs.map(x => x.nombre) });
                       }} style={{ padding: "5px 9px", fontSize: 12, background: "transparent", color: C.textoSuave, border: `1px solid ${C.borde}`, borderRadius: 7, cursor: "pointer" }}>×</button>
                     </div>
@@ -5989,7 +6019,7 @@ export default function App({ onCerrarSesion }) {
                               const tot = dets.reduce((a, d) => a + d.cartones, 0);
                               const rs = [...repartos];
                               rs[i] = { ...r, tiq: crudo, tiquetesDet: dets, ...(dets.length ? { salida: String(+tot.toFixed(1)) } : {}) };
-                              setRepartos(rs);
+                              editarRepartosBodega(rs);
                             }}
                             style={{ ...inputStyle, marginBottom: 4, padding: "8px 10px", fontSize: 13.5, background: hallados.length ? C.verdeSuave : C.superficie }} />
                           {det.length > 0 && (
@@ -6012,14 +6042,14 @@ export default function App({ onCerrarSesion }) {
                       );
                     })()}
                     <div style={{ display: "flex", gap: 8 }}>
-                      <input type="text" inputMode="decimal" placeholder="Salida" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
-                      <input type="text" inputMode="decimal" placeholder="Dev. bueno" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
-                      <input type="text" inputMode="decimal" placeholder="Dev. malo" value={r.devMalo} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devMalo: e.target.value }; setRepartos(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Salida" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Dev. bueno" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <input type="text" inputMode="decimal" placeholder="Dev. malo" value={r.devMalo} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devMalo: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
                     </div>
                   </div>
                 );
               })}
-              <button onClick={() => setRepartos([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
+              <button onClick={() => editarRepartosBodega([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
                 style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Agregar repartidor</button>
             </Seccion>
             )}
@@ -6027,10 +6057,10 @@ export default function App({ onCerrarSesion }) {
             {(subBodega === "otros" || subBodega === "todo") && (
             <Seccion num="3" titulo="Otros movimientos del día" sub="Solo si aplica — en cartones">
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Campo mitad etiqueta="Huevo comprado (+)" type="text" inputMode="decimal" placeholder="0" value={movBodega.comprado} onChange={e => setMovBodega({ ...movBodega, comprado: e.target.value })} />
-                <Campo mitad etiqueta="Vendido en granja (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.vendGranja} onChange={e => setMovBodega({ ...movBodega, vendGranja: e.target.value })} />
-                <Campo mitad etiqueta="Destruido/quebrado en bodega (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => setMovBodega({ ...movBodega, destruido: e.target.value })} />
-                <Campo mitad etiqueta="Regalado / salida gratis (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => setMovBodega({ ...movBodega, regalado: e.target.value })} />
+                <Campo mitad etiqueta="Huevo comprado (+)" type="text" inputMode="decimal" placeholder="0" value={movBodega.comprado} onChange={e => editarMovBodega({ ...movBodega, comprado: e.target.value })} />
+                <Campo mitad etiqueta="Vendido en granja (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.vendGranja} onChange={e => editarMovBodega({ ...movBodega, vendGranja: e.target.value })} />
+                <Campo mitad etiqueta="Destruido/quebrado en bodega (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.destruido} onChange={e => editarMovBodega({ ...movBodega, destruido: e.target.value })} />
+                <Campo mitad etiqueta="Regalado / salida gratis (−)" type="text" inputMode="decimal" placeholder="0" value={movBodega.regalado} onChange={e => editarMovBodega({ ...movBodega, regalado: e.target.value })} />
               </div>
               {subBodega !== "todo" && (
                 <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
@@ -6052,11 +6082,11 @@ export default function App({ onCerrarSesion }) {
                 {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (−)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}
                 {Number(movBodega.regalado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Regalado (−)</span><b>{Number(movBodega.regalado).toFixed(1)}</b></div>}
               </div>
-              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${f2Dec(saldoCalculado)})`} type="text" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => setAjusteBodega(e.target.value)} />
+              <Campo etiqueta={`Ajuste / conteo físico — cartones reales (calculado: ${f2Dec(saldoCalculado)})`} type="text" inputMode="decimal" placeholder="Déjalo vacío si no contaste hoy" value={ajusteBodega} onChange={e => editarAjusteBodega(e.target.value)} />
               {hayAjuste && <div style={{ fontSize: 12.5, color: difAjuste === 0 ? C.verde : "#9A6605", marginTop: -6, marginBottom: 10 }}>
                 {difAjuste === 0 ? "✓ El conteo coincide con lo calculado" : `El saldo se fijará en ${f2Dec(ajusteBodega)} cartones — diferencia de ${difAjuste > 0 ? "+" : ""}${f2Dec(difAjuste)} vs lo calculado (quedará registrada)`}
               </div>}
-              <Campo etiqueta="Observaciones del día" type="text" placeholder="Opcional" value={obsInv} onChange={e => setObsInv(e.target.value)} />
+              <Campo etiqueta="Observaciones del día" type="text" placeholder="Opcional" value={obsInv} onChange={e => editarObsBodega(e.target.value)} />
               {movBodegaId != null && <Campo etiqueta="Motivo del cambio (obligatorio para editar)" type="text" placeholder="Ej. corregir devolución de ruta del 25" value={motivoEdicionBodega} onChange={e => setMotivoEdicionBodega(e.target.value)} />}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, marginBottom: 12 }}>
                 <b>Saldo final en bodega (=)</b><b style={{ color: C.verde }}>{saldoFinal.toFixed(1)} cartones</b>
@@ -6064,7 +6094,7 @@ export default function App({ onCerrarSesion }) {
               <button onClick={guardarBodega} disabled={guardando} style={btnStyle}>{guardando ? "Guardando…" : "Guardar movimiento del día"}</button>
               <details style={{ marginTop: 12, padding: 10, background: C.verdeSuave, borderRadius: 10 }}><summary style={{ fontWeight: 700 }}>Cierre guiado de bodega</summary>
                 <p style={{ fontSize: 12 }}>Revisa los tiquetes de cada ruta, digita las devoluciones y cuenta los cartones físicos arriba. Guarda el movimiento antes de confirmar el cierre.</p>
-                {[["salidas", "Tiquetes y salidas revisados"], ["devoluciones", "Devoluciones buenas y malas revisadas"], ["conteo", "Saldo físico contado y registrado"]].map(([k, etiqueta]) => <label key={k} style={{ display: "block", fontSize: 12, padding: 5 }}><input type="checkbox" checked={pasosBodega[k]} onChange={e => setPasosBodega(v => ({ ...v, [k]: e.target.checked }))} /> {etiqueta}</label>)}
+                {[["salidas", "Tiquetes y salidas revisados"], ["devoluciones", "Devoluciones buenas y malas revisadas"], ["conteo", "Saldo físico contado y registrado"]].map(([k, etiqueta]) => <label key={k} style={{ display: "block", fontSize: 12, padding: 5 }}><input type="checkbox" checked={pasosBodega[k]} onChange={e => editarPasosBodega(v => ({ ...v, [k]: e.target.checked }))} /> {etiqueta}</label>)}
                 {bodegaMovs.find(m => String(m.id) === String(movBodegaId))?.cierreVerificado && <div style={{ color: C.verde, fontSize: 12 }}>✓ Cerrado por {mostrarNombre(bodegaMovs.find(m => String(m.id) === String(movBodegaId)).cierreVerificado.responsable)}</div>}
                 <button disabled={guardando} onClick={cerrarBodegaDia} style={{ ...btnStyle, marginTop: 8 }}>Confirmar cierre del día</button>
               </details>
@@ -7909,11 +7939,12 @@ export default function App({ onCerrarSesion }) {
           <>
             <button onClick={() => setPrintDoc({ tipo: "lotes" })} style={{ marginBottom: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif", width: "100%" }}>🖨 Imprimir estado de lotes</button>
             {!formLote && (
-              <button onClick={() => setFormLote({ galpon: "", lote: "", raza: "", nac: "", avesIniciales: "", formula: Object.keys(costos)[0] || "", racionGAve: "", posturaIdeal: "", pesoMeta: "", proveedor: "", edadInicioPosturaSemanas: EDAD_POSTURA_SEMANAS_DEFAULT, estadoProd: "", origenAlimento: "propio", productoCompradoId: "" })}
+              <button onClick={() => abrirFormularioLote({ galpon: "", lote: "", raza: "", nac: "", avesIniciales: "", formula: Object.keys(costos)[0] || "", racionGAve: "", posturaIdeal: "", pesoMeta: "", proveedor: "", edadInicioPosturaSemanas: EDAD_POSTURA_SEMANAS_DEFAULT, estadoProd: "", origenAlimento: "propio", productoCompradoId: "" })}
                 style={{ ...btnStyle, marginBottom: 14 }}>+ Crear lote nuevo</button>
             )}
 
             {formLote && (
+              <div ref={formLoteRef} style={{ scrollMarginTop: 16 }}>
               <Seccion titulo={formLote.id ? "Editar lote" : "Nuevo lote"} sub="Galpón, raza y fecha de nacimiento son obligatorios">
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <Campo tercio etiqueta="Gallinero #" type="text" inputMode="numeric" placeholder="ej. 1" value={formLote.galpon} onChange={e => setFormLote({ ...formLote, galpon: e.target.value })} />
@@ -7995,6 +8026,7 @@ export default function App({ onCerrarSesion }) {
                   <button onClick={() => setFormLote(null)} style={{ ...btnStyle, flex: 0.5, background: "#fff", color: C.textoSuave, border: `1.5px solid ${C.borde}` }}>Cancelar</button>
                 </div>
               </Seccion>
+              </div>
             )}
 
             <div id="tablasRazas"><Seccion titulo="Tablas genéticas por raza" sub="Selecciona una línea y una semana. Los indicadores del lote usan automáticamente la fila de su edad; los rangos se muestran tal como aparecen en la guía.">
@@ -8101,7 +8133,7 @@ export default function App({ onCerrarSesion }) {
 
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 13 }}>
-                      <button onClick={() => setFormLote({ ...l })} style={{ flex: 1, padding: "10px", fontSize: 13.5, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Editar</button>
+                      <button onClick={() => abrirFormularioLote({ ...l })} style={{ flex: 1, padding: "10px", fontSize: 13.5, fontWeight: 600, background: C.verdeSuave, color: C.verde, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Editar</button>
                       <button onClick={() => cerrarLote(l.id)} style={{ flex: 1, padding: "10px", fontSize: 13.5, fontWeight: 600, background: "#fff", color: C.alerta, border: `1.5px solid ${C.borde}`, borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>Cerrar lote</button>
                     </div>
                   </div>
