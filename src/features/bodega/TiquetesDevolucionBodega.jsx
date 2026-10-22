@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   buscarTiqueteDevuelto,
   cartonesUsadosTiquete,
   esCantidadMediaCarton,
   formatoCartones,
   numeroCartones,
-  validarUsoTiquete,
 } from "./tiquetesDevolucion.js";
 
 const fechaCorta = (fecha) => String(fecha || "").slice(0, 10).split("-").reverse().join("/");
@@ -30,23 +29,17 @@ export function TiquetesDevolucionBodega({
   tiquetes = [],
   movimientos = [],
   rutasOrigen = [],
-  rutasDestino = [],
   rutasDetalle = [],
   permitirEscritura = false,
   errorCarga = "",
   ocupado = false,
   onRegistrar,
-  onUsar,
   onCorregir,
 }) {
-  const [modo, setModo] = useState("devolucion");
   const [rutaOrigenKey, setRutaOrigenKey] = useState("");
-  const [rutaDestinoKey, setRutaDestinoKey] = useState("");
   const [numeroDevolucion, setNumeroDevolucion] = useState("");
   const [cartonesDevolucion, setCartonesDevolucion] = useState("");
   const [cartonesMalosDevolucion, setCartonesMalosDevolucion] = useState("");
-  const [numeroUso, setNumeroUso] = useState("");
-  const [cartonesUso, setCartonesUso] = useState("");
   const [edicionId, setEdicionId] = useState("");
   const [edicionNumero, setEdicionNumero] = useState("");
   const [edicionCartones, setEdicionCartones] = useState("");
@@ -56,9 +49,6 @@ export function TiquetesDevolucionBodega({
   const [guardando, setGuardando] = useState(false);
 
   const origenesPorClave = useMemo(() => new Map(rutasOrigen.map(ruta => [claveRuta(ruta), ruta])), [rutasOrigen]);
-  const destinosPorClave = useMemo(() => new Map(rutasDestino.map(ruta => [claveRuta(ruta), ruta])), [rutasDestino]);
-  const tiqueteUso = buscarTiqueteDevuelto(tiquetes, numeroUso);
-  const validarUso = validarUsoTiquete({ tiquetes, numero: numeroUso, cartones: cartonesUso });
   const recibidosHoy = tiquetes.filter(t => String(t.fecha_recepcion).slice(0, 10) === fecha);
   const movimientosAplicadosHoy = movimientos.filter(m => String(m.fecha).slice(0, 10) === fecha);
   const movimientosHoy = movimientos.filter(m => String(m.fecha).slice(0, 10) === fecha || String(m.fecha_recepcion || "").slice(0, 10) === fecha);
@@ -70,6 +60,10 @@ export function TiquetesDevolucionBodega({
     devolucionesMalas: movimientos.filter(m => m.tipo === "devolucion_mala" && String(m.ruta_mov_id) === String(ruta.movimientoId) && String(m.ruta_id) === String(ruta.rutaId)),
     usos: movimientos.filter(m => m.tipo === "uso" && String(m.ruta_mov_id) === String(ruta.movimientoId) && String(m.ruta_id) === String(ruta.rutaId)),
   })).filter(item => item.devoluciones.length || item.devolucionesMalas.length || item.usos.length);
+
+  useEffect(() => {
+    if (rutaOrigenKey && !origenesPorClave.has(rutaOrigenKey)) setRutaOrigenKey("");
+  }, [origenesPorClave, rutaOrigenKey]);
 
   const mostrarOpcionRuta = (ruta) => `${fechaCorta(ruta.fecha)} · ${ruta.repartidor}${ruta.salida > 0 ? ` · ${formatoCartones(ruta.salida, "0")} cart` : ""}`;
   const ejecutar = async (accion, exito) => {
@@ -112,26 +106,6 @@ export function TiquetesDevolucionBodega({
     }
   };
 
-  const guardarUso = async (evento) => {
-    evento.preventDefault();
-    const ruta = destinosPorClave.get(rutaDestinoKey);
-    if (!ruta) { setMensaje("Selecciona la ruta que utilizará estos cartones."); return; }
-    const validacion = validarUsoTiquete({ tiquetes, numero: numeroUso, cartones: cartonesUso });
-    if (!validacion.ok) {
-      setMensaje(validacion.motivo === "saldo-insuficiente"
-        ? `Saldo insuficiente: quedan ${validacion.disponible} cartones.`
-        : validacion.motivo === "no-encontrado"
-          ? "No encontramos ese número entre los tiquetes devueltos. Comprueba el número."
-          : "Indica una cantidad mayor que cero.");
-      return;
-    }
-    const guardado = await ejecutar(() => onUsar({ numero: numeroUso.trim(), cartones: numeroCartones(cartonesUso), ruta }), "Uso registrado; el saldo restante sigue disponible.");
-    if (guardado) {
-      setNumeroUso("");
-      setCartonesUso("");
-    }
-  };
-
   const comenzarEdicion = (tiquete) => {
     setEdicionId(String(tiquete.id));
     setEdicionNumero(tiquete.numero);
@@ -168,68 +142,47 @@ export function TiquetesDevolucionBodega({
     <section style={{ marginTop: 16, padding: 14, border: `1px solid ${colores.borde}`, borderRadius: 12, background: colores.superficie }} aria-labelledby="titulo-tiquetes-devueltos">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
         <div>
-          <h4 id="titulo-tiquetes-devueltos" style={{ margin: 0, fontSize: 15 }}>Tiquetes de devolución y reutilización</h4>
-          <div style={{ marginTop: 4, fontSize: 12, color: colores.textoSuave }}>Buenos: entran en la fecha real de recepción. Malos: se cargan a la ruta de origen. Acepta cartones enteros o .5.</div>
+          <h4 id="titulo-tiquetes-devueltos" style={{ margin: 0, fontSize: 15 }}>Inventario de tiquetes devueltos</h4>
+          <div style={{ marginTop: 4, fontSize: 12, color: colores.textoSuave }}>Los cartones buenos se incorporan al inventario del día seleccionado y se usan desde el campo normal de tiquetes de ruta. Los malos se cargan a la ruta de origen.</div>
         </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: netoHoy >= 0 ? colores.verde : colores.alerta }}>
           Movimiento neto hoy: {netoHoy > 0 ? "+" : ""}{formatoCartones(netoHoy, "0")} cart
         </div>
       </div>
 
-      <div role="tablist" aria-label="Acción de tiquetes devueltos" style={{ display: "flex", gap: 7, margin: "12px 0", flexWrap: "wrap" }}>
-        {[["devolucion", "Registrar devolución"], ["uso", "Usar en una ruta"]].map(([id, texto]) => <button key={id} type="button" role="tab" aria-selected={modo === id} onClick={() => { setModo(id); setMensaje(""); }} style={{ padding: "8px 11px", borderRadius: 9, border: `1px solid ${modo === id ? colores.verde : colores.borde}`, background: modo === id ? colores.verde : colores.superficie, color: modo === id ? "#fff" : colores.texto, fontWeight: 700, cursor: "pointer" }}>{texto}</button>)}
-      </div>
+      <div style={{ padding: 9, margin: "12px 0", borderRadius: 8, background: colores.verdeSuave, color: colores.texto, fontSize: 12 }}>Los cartones buenos pasan al inventario y se agregan a la ruta desde el campo normal de tiquetes que se lleva.</div>
 
       {errorCarga && <div role="alert" style={{ padding: 10, marginBottom: 10, borderRadius: 8, background: colores.alertaSuave, color: colores.alerta, fontSize: 12.5 }}>No se pudo cargar el kardex de tiquetes devueltos. Actualiza los datos antes de registrar un movimiento. {errorCarga}</div>}
 
-      {!permitirEscritura && <div style={{ padding: 9, marginBottom: 10, borderRadius: 8, background: colores.fondo, color: colores.textoSuave, fontSize: 12 }}>Tu perfil puede consultar los saldos, pero no registrar devoluciones ni usos.</div>}
+      {!permitirEscritura && <div style={{ padding: 9, marginBottom: 10, borderRadius: 8, background: colores.fondo, color: colores.textoSuave, fontSize: 12 }}>Tu perfil puede consultar los saldos, pero no registrar ni corregir devoluciones.</div>}
 
-      {modo === "devolucion" ? (
-        <form onSubmit={guardarDevolucion} style={{ display: "grid", gap: 9 }}>
-          <label style={{ fontSize: 12, fontWeight: 600 }}>Ruta de origen de la devolución
-            <select required value={rutaOrigenKey} onChange={evento => setRutaOrigenKey(evento.target.value)} style={estiloInput}>
-              <option value="">Seleccionar ruta anterior…</option>
-              {rutasOrigen.map(ruta => <option key={claveRuta(ruta)} value={claveRuta(ruta)}>{mostrarOpcionRuta(ruta)}</option>)}
-            </select>
+      <form onSubmit={guardarDevolucion} style={{ display: "grid", gap: 9 }}>
+        <label style={{ fontSize: 12, fontWeight: 600 }}>Ruta de origen de la devolución
+          <select required value={rutaOrigenKey} onChange={evento => setRutaOrigenKey(evento.target.value)} style={estiloInput}>
+            <option value="">Seleccionar entre las últimas rutas…</option>
+            {rutasOrigen.map(ruta => <option key={claveRuta(ruta)} value={claveRuta(ruta)}>{mostrarOpcionRuta(ruta)}</option>)}
+          </select>
+          <span style={{ display: "block", marginTop: 3, color: colores.textoSuave, fontSize: 11 }}>Se muestran hasta cuatro rutas elegibles hasta la fecha seleccionada en Bodega.</span>
+        </label>
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+          <label style={{ flex: "1 1 150px", fontSize: 12, fontWeight: 600 }}>Número del tiquete físico de devolución
+            <input required value={numeroDevolucion} onChange={evento => setNumeroDevolucion(evento.target.value)} placeholder="Ej. DEV-1042" style={estiloInput} />
           </label>
-          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-            <label style={{ flex: "1 1 150px", fontSize: 12, fontWeight: 600 }}>Número del tiquete físico de devolución
-              <input required value={numeroDevolucion} onChange={evento => setNumeroDevolucion(evento.target.value)} placeholder="Ej. DEV-1042" style={estiloInput} />
-            </label>
-            <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones buenos reutilizables
-              <input required type="text" inputMode="decimal" value={cartonesDevolucion} onChange={evento => setCartonesDevolucion(evento.target.value)} placeholder="0" style={estiloInput} />
-            </label>
-            <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones malos (ruta origen)
-              <input type="text" inputMode="decimal" value={cartonesMalosDevolucion} onChange={evento => setCartonesMalosDevolucion(evento.target.value)} placeholder="0" style={estiloInput} />
-            </label>
-          </div>
-          <div style={{ padding: 9, borderRadius: 8, background: colores.verdeSuave, color: colores.texto, fontSize: 12 }}>
-            Registra juntos los buenos y los malos. Los buenos aumentan el inventario en esta fecha; los malos no se reutilizan y se imputan a la ruta original.
-          </div>
-          <button type="submit" disabled={!permitirEscritura || ocupado || guardando || !!errorCarga} style={estiloBoton}>{guardando ? "Registrando…" : "Registrar devolución"}</button>
-        </form>
-      ) : (
-        <form onSubmit={guardarUso} style={{ display: "grid", gap: 9 }}>
-          <label style={{ fontSize: 12, fontWeight: 600 }}>Ruta que usará el tiquete
-            <select required value={rutaDestinoKey} onChange={evento => setRutaDestinoKey(evento.target.value)} style={estiloInput}>
-              <option value="">Seleccionar repartidor de esta fecha…</option>
-              {rutasDestino.map(ruta => <option key={claveRuta(ruta)} value={claveRuta(ruta)}>{mostrarOpcionRuta(ruta)}</option>)}
-            </select>
+          <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones buenos reutilizables
+            <input required type="text" inputMode="decimal" value={cartonesDevolucion} onChange={evento => setCartonesDevolucion(evento.target.value)} placeholder="0" style={estiloInput} />
           </label>
-          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-            <label style={{ flex: "1 1 150px", fontSize: 12, fontWeight: 600 }}>Número del tiquete de devolución
-              <input required value={numeroUso} onChange={evento => setNumeroUso(evento.target.value)} placeholder="Escribe el número" style={estiloInput} />
-            </label>
-            <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones que se lleva
-              <input required type="text" inputMode="decimal" value={cartonesUso} onChange={evento => setCartonesUso(evento.target.value)} placeholder="0" style={estiloInput} />
-            </label>
-          </div>
-          {numeroUso.trim() && <div role="status" style={{ padding: 9, borderRadius: 8, background: tiqueteUso ? (validarUso.ok || !cartonesUso ? colores.verdeSuave : colores.alertaSuave) : colores.fondo, color: tiqueteUso ? (validarUso.ok || !cartonesUso ? colores.verde : colores.alerta) : colores.textoSuave, fontSize: 12 }}>
-            {!tiqueteUso ? "No hay un tiquete de devolución con ese número." : <>Tiquete #{tiqueteUso.numero}: saldo actual <b>{formatoCartones(tiqueteUso.saldo_cartones || 0, "0")} cartones</b>{cartonesUso && !validarUso.ok && validarUso.motivo === "saldo-insuficiente" ? `; la cantidad supera el saldo.` : "."}</>}
-          </div>}
-          <button type="submit" disabled={!permitirEscritura || ocupado || guardando || !!errorCarga || !validarUso.ok} style={estiloBoton}>{guardando ? "Registrando…" : "Registrar uso y descontar saldo"}</button>
-        </form>
-      )}
+          <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones malos (ruta origen)
+            <input type="text" inputMode="decimal" value={cartonesMalosDevolucion} onChange={evento => setCartonesMalosDevolucion(evento.target.value)} placeholder="0" style={estiloInput} />
+          </label>
+        </div>
+        {(cartonesDevolucion || cartonesMalosDevolucion) && !numeroDevolucion.trim() && <div role="alert" style={{ padding: 9, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 12, fontWeight: 700 }}>
+          ⚠ Esta devolución no tiene tiquete. Ingresa el número físico para registrarla y controlar su inventario.
+        </div>}
+        <div style={{ padding: 9, borderRadius: 8, background: colores.verdeSuave, color: colores.texto, fontSize: 12 }}>
+          Registra juntos los buenos y los malos. Los buenos aumentan el inventario en esta fecha; los malos no se reutilizan y se imputan a la ruta original.
+        </div>
+        <button type="submit" disabled={!permitirEscritura || ocupado || guardando || !!errorCarga} style={estiloBoton}>{guardando ? "Registrando…" : "Registrar devolución"}</button>
+      </form>
 
       {mensaje && <div role="status" aria-live="polite" style={{ padding: 9, marginTop: 9, borderRadius: 8, background: /registrad|corregido/i.test(mensaje) ? colores.verdeSuave : colores.alertaSuave, color: /registrad|corregido/i.test(mensaje) ? colores.verde : colores.alerta, fontSize: 12.5 }}>{mensaje}</div>}
 

@@ -45,6 +45,7 @@ test("al imprimir Bodega, el movimiento elegido pertenece a la fecha visible", (
 
 test("la devolución mala aumenta la salida proyectada; la buena sí regresa al saldo", () => {
   assert.equal(rutaNetaBodega([{ salida: 10, devBueno: 3, devMalo: 2 }]), 9);
+  assert.equal(rutaNetaBodega([{ salida: 0, tiquetesDevueltos: [{ cartones: "0,5" }] }]), 0.5);
   const [movimiento] = reconstruirBodega([
     { id: "hoy", fecha: "01/10/2026", producido: 0, repartos: [{ salida: 10, devBueno: 3, devMalo: 2 }] },
   ], 100, "2026-10-01");

@@ -13,7 +13,7 @@ export function esCantidadMediaCarton(valor) {
 }
 
 export function formatoCartones(valor, defecto = "—") {
-  const numero = Number(valor);
+  const numero = numeroCartones(valor);
   if (valor == null || valor === "" || !Number.isFinite(numero)) return defecto;
   const medio = Math.round((numero + Number.EPSILON) * 2) / 2;
   if (Math.abs(numero - medio) < 0.000001) return String(medio);
@@ -81,6 +81,27 @@ export function validarUsoTiquete({ tiquetes = [], numero, cartones }) {
   return { ok: true, motivo: "", tiquete, disponible };
 }
 
+// El saldo de la tabla refleja usos confirmados. Si una ruta ya se guardó pero
+// la llamada RPC quedó pendiente, reservamos esos cartones para que otra ruta
+// no pueda volver a seleccionarlos mientras se reintenta la sincronización.
+export function saldoDisponibleTiquete(tiquete, movimientosTiquetes = [], movimientosBodega = [], excluirMovimientoId = "") {
+  const id = String(tiquete?.id ?? "");
+  const usosConfirmados = new Set((Array.isArray(movimientosTiquetes) ? movimientosTiquetes : [])
+    .filter(movimiento => movimiento.tipo === "uso")
+    .map(movimiento => String(movimiento.operacion_id ?? movimiento.operacionId ?? movimiento.id ?? "")));
+  const pendientes = (Array.isArray(movimientosBodega) ? movimientosBodega : [])
+    .filter(movimiento => String(movimiento.id ?? "") !== String(excluirMovimientoId ?? ""))
+    .flatMap(movimiento => (movimiento.repartos || []).flatMap(reparto => reparto.tiquetesDevueltos || []))
+    .filter(uso => String(uso.tiqueteId ?? uso.tiquete_id ?? "") === id
+      && !usosConfirmados.has(String(uso.operacionId ?? uso.operacion_id ?? "")));
+  const reservado = pendientes.reduce((total, uso) => {
+    const cantidad = numeroCartones(uso.cartones);
+    return total + (Number.isFinite(cantidad) ? Math.max(0, cantidad) : 0);
+  }, 0);
+  const saldo = numeroCartones(tiquete?.saldo_cartones ?? tiquete?.saldoCartones);
+  return Number.isFinite(saldo) ? Math.max(0, saldo - reservado) : 0;
+}
+
 export function idRepartoBodega(movimientoId, reparto, indice = 0) {
   return String(reparto?.id || `legacy:${movimientoId || "sin-movimiento"}:${indice}`);
 }
@@ -128,4 +149,17 @@ export function rutasBodegaParaTiquetes(movimientos = []) {
     });
   }
   return rutas;
+}
+
+export function ultimasRutasElegibles(rutas = [], fechaSeleccionada, limite = 4) {
+  const corte = fechaISODeTiquete(fechaSeleccionada);
+  if (!corte) return [];
+  return (Array.isArray(rutas) ? rutas : [])
+    .filter(ruta => {
+      const fecha = fechaISODeTiquete(ruta.fecha);
+      return fecha && fecha <= corte;
+    })
+    .sort((a, b) => fechaISODeTiquete(b.fecha).localeCompare(fechaISODeTiquete(a.fecha))
+      || String(a.repartidor || "").localeCompare(String(b.repartidor || ""), "es"))
+    .slice(0, Math.max(0, Number(limite) || 0));
 }

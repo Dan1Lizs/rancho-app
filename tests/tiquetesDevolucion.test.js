@@ -12,6 +12,8 @@ import {
   idRepartoBodega,
   numeroCartones,
   rutasBodegaParaTiquetes,
+  saldoDisponibleTiquete,
+  ultimasRutasElegibles,
   validarUsoTiquete,
 } from "../src/features/bodega/tiquetesDevolucion.js";
 
@@ -26,6 +28,7 @@ test("un uso parcial deja el sobrante del tiquete disponible", () => {
   assert.equal(esCantidadMediaCarton("7,5"), true);
   assert.equal(esCantidadMediaCarton("7.25"), false);
   assert.equal(formatoCartones(148.5), "148.5");
+  assert.equal(formatoCartones("0,5"), "0.5");
   assert.equal(formatoCartones(149), "149");
 });
 
@@ -55,6 +58,27 @@ test("el historial de uso se acumula por id del tiquete, no por su número edita
   ];
   assert.equal(cartonesUsadosTiquete(tiquete, movimientos), 5);
   assert.equal(buscarTiqueteDevuelto([tiquete], " dv-12 "), tiquete);
+});
+
+test("reserva usos de rutas guardadas que todavía no llegaron al kardex", () => {
+  const tiquete = { id: "dev-1", saldo_cartones: 10 };
+  const bodega = [{ id: "b-1", repartos: [{ tiquetesDevueltos: [{ operacionId: "op-1", tiqueteId: "dev-1", cartones: 3.5 }] }] }];
+  assert.equal(saldoDisponibleTiquete(tiquete, [], bodega), 6.5);
+  assert.equal(saldoDisponibleTiquete(tiquete, [{ tipo: "uso", operacion_id: "op-1" }], bodega), 10);
+  assert.equal(saldoDisponibleTiquete(tiquete, [], bodega, "b-1"), 10);
+});
+
+test("limita rutas de origen a las cuatro más recientes hasta la fecha elegida", () => {
+  const rutas = [
+    { fecha: "2026-10-01", repartidor: "A" },
+    { fecha: "2026-10-02", repartidor: "B" },
+    { fecha: "2026-10-03", repartidor: "C" },
+    { fecha: "2026-10-04", repartidor: "D" },
+    { fecha: "2026-10-05", repartidor: "E" },
+    { fecha: "2026-10-22", repartidor: "F" },
+  ];
+  assert.deepEqual(ultimasRutasElegibles(rutas, "2026-10-05").map(ruta => ruta.repartidor), ["E", "D", "C", "B"]);
+  assert.deepEqual(ultimasRutasElegibles(rutas, "2026-10-01").map(ruta => ruta.repartidor), ["A"]);
 });
 
 test("las rutas quedan asociadas a un identificador estable del repartidor", () => {

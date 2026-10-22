@@ -33,7 +33,7 @@ import { calcularSaldoAlimentoComprado, disponibilidadAlimentoComprado, esConsum
 import { nombreColeccionRespaldo, resumenArchivoRespaldo } from "./respaldo.js";
 import { analizarRuta, serializarRuta } from "./rutas.js";
 import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, loteEnLevante, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
-import { asociarUsosDeTiquetesARepartos, cartonesUsoEnRuta, esCantidadMediaCarton, formatoCartones, impactoTiquetesEnFecha, idOperacionTiquete, idRepartoBodega, rutasBodegaParaTiquetes } from "./features/bodega/tiquetesDevolucion.js";
+import { asociarUsosDeTiquetesARepartos, buscarTiqueteDevuelto, cartonesUsoEnRuta, esCantidadMediaCarton, formatoCartones, impactoTiquetesEnFecha, idOperacionTiquete, idRepartoBodega, numeroCartones, rutasBodegaParaTiquetes, saldoDisponibleTiquete, ultimasRutasElegibles } from "./features/bodega/tiquetesDevolucion.js";
 import { TiquetesDevolucionBodega } from "./features/bodega/TiquetesDevolucionBodega.jsx";
 import { AlimentoCompradoForm } from "./features/formulas/AlimentoCompradoForm";
 import { AlimentoCompradoPlanta } from "./features/planta/AlimentoCompradoPlanta";
@@ -55,7 +55,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.2.0";
+const VERSION_APP = "10.3.0";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1462,11 +1462,10 @@ export default function App({ onCerrarSesion }) {
     salida: Number(reparto.salida || 0) + cartonesUsoEnRuta(reparto),
     cartonesReutilizados: cartonesUsoEnRuta(reparto),
   }));
-  const rutasOrigenTiquetes = [
+  const rutasOrigenTiquetes = ultimasRutasElegibles([
     ...rutasRegistradasTiquetes,
     ...rutasFormularioTiquetes.filter(ruta => ruta.repartidor && ruta.salida > 0),
-  ].filter(ruta => ruta.fecha <= fechaBodega);
-  const rutasDestinoTiquetes = rutasFormularioTiquetes.filter(ruta => ruta.repartidor);
+  ], fechaBodega, 4);
   const guardarCfgBodega = async (cfg) => { if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; } setBodegaCfg(cfg); await escribir(K.bodegaCfg, cfg); };
   const cambiarFechaBodega = (iso, id = null) => {
     setFechaBodega(iso);
@@ -1610,28 +1609,6 @@ export default function App({ onCerrarSesion }) {
     await refrescarTiquetesDevolucion();
   };
 
-  const usarDevolucionTiquete = async ({ numero, cartones, ruta }) => {
-    const operacionId = idOperacionTiquete();
-    await usarTiqueteDevolucionRuta({
-      id: operacionId, numero, cartones,
-      fecha: fechaBodega, fechaRuta: ruta.fecha,
-      rutaMovId: ruta.movimientoId, rutaId: ruta.rutaId, repartidor: ruta.repartidor,
-    });
-    setRepartos(actuales => actuales.map((reparto, indice) => {
-      const rutaId = idRepartoBodega(idMovimientoBodegaActual, reparto, indice);
-      if (String(rutaId) !== String(ruta.rutaId)) return reparto;
-      const usos = Array.isArray(reparto.tiquetesDevueltos) ? reparto.tiquetesDevueltos : [];
-      if (usos.some(uso => String(uso.operacionId || uso.operacion_id) === String(operacionId))) return reparto;
-      return {
-        ...reparto,
-        id: ruta.rutaId,
-        tiquetesDevueltos: [...usos, { operacionId, numero, cartones }],
-      };
-    }));
-    await refrescarTiquetesDevolucion();
-    return operacionId;
-  };
-
   const corregirDevolucionTiquete = async ({ tiquete, numero, cartones, cartonesMalos, motivo }) => {
     await corregirTiqueteDevolucionRuta({
       id: tiquete.id, operacionId: idOperacionTiquete(), numero, cartones, cartonesMalos,
@@ -1661,6 +1638,46 @@ export default function App({ onCerrarSesion }) {
     if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("⚠ El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
     if (delDia.length && movBodegaIdRef.current == null) { avisar("⚠ Ya hay un movimiento para esta fecha. Cárgalo desde el historial antes de editarlo."); return; }
     if (elegido && !motivoEdicionBodega.trim()) { setAvisoMotivoGuardar("Escribe el motivo de la modificación en el campo indicado y vuelve a guardar. El movimiento no se ha cambiado."); return; }
+    const usosSolicitados = repartos.flatMap((reparto, indice) => (reparto.tiquetesDevueltos || [])
+      .map(uso => ({ ...uso, rutaId: idRepartoBodega(idMovimiento, reparto, indice), repartidor: reparto.nombre })));
+    if (usosSolicitados.some(uso => !(uso.operacionId || uso.operacion_id))) {
+      avisar("⚠ Hay un tiquete devuelto sin identificador de operación. Actualiza Bodega antes de guardar."); return;
+    }
+    if (usosSolicitados.some(uso => {
+      const cantidad = numeroCartones(uso.cartones);
+      return !Number.isFinite(cantidad) || cantidad <= 0 || !esCantidadMediaCarton(cantidad);
+    })) {
+      avisar("⚠ El uso de tiquetes devueltos debe ser mayor que cero y en cartones enteros o .5."); return;
+    }
+    if (new Set(usosSolicitados.map(uso => String(uso.operacionId || uso.operacion_id))).size !== usosSolicitados.length) {
+      avisar("⚠ Hay una operación de tiquete repetida entre rutas. Revisa los números antes de guardar."); return;
+    }
+    const confirmadosEnEsteMovimiento = new Map();
+    movimientosTiquetesDevolucion.filter(movimiento => movimiento.tipo === "uso"
+      && String(movimiento.ruta_mov_id || movimiento.rutaMovId || "") === String(idMovimiento))
+      .forEach(movimiento => {
+        const tiqueteId = String(movimiento.tiquete_id || movimiento.tiqueteId || "");
+        confirmadosEnEsteMovimiento.set(tiqueteId,
+          (confirmadosEnEsteMovimiento.get(tiqueteId) || 0) + Math.abs(Number(movimiento.cartones_delta || movimiento.cartonesDelta || 0)));
+      });
+    const usoPorTiquete = new Map();
+    usosSolicitados.forEach(uso => {
+      const tiqueteId = String(uso.tiqueteId || uso.tiquete_id || "");
+      usoPorTiquete.set(tiqueteId, (usoPorTiquete.get(tiqueteId) || 0) + numeroCartones(uso.cartones));
+    });
+    for (const [tiqueteId, cantidad] of usoPorTiquete) {
+      const tiquete = tiquetesDevolucion.find(item => String(item.id) === tiqueteId);
+      if (!tiquete) { avisar("⚠ No encontramos uno de los tiquetes devueltos. Actualiza el inventario y revisa la ruta."); return; }
+      if (String(tiquete.fecha_recepcion || "").slice(0, 10) > fechaBodega) {
+        avisar("⚠ El tiquete #" + tiquete.numero + " se recibió después de la fecha seleccionada y todavía no se puede usar ese día."); return;
+      }
+      const disponible = saldoDisponibleTiquete(tiquete, movimientosTiquetesDevolucion, actuales, idMovimiento)
+        + (confirmadosEnEsteMovimiento.get(tiqueteId) || 0);
+      if (cantidad > disponible + 0.000001) {
+        avisar("⚠ Saldo insuficiente en el tiquete #" + tiquete.numero + ": quedan "
+          + formatoCartones(disponible, "0") + " cartones para esta fecha."); return;
+      }
+    }
     const ajusteHistoricoElegido = Number(
       bodegaMovs.find(m => String(m.id) === String(idMovimiento))?.ajusteHistoricoImplicito
       ?? elegido?.ajusteHistoricoImplicito ?? 0
@@ -1714,7 +1731,39 @@ export default function App({ onCerrarSesion }) {
       setAjusteBodega(nuevoMov.ajusteConteo == null ? "" : String(nuevoMov.ajusteConteo));
       await eliminarBorrador("consulta-bodega", "local").catch(() => {});
       setBodegaBorradorConsulta(null);
-      avisar(delDia.length > 1 ? `✓ Fecha ${fechaB} unificada; ${delDia.length - 1} duplicado(s) conservados en la bitácora` : elegido ? "✓ Movimiento editado con registro de cambios" : "✓ Movimiento de bodega guardado");
+      const operacionesConfirmadas = new Set(movimientosTiquetesDevolucion
+        .filter(movimiento => movimiento.tipo === "uso")
+        .map(movimiento => String(movimiento.operacion_id || movimiento.id || "")));
+      const sincronizacionPendiente = [];
+      for (const reparto of nuevoMov.repartos || []) {
+        for (const uso of reparto.tiquetesDevueltos || []) {
+          const operacionId = String(uso.operacionId || uso.operacion_id || "");
+          if (!operacionId || operacionesConfirmadas.has(operacionId)) continue;
+          const tiquete = tiquetesDevolucion.find(item => String(item.id) === String(uso.tiqueteId || uso.tiquete_id || ""));
+          try {
+            await usarTiqueteDevolucionRuta({
+              id: operacionId, numero: uso.numero || tiquete?.numero, cartones: numeroCartones(uso.cartones),
+              fecha: fechaBodega, fechaRuta: fechaBodega, rutaMovId: idMovimiento,
+              rutaId: reparto.id, repartidor: reparto.nombre,
+            });
+            operacionesConfirmadas.add(operacionId);
+          } catch (error) {
+            console.error("Sincronizar uso del tiquete devuelto:", error);
+            sincronizacionPendiente.push(String(uso.numero || tiquete?.numero || "desconocido"));
+          }
+        }
+      }
+      try { await refrescarTiquetesDevolucion(); }
+      catch (error) {
+        console.error("Actualizar inventario de tiquetes devueltos:", error);
+        if (!sincronizacionPendiente.length) sincronizacionPendiente.push("inventario");
+      }
+      if (sincronizacionPendiente.length) {
+        avisar("✓ La ruta quedó guardada. Falta sincronizar " + [...new Set(sincronizacionPendiente)].map(numero => "#" + numero).join(", ")
+          + "; el saldo está reservado y puedes volver a guardar para reintentar.");
+      } else {
+        avisar(delDia.length > 1 ? `✓ Fecha ${fechaB} unificada; ${delDia.length - 1} duplicado(s) conservados en la bitácora` : elegido ? "✓ Movimiento editado con registro de cambios" : "✓ Movimiento de bodega guardado");
+      }
     }
     else avisar("⚠ No se pudo guardar la bodega");
     } catch (e) { console.error("Guardar bodega:", e); avisar("⚠ No se pudo guardar la bodega"); }
@@ -6262,59 +6311,157 @@ export default function App({ onCerrarSesion }) {
                     </div>
                     {(() => {
                       const nums = String(r.tiq || "").trim().split(/[\s,;]+/).filter(Boolean);
-                      const buscarTiquete = (num) => {
+                      const idsConfirmados = new Set(movimientosTiquetesDevolucion
+                        .filter(movimiento => movimiento.tipo === "uso")
+                        .map(movimiento => String(movimiento.operacion_id || movimiento.id || "")));
+                      const usosRutaActual = Array.isArray(r.tiquetesDevueltos) ? r.tiquetesDevueltos : [];
+                      const usosSeleccionados = repartos.flatMap((reparto, indice) =>
+                        (reparto.tiquetesDevueltos || []).map(uso => ({ ...uso, indice }))
+                      );
+                      const saldoBaseTiquete = tiquete => {
+                        const id = String(tiquete.id);
+                        const consumidoEnMovimientoActual = usosSeleccionados
+                          .filter(uso => String(uso.tiqueteId || uso.tiquete_id || "") === id
+                            && idsConfirmados.has(String(uso.operacionId || uso.operacion_id || "")))
+                          .reduce((total, uso) => total + numeroCartones(uso.cartones || 0), 0);
+                        return Math.max(0, saldoDisponibleTiquete(
+                          tiquete, movimientosTiquetesDevolucion, bodegaMovs, idMovimientoBodegaActual
+                        ) + consumidoEnMovimientoActual);
+                      };
+                      const saldoParaRuta = tiquete => Math.max(0, saldoBaseTiquete(tiquete) - usosSeleccionados
+                        .filter(uso => uso.indice !== i && String(uso.tiqueteId || uso.tiquete_id || "") === String(tiquete.id))
+                        .reduce((total, uso) => total + numeroCartones(uso.cartones || 0), 0));
+                      const buscarTiqueteProduccion = num => {
                         for (const reg of registros) {
-                          const t = (reg.tiquetes || []).find(x => String(x.num).trim() === num);
+                          const t = (reg.tiquetes || []).find(x => String(x.num).trim().toLocaleLowerCase("es") === num.trim().toLocaleLowerCase("es"));
                           if (t) { const l2 = lotes.find(x => x.id === reg.lote); return { cartones: Number(t.cartones || 0), peso: Number(t.peso || 0), fecha: reg.fecha, galpon: l2?.galpon }; }
                         }
                         return null;
                       };
-                      const yaSalio = (num) => bodegaMovs.some(mv => (mv.repartos || []).some(rp => (rp.tiquetesDet || []).some(td => String(td.num) === num)));
-                      const det = nums.map(num => { const info = buscarTiquete(num); return { num, ...info, hallado: !!info, repetido: info && yaSalio(num) }; });
-                      const hallados = det.filter(d => d.hallado);
-                      const totalCart = hallados.reduce((a, d) => a + d.cartones, 0);
-                      const totalKg = hallados.reduce((a, d) => a + d.peso, 0);
+                      const yaSalio = num => bodegaMovs.some(mv => (mv.repartos || []).some((rp, indice) => {
+                        const mismaRuta = String(mv.id) === idMovimientoBodegaActual
+                          && idRepartoBodega(mv.id, rp, indice) === idRepartoBodega(idMovimientoBodegaActual, r, i);
+                        return !mismaRuta && (rp.tiquetesDet || []).some(td => String(td.num).trim().toLocaleLowerCase("es") === num.trim().toLocaleLowerCase("es"));
+                      }));
+                      const det = nums.map(num => {
+                        const produccion = buscarTiqueteProduccion(num);
+                        if (produccion) return { num, ...produccion, tipo: "produccion", hallado: true, repetido: yaSalio(num) };
+                        const devuelto = buscarTiqueteDevuelto(tiquetesDevolucion, num);
+                        if (!devuelto) return { num, tipo: "no-encontrado", hallado: false };
+                        const fechaRecepcion = String(devuelto.fecha_recepcion || "").slice(0, 10);
+                        const posterior = fechaRecepcion > fechaBodega;
+                        const anteriorUso = usosRutaActual.find(uso => String(uso.tiqueteId || uso.tiquete_id || "") === String(devuelto.id));
+                        const disponible = posterior ? 0 : saldoParaRuta(devuelto);
+                        return {
+                          num, tipo: "devolucion", tiquete: devuelto, fechaRecepcion, posterior,
+                          disponible, cartones: anteriorUso ? Number(anteriorUso.cartones) : disponible,
+                          hallado: !posterior && (disponible > 0 || !!anteriorUso),
+                        };
+                      });
+                      const detProduccion = det.filter(item => item.tipo === "produccion");
+                      const devueltos = [...new Map(det.filter(item => item.tipo === "devolucion" && item.hallado)
+                        .map(item => [String(item.tiquete.id), item])).values()];
+                      const totalCart = detProduccion.reduce((a, d) => a + d.cartones, 0);
+                      const totalKg = detProduccion.reduce((a, d) => a + d.peso, 0);
+                      const actualizarCantidadDevuelta = (tiqueteId, cartones) => {
+                        const rs = [...repartos];
+                        rs[i] = { ...r, tiquetesDevueltos: usosRutaActual.map(uso =>
+                          String(uso.tiqueteId || uso.tiquete_id || "") === String(tiqueteId) ? { ...uso, cartones } : uso
+                        ) };
+                        editarRepartosBodega(rs);
+                      };
                       return (
                         <div style={{ marginBottom: 8 }}>
                           <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textoSuave, marginBottom: 3 }}>
-                            Tiquetes que se lleva — NÚMEROS separados por espacio: el sistema busca cada tiquete y suma sus cartones
+                            Tiquetes que se lleva — escribe los números separados por espacio; busca producción y devoluciones disponibles
                           </span>
-                          <input type="text" placeholder="ej. 4521 4522 4530" value={r.tiq || ""}
+                          <input type="text" placeholder="ej. 4521 DEV-1042 4530" value={r.tiq || ""}
                             onChange={e => {
                               const crudo = e.target.value;
                               const ns2 = crudo.trim().split(/[\s,;]+/).filter(Boolean);
-                              const dets = ns2.map(num => { const info = buscarTiquete(num); return info ? { num, cartones: info.cartones, peso: info.peso } : null; }).filter(Boolean);
-                              const tot = dets.reduce((a, d) => a + d.cartones, 0);
+                              const produccion = ns2.map(num => {
+                                const info = buscarTiqueteProduccion(num);
+                                return info ? { num, cartones: info.cartones, peso: info.peso } : null;
+                              }).filter(Boolean);
+                              const usosPorTiquete = new Map();
+                              ns2.forEach(num => {
+                                const devuelto = buscarTiqueteDevuelto(tiquetesDevolucion, num);
+                                if (!devuelto || String(devuelto.fecha_recepcion || "").slice(0, 10) > fechaBodega) return;
+                                const id = String(devuelto.id);
+                                if (usosPorTiquete.has(id)) return;
+                                const previo = usosRutaActual.find(uso => String(uso.tiqueteId || uso.tiquete_id || "") === id);
+                                const disponible = saldoParaRuta(devuelto);
+                                if (disponible <= 0 && !previo) return;
+                                usosPorTiquete.set(id, {
+                                  operacionId: previo?.operacionId || previo?.operacion_id || idOperacionTiquete(),
+                                  tiqueteId: id, numero: devuelto.numero, cartones: previo?.cartones ?? disponible,
+                                });
+                              });
+                              const usosConfirmadosQuitados = usosRutaActual.filter(uso =>
+                                idsConfirmados.has(String(uso.operacionId || uso.operacion_id || ""))
+                                && !usosPorTiquete.has(String(uso.tiqueteId || uso.tiquete_id || "")));
+                              usosConfirmadosQuitados.forEach(uso => usosPorTiquete.set(String(uso.tiqueteId || uso.tiquete_id), uso));
+                              const numerosProtegidos = usosConfirmadosQuitados.map(uso => String(uso.numero || "")).filter(Boolean);
+                              const tiquetesVisibles = [...new Set([...ns2, ...numerosProtegidos])].join(" ");
                               const rs = [...repartos];
-                              rs[i] = { ...r, tiq: crudo, tiquetesDet: dets, ...(dets.length ? { salida: String(+tot.toFixed(1)) } : {}) };
+                              const total = produccion.reduce((a, d) => a + d.cartones, 0);
+                              rs[i] = {
+                                ...r, tiq: tiquetesVisibles, tiquetesDet: produccion,
+                                tiquetesDevueltos: [...usosPorTiquete.values()],
+                                ...(produccion.length ? { salida: String(+total.toFixed(1)) } : {}),
+                              };
                               editarRepartosBodega(rs);
                             }}
-                            style={{ ...inputStyle, marginBottom: 4, padding: "8px 10px", fontSize: 13.5, background: hallados.length ? C.verdeSuave : C.superficie }} />
+                            style={{ ...inputStyle, marginBottom: 4, padding: "8px 10px", fontSize: 13.5, background: det.some(item => item.hallado) ? C.verdeSuave : C.superficie }} />
                           {det.length > 0 && (
-                            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                              {det.map((d, j) => (
-                                <span key={j} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 10,
-                                  background: !d.hallado ? "#FBEAE6" : d.repetido ? C.yemaSuave : C.verdeSuave,
-                                  color: !d.hallado ? C.alerta : d.repetido ? "#9A6605" : C.verde }}>
-                                  #{d.num}{d.hallado ? `: ${d.cartones} cart` + (d.peso ? ` · ${d.peso.toFixed(1)} kg` : "") + ` (G${d.galpon} ${String(d.fecha).slice(0, 5)})` : ": no existe en producción"}{d.repetido ? " ⚠ ya salió antes" : ""}
-                                </span>
-                              ))}
-                              {hallados.length > 0 && (
-                                <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: C.verde, color: "#fff" }}>
-                            Σ {hallados.length} tiq · {formatoCartones(totalCart)} cart{totalKg > 0 ? ` · ${totalKg.toFixed(1)} kg` : ""} → Salida
-                                </span>
-                              )}
+                            <div style={{ display: "grid", gap: 6, marginTop: 5 }}>
+                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                                {det.map((d, j) => (
+                                  <span key={j} style={{ fontSize: 11, fontWeight: 600, padding: "4px 8px", borderRadius: 10,
+                                    background: !d.hallado ? "#FFF1D6" : d.repetido ? C.yemaSuave : C.verdeSuave,
+                                    color: !d.hallado ? "#8A4B08" : d.repetido ? "#9A6605" : C.verde }}>
+                                    #{d.num}{d.tipo === "produccion" ? `: ${d.cartones} cart` + (d.peso ? ` · ${d.peso.toFixed(1)} kg` : "") + ` (G${d.galpon} ${String(d.fecha).slice(0, 5)})`
+                                      : d.tipo === "devolucion" && d.posterior ? `: devolución recibida el ${d.fechaRecepcion}; aún no disponible para ${fechaBodega}`
+                                        : d.tipo === "devolucion" ? d.hallado ? `: devolución; saldo ${formatoCartones(d.disponible)} cart` : `: devolución sin saldo disponible`
+                                          : ": no se encontró"}
+                                    {d.repetido ? " ⚠ ya salió en otra ruta" : ""}
+                                  </span>
+                                ))}
+                                {detProduccion.length > 0 && (
+                                  <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: C.verde, color: "#fff" }}>
+                                    Σ {detProduccion.length} tiq · {formatoCartones(totalCart)} cart{totalKg > 0 ? ` · ${totalKg.toFixed(1)} kg` : ""} → Salida
+                                  </span>
+                                )}
+                              </div>
+                              {devueltos.map((d, j) => {
+                                const uso = usosRutaActual.find(item => String(item.tiqueteId || item.tiquete_id || "") === String(d.tiquete.id));
+                                const usoConfirmado = !!uso && idsConfirmados.has(String(uso.operacionId || uso.operacion_id || ""));
+                                return <label key={d.tiquete.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 8px", border: `1px solid ${C.borde}`, borderRadius: 8, fontSize: 11.5 }}>
+                                  <span style={{ fontWeight: 700, color: C.verde }}>Tiquete devuelto #{d.tiquete.numero} · saldo utilizable hasta ahora: {formatoCartones(d.disponible)} cart</span>
+                                  <span>Se lleva:</span>
+                                  <input type="text" inputMode="decimal" aria-label={`Cartones del tiquete devuelto ${d.tiquete.numero}`}
+                                    value={uso?.cartones ?? d.cartones}
+                                    disabled={usoConfirmado}
+                                    onChange={evento => actualizarCantidadDevuelta(d.tiquete.id, evento.target.value)}
+                                    style={{ ...inputStyle, width: 82, padding: "5px 7px", margin: 0 }} />
+                                  {!esCantidadMediaCarton(uso?.cartones ?? d.cartones) && <span style={{ color: C.alerta, fontWeight: 700 }}>Usa enteros o .5</span>}
+                                  {usoConfirmado && <span style={{ color: "#8A4B08", fontWeight: 700 }}>Uso guardado en historial</span>}
+                                </label>;
+                              })}
                             </div>
                           )}
+                          {usosRutaActual.some(uso => idsConfirmados.has(String(uso.operacionId || uso.operacion_id || ""))) && <div role="status" style={{ marginTop: 6, padding: 8, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 11.5 }}>
+                            Los tiquetes devueltos ya consumidos quedan asociados a esta ruta y protegidos en el historial.
+                          </div>}
+                          {Number(r.devBueno || 0) > 0 && <div role="alert" style={{ marginTop: 6, padding: 9, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 12, fontWeight: 700 }}>
+                            ⚠ Esta devolución buena ({formatoCartones(r.devBueno)} cartones) no tiene tiquete. Regístrala con su tiquete físico para que quede disponible en el inventario.
+                          </div>}
                         </div>
                       );
                     })()}
                     <div style={{ display: "flex", gap: 8 }}>
                       <label style={{ flex: 1, fontSize: 11.5, fontWeight: 600, color: C.textoSuave }}>Salida normal
                         <input type="text" inputMode="decimal" placeholder="0" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
-                      </label>
-                      <label style={{ flex: 1, fontSize: 11.5, fontWeight: 600, color: C.textoSuave }}>Devolución buena sin tiquete
-                        <input type="text" inputMode="decimal" placeholder="0" aria-label="Devolución buena sin tiquete reutilizable" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
                       </label>
                     </div>
                     {cartonesUsoEnRuta(r) > 0 && <div style={{ marginTop: 4, fontSize: 12, color: C.verde, fontWeight: 700 }}>
@@ -6330,13 +6477,11 @@ export default function App({ onCerrarSesion }) {
                 tiquetes={tiquetesDevolucion}
                 movimientos={movimientosTiquetesDevolucion}
                 rutasOrigen={rutasOrigenTiquetes}
-                rutasDestino={rutasDestinoTiquetes}
-                rutasDetalle={rutasDestinoTiquetes}
+                rutasDetalle={rutasFormularioTiquetes}
                 permitirEscritura={["admin", "encargado", "bodega"].includes(miRol)}
                 errorCarga={errorTiquetesDevolucion}
                 ocupado={cargandoFondo || guardando}
                 onRegistrar={registrarDevolucionTiquete}
-                onUsar={usarDevolucionTiquete}
                 onCorregir={corregirDevolucionTiquete}
               />
               <button onClick={() => editarRepartosBodega([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
