@@ -9,7 +9,7 @@ export function inventarioMPTieneDatos(items = {}) {
 }
 
 export function valoresFormularioBodega({
-  movBodega = {}, repartos = [], obsInv = "", ajusteBodega = "", pasosBodega = pasosVacios,
+  movBodega = {}, repartos = [], devolucionesSinTiquete = [], obsInv = "", ajusteBodega = "", pasosBodega = pasosVacios,
 } = {}) {
   return {
     movBodega: Object.fromEntries(camposMovimiento.map(campo => [campo, texto(movBodega?.[campo])])),
@@ -22,6 +22,15 @@ export function valoresFormularioBodega({
       salida: texto(reparto?.salida),
       devBueno: texto(reparto?.devBueno),
       devMalo: texto(reparto?.devMalo),
+    })),
+    devolucionesSinTiquete: (devolucionesSinTiquete || []).map(devolucion => ({
+      id: texto(devolucion?.id),
+      rutaMovId: texto(devolucion?.rutaMovId ?? devolucion?.ruta_mov_id),
+      rutaId: texto(devolucion?.rutaId ?? devolucion?.ruta_id),
+      fechaRutaOrigen: texto(devolucion?.fechaRutaOrigen ?? devolucion?.fecha_ruta_origen),
+      repartidor: texto(devolucion?.repartidor),
+      cartonesBuenos: texto(devolucion?.cartonesBuenos ?? devolucion?.cartones_buenos),
+      cartonesMalos: texto(devolucion?.cartonesMalos ?? devolucion?.cartones_malos),
     })),
     obsInv: texto(obsInv),
     ajusteBodega: texto(ajusteBodega),
@@ -38,6 +47,7 @@ export function formularioBodegaDesdeMovimiento(movimiento, repartidores = [], p
   return valoresFormularioBodega({
     movBodega: Object.fromEntries(camposMovimiento.map(campo => [campo, movimiento?.[campo] || ""])),
     repartos: repartosBase,
+    devolucionesSinTiquete: movimiento?.devolucionesSinTiquete || [],
     obsInv: movimiento?.obs || "",
     ajusteBodega: movimiento?.ajusteConteo == null ? "" : String(movimiento.ajusteConteo),
     pasosBodega,

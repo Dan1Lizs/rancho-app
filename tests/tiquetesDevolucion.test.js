@@ -12,6 +12,7 @@ import {
   idRepartoBodega,
   numeroCartones,
   rutasBodegaParaTiquetes,
+  rutaMismoDiaPorRepartidor,
   saldoDisponibleTiquete,
   ultimasRutasElegibles,
   validarUsoTiquete,
@@ -79,6 +80,17 @@ test("limita rutas de origen a las cuatro más recientes hasta la fecha elegida"
   ];
   assert.deepEqual(ultimasRutasElegibles(rutas, "2026-10-05").map(ruta => ruta.repartidor), ["E", "D", "C", "B"]);
   assert.deepEqual(ultimasRutasElegibles(rutas, "2026-10-01").map(ruta => ruta.repartidor), ["A"]);
+});
+
+test("empareja por repartidor cuando hay una sola ruta ese día y deja elegir si hay ambigüedad", () => {
+  const rutas = [
+    { movimientoId: "b-1", rutaId: "r-1", fecha: "2026-10-11", repartidor: "Bryan" },
+    { movimientoId: "b-1", rutaId: "r-2", fecha: "2026-10-11", repartidor: "Andrés" },
+    { movimientoId: "b-2", rutaId: "r-3", fecha: "2026-10-12", repartidor: "Bryan" },
+  ];
+  assert.equal(rutaMismoDiaPorRepartidor(rutas, "2026-10-11", "bRyAn"), rutas[0]);
+  assert.equal(rutaMismoDiaPorRepartidor(rutas, "2026-10-12", "Bryan"), rutas[2]);
+  assert.equal(rutaMismoDiaPorRepartidor(rutas, "2026-10-11", "Rosa"), null);
 });
 
 test("las rutas quedan asociadas a un identificador estable del repartidor", () => {

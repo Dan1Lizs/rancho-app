@@ -17,20 +17,27 @@ test("date and responsible alone do not make an MP draft, but zero is a real cou
 });
 
 test("saved Bodega values are not treated as changes", () => {
+  const devolucionesSinTiquete = [{
+    id: "dev-1", rutaMovId: "b-1", rutaId: "r-1", fechaRutaOrigen: "2026-10-01",
+    repartidor: "Bryan", cartonesBuenos: 3.5, cartonesMalos: 1,
+  }];
   const movimiento = {
     comprado: 2, vendGranja: 1, destruido: 0, regalado: 0,
     repartos: [{ nombre: "Bryan", salida: 12, devBueno: 1, devMalo: 0 }],
+    devolucionesSinTiquete,
     obs: "Conteo revisado", ajusteConteo: 40,
   };
   const base = formularioBodegaDesdeMovimiento(movimiento, ["Bryan"]);
   const iguales = valoresFormularioBodega({
     movBodega: { comprado: "2", vendGranja: "1", destruido: "", regalado: "" },
     repartos: [{ nombre: "Bryan", salida: "12", devBueno: "1", devMalo: "0" }],
+    devolucionesSinTiquete,
     obsInv: "Conteo revisado", ajusteBodega: "40",
   });
 
   assert.ok(formulariosIguales(iguales, base));
   assert.ok(!formulariosIguales({ ...iguales, obsInv: "Conteo corregido" }, base));
+  assert.ok(!formulariosIguales({ ...iguales, devolucionesSinTiquete: [{ ...devolucionesSinTiquete[0], cartonesMalos: "2" }] }, base));
 });
 
 test("Bodega only offers a draft after a manual change that differs from the baseline", () => {

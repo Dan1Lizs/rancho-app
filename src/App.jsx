@@ -8,7 +8,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta } from "./historial";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, hayCambiosFormularioBodega, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
@@ -55,7 +55,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.3.0";
+const VERSION_APP = "10.4.0";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -604,6 +604,7 @@ export default function App({ onCerrarSesion }) {
     { nombre: "Andrés", salida: "", devBueno: "", devMalo: "" },
     { nombre: "Bryan", salida: "", devBueno: "", devMalo: "" },
   ]);
+  const [devolucionesSinTiquete, setDevolucionesSinTiquete] = useState([]);
   const [obsInv, setObsInv] = useState("");
   const [ajusteBodega, setAjusteBodega] = useState("");
   const [bodegaBorradorConsulta, setBodegaBorradorConsulta] = useState(null);
@@ -1086,12 +1087,14 @@ export default function App({ onCerrarSesion }) {
           setMovBodega({ comprado: elegido.comprado || "", vendGranja: elegido.vendGranja || "", destruido: elegido.destruido || "", regalado: elegido.regalado || "" });
           const repartosCargados = (elegido.repartos?.length ? elegido.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r }));
           setRepartos(asociarUsosDeTiquetesARepartos(elegido.id, repartosCargados, movimientosTiquetesActuales));
+          setDevolucionesSinTiquete(elegido.devolucionesSinTiquete || []);
           setObsInv(elegido.obs || "");
           setAjusteBodega(elegido.ajusteConteo == null ? "" : String(elegido.ajusteConteo));
         } else {
           setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
           const repartosCargados = repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }));
           setRepartos(asociarUsosDeTiquetesARepartos(`bodega-${fechaBodegaRef.current}`, repartosCargados, movimientosTiquetesActuales));
+          setDevolucionesSinTiquete([]);
           setObsInv("");
           setAjusteBodega("");
         }
@@ -1433,26 +1436,43 @@ export default function App({ onCerrarSesion }) {
     cartones: regsFechaB.filter(r => r.lote === l.id).reduce((s, r) => s + r.cartones, 0),
   }));
   const producidoHoyCart = producidoPorGalpon.reduce((s, g) => s + g.cartones, 0);
-  const rutaNeta = +rutaNetaBodega(repartos).toFixed(1);
+  const idMovimientoBodegaActual = String(movBodegaIdRef.current || `bodega-${fechaBodega}`);
+  const devolucionesDeOtrosDias = devolucionesSinTiqueteDeMovimiento(bodegaMovs.filter(m => String(m.id) !== idMovimientoBodegaActual));
+  const devolucionesActivasSinTiquete = [...devolucionesDeOtrosDias, ...devolucionesSinTiquete];
+  const malasSinTiquetePorRutaActual = repartos.reduce((total, reparto, indice) => total
+    + cartonesMalosSinTiqueteEnRuta(devolucionesActivasSinTiquete, idMovimientoBodegaActual, idRepartoBodega(idMovimientoBodegaActual, reparto, indice)), 0);
+  const rutaNeta = +(rutaNetaBodega(repartos) + malasSinTiquetePorRutaActual).toFixed(1);
+  const buenasSinTiqueteHoy = devolucionesSinTiquete.reduce((total, devolucion) => total + numeroCartones(devolucion.cartonesBuenos || 0), 0);
   const operacionesUsoEnRuta = repartos.flatMap(reparto => reparto.tiquetesDevueltos || []).map(uso => uso.operacionId || uso.operacion_id).filter(Boolean);
   const movimientosTiquetesFechaBodega = movimientosTiquetesDevolucion.filter(movimiento => fechaHistorialISO(movimiento.fecha) === fechaBodega);
   const devolucionMalaTiqueteHoy = movimientosTiquetesFechaBodega.filter(movimiento => movimiento.tipo === "devolucion_mala")
-    .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0);
+    .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0) + malasSinTiquetePorRutaActual;
   const operacionesUsoAsociadas = new Set(operacionesUsoEnRuta.map(String));
   const usosTiquetesSinRutaGuardadaHoy = movimientosTiquetesFechaBodega
     .filter(movimiento => movimiento.tipo === "uso" && !operacionesUsoAsociadas.has(String(movimiento.operacion_id || movimiento.id)))
     .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0);
-  const impactoTiquetesHoy = impactoTiquetesEnFecha(movimientosTiquetesDevolucion, fechaBodega, operacionesUsoEnRuta);
+  const impactoTiquetesHoy = impactoTiquetesEnFecha(movimientosTiquetesDevolucion, fechaBodega, operacionesUsoEnRuta) + buenasSinTiqueteHoy;
   const impactoRuta = presentacionRutaNeta(rutaNeta);
   const devolucionNetaRuta = impactoRuta.tipo === "devolucion" ? impactoRuta.cantidad : 0;
   const salidaNetaRuta = impactoRuta.tipo === "salida" ? impactoRuta.cantidad : 0;
   const otrasSalidasBodega = Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0);
-  const saldoBase = (() => {
+  const saldoBaseGuardado = (() => {
     const previos = bodegaMovs.filter(m => aDate(m.fecha) < aDate(fechaB));
     if (!previos.length) return Number(bodegaCfg.inicialCart || 0);
     return previos.reduce((mejor, m) => (!mejor || aDate(m.fecha) > aDate(mejor.fecha) ? m : mejor), null).saldoFinal;
   })();
-  const idMovimientoBodegaActual = String(movBodegaIdRef.current || `bodega-${fechaBodega}`);
+  const sumarMalosPorRuta = lista => (lista || []).reduce((mapa, devolucion) => {
+    const clave = String(devolucion.rutaMovId ?? devolucion.ruta_mov_id ?? "");
+    if (clave) mapa.set(clave, (mapa.get(clave) || 0) + numeroCartones(devolucion.cartonesMalos ?? devolucion.cartones_malos));
+    return mapa;
+  }, new Map());
+  const malosAntesGuardados = sumarMalosPorRuta(bodegaMovs.find(m => String(m.id) === idMovimientoBodegaActual)?.devolucionesSinTiquete);
+  const malosAntesFormulario = sumarMalosPorRuta(devolucionesSinTiquete);
+  const movimientosPreviosIds = new Set(bodegaMovs.filter(m => aDate(m.fecha) < aDate(fechaB)).map(m => String(m.id)));
+  const cambioMalosPrevios = [...new Set([...malosAntesGuardados.keys(), ...malosAntesFormulario.keys()])]
+    .filter(movimientoId => movimientosPreviosIds.has(movimientoId))
+    .reduce((total, movimientoId) => total + (malosAntesFormulario.get(movimientoId) || 0) - (malosAntesGuardados.get(movimientoId) || 0), 0);
+  const saldoBase = Number(saldoBaseGuardado || 0) - cambioMalosPrevios;
   const rutasRegistradasTiquetes = rutasBodegaParaTiquetes(bodegaMovs).filter(ruta => ruta.movimientoId !== idMovimientoBodegaActual);
   const rutasFormularioTiquetes = repartos.map((reparto, indice) => ({
     movimientoId: idMovimientoBodegaActual,
@@ -1485,22 +1505,25 @@ export default function App({ onCerrarSesion }) {
       setMovBodega({ comprado: mov.comprado || "", vendGranja: mov.vendGranja || "", destruido: mov.destruido || "", regalado: mov.regalado || "" });
       const repartosCargados = (mov.repartos?.length ? mov.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r }));
       setRepartos(asociarUsosDeTiquetesARepartos(mov.id, repartosCargados, movimientosTiquetesDevolucion));
+      setDevolucionesSinTiquete(mov.devolucionesSinTiquete || []);
       setObsInv(mov.obs || "");
       setAjusteBodega(mov.ajusteConteo == null ? "" : String(mov.ajusteConteo));
     } else {
       setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
       const repartosCargados = repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }));
       setRepartos(asociarUsosDeTiquetesARepartos(`bodega-${iso}`, repartosCargados, movimientosTiquetesDevolucion));
+      setDevolucionesSinTiquete([]);
       setObsInv("");
       setAjusteBodega("");
     }
   };
-  const estadoFormularioBodega = valoresFormularioBodega({ movBodega, repartos, obsInv, ajusteBodega, pasosBodega });
+  const estadoFormularioBodega = valoresFormularioBodega({ movBodega, repartos, devolucionesSinTiquete, obsInv, ajusteBodega, pasosBodega });
   const baseFormularioBodega = bodegaFormularioBaseRef.current
     || formularioBodegaDesdeMovimiento(null, bodegaCfg.repartidores, { salidas: false, devoluciones: false, conteo: false });
   const bodegaTieneCambios = hayCambiosFormularioBodega(estadoFormularioBodega, baseFormularioBodega, bodegaEditadaRef.current);
   const editarMovBodega = valor => { bodegaEditadaRef.current = true; setMovBodega(valor); };
   const editarRepartosBodega = valor => { bodegaEditadaRef.current = true; setRepartos(valor); };
+  const editarDevolucionesSinTiquete = valor => { bodegaEditadaRef.current = true; setDevolucionesSinTiquete(valor); };
   const editarObsBodega = valor => { bodegaEditadaRef.current = true; setObsInv(valor); };
   const editarAjusteBodega = valor => { bodegaEditadaRef.current = true; setAjusteBodega(valor); };
   const editarPasosBodega = valor => { bodegaEditadaRef.current = true; setPasosBodega(valor); };
@@ -1512,6 +1535,7 @@ export default function App({ onCerrarSesion }) {
     const borrador = valoresFormularioBodega({
       movBodega: bodegaBorradorConsulta.movBodega,
       repartos: bodegaBorradorConsulta.repartos,
+      devolucionesSinTiquete: bodegaBorradorConsulta.devolucionesSinTiquete,
       obsInv: bodegaBorradorConsulta.obsInv,
       ajusteBodega: bodegaBorradorConsulta.ajusteBodega,
       pasosBodega: bodegaBorradorConsulta.pasosBodega,
@@ -1528,6 +1552,7 @@ export default function App({ onCerrarSesion }) {
       movimientoId: movBodegaIdRef.current,
       movBodega,
       repartos,
+      devolucionesSinTiquete,
       obsInv,
       ajusteBodega,
       pasosBodega,
@@ -1609,6 +1634,19 @@ export default function App({ onCerrarSesion }) {
     await refrescarTiquetesDevolucion();
   };
 
+  const registrarDevolucionSinTiquete = ({ cartonesBuenos, cartonesMalos, ruta }) => {
+    editarDevolucionesSinTiquete([...devolucionesSinTiquete, {
+      id: idOperacionTiquete(),
+      fechaRecepcion: fechaBodega,
+      fechaRutaOrigen: ruta.fecha,
+      rutaMovId: ruta.movimientoId,
+      rutaId: ruta.rutaId,
+      repartidor: ruta.repartidor,
+      cartonesBuenos,
+      cartonesMalos,
+    }]);
+  };
+
   const corregirDevolucionTiquete = async ({ tiquete, numero, cartones, cartonesMalos, motivo }) => {
     await corregirTiqueteDevolucionRuta({
       id: tiquete.id, operacionId: idOperacionTiquete(), numero, cartones, cartonesMalos,
@@ -1628,12 +1666,34 @@ export default function App({ onCerrarSesion }) {
     ];
     const cantidadInvalida = cantidadesBodega.find(([, valor]) => valor !== "" && valor != null && !esCantidadMediaCarton(valor));
     if (cantidadInvalida) { avisar(`⚠ ${cantidadInvalida[0]}: usa cartones enteros o medios cartones (.5).`); return; }
+    const devolucionSinTiqueteInvalida = devolucionesSinTiquete.find(devolucion => {
+      const buenos = numeroCartones(devolucion.cartonesBuenos || 0);
+      const malos = numeroCartones(devolucion.cartonesMalos || 0);
+      return !devolucion.id || !devolucion.rutaMovId || !devolucion.rutaId
+        || fechaHistorialISO(devolucion.fechaRecepcion || fechaBodega) !== fechaBodega
+        || buenos < 0 || malos < 0 || buenos + malos <= 0
+        || !esCantidadMediaCarton(buenos) || !esCantidadMediaCarton(malos);
+    });
+    if (devolucionSinTiqueteInvalida) { avisar("⚠ Revisa la devolución sin tiquete: necesita una ruta, fecha y cantidades enteras o terminadas en .5."); return; }
     setGuardando(true);
     try {
     const actualesRemotos = await leerBodegaActual();
     if (!actualesRemotos) { avisar("⚠ No se pudo consultar la bodega actual. No se guardó ningún cambio."); return; }
     const actuales = reconstruirBodega(actualesRemotos.filter(m => !m.movimientoSoloTiquetes), bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion).filter(m => !m.movimientoSoloTiquetes);
     const { delDia, elegido, id: idMovimiento } = elegirMovimientoBodega(actuales, fechaBodega, movBodegaIdRef.current);
+    const rutasValidasDevolucion = [
+      ...rutasBodegaParaTiquetes(actuales),
+      ...rutasBodegaParaTiquetes([{
+        id: idMovimiento, fecha: fechaB, repartos: repartos.map((reparto, indice) => ({
+          ...reparto, id: idRepartoBodega(idMovimiento, reparto, indice),
+        })),
+      }]),
+    ];
+    const rutasValidasDevolucionKeys = new Set(rutasValidasDevolucion.map(ruta => `${ruta.movimientoId}::${ruta.rutaId}`));
+    if (devolucionesSinTiquete.some(devolucion => !rutasValidasDevolucionKeys.has(`${devolucion.rutaMovId}::${devolucion.rutaId}`)
+      || fechaHistorialISO(devolucion.fechaRutaOrigen) > fechaHistorialISO(devolucion.fechaRecepcion || fechaBodega))) {
+      avisar("⚠ La ruta de origen de una devolución sin tiquete ya no está disponible. Actualiza el formulario y vuelve a elegir la ruta."); return;
+    }
     if (movBodegaIdRef.current != null && !elegido) { avisar("⚠ Este registro cambió en otro dispositivo. Actualiza y vuelve a elegirlo."); return; }
     if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("⚠ El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
     if (delDia.length && movBodegaIdRef.current == null) { avisar("⚠ Ya hay un movimiento para esta fecha. Cárgalo desde el historial antes de editarlo."); return; }
@@ -1689,6 +1749,7 @@ export default function App({ onCerrarSesion }) {
       comprado: Number(movBodega.comprado || 0), vendGranja: Number(movBodega.vendGranja || 0),
       destruido: Number(movBodega.destruido || 0), regalado: Number(movBodega.regalado || 0),
       repartos: repartos.map((r, indice) => ({ ...r, id: idRepartoBodega(idMovimiento, r, indice) })), rutaNeta: +rutaNeta.toFixed(1),
+      devolucionesSinTiquete: devolucionesSinTiquete.map(devolucion => ({ ...devolucion, fechaRecepcion: fechaBodega })),
       obs: obsInv, saldoFinal: +saldoFinal.toFixed(1),
       ajusteConteo: hayAjuste ? Number(ajusteBodega) : null, difAjuste: hayAjuste ? difAjuste : null,
     };
@@ -6194,6 +6255,7 @@ export default function App({ onCerrarSesion }) {
                     setPasosBodega(b.pasosBodega || { salidas: false, devoluciones: false, conteo: false });
                     setMovBodega(b.movBodega || { comprado: "", vendGranja: "", destruido: "", regalado: "" });
                     setRepartos(b.repartos || []);
+                    setDevolucionesSinTiquete(b.devolucionesSinTiquete || []);
                     setObsInv(b.obsInv || "");
                     setAjusteBodega(b.ajusteBodega || "");
                     setPasosBodega(b.pasosBodega || { salidas: false, devoluciones: false, conteo: false });
@@ -6228,8 +6290,8 @@ export default function App({ onCerrarSesion }) {
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
-              <KPI etiqueta="Entradas (+)" valor={formatoCartones(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta + Math.max(0, impactoTiquetesHoy))} unidad="cart" tono="ok" sub={`Producido ${formatoCartones(producidoHoyCart, "0")}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${formatoCartones(movBodega.comprado, "0")}` : ""}${devolucionNetaRuta > 0 ? ` · devolución manual +${formatoCartones(devolucionNetaRuta, "0")}` : ""}${impactoTiquetesHoy > 0 ? ` · tiquetes devueltos +${formatoCartones(impactoTiquetesHoy, "0")}` : ""}`} />
-              <KPI etiqueta="Salidas (−)" valor={formatoCartones(salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy))} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy) > 0 ? "alerta" : undefined} sub={`Ruta (incluye devolución mala) −${formatoCartones(salidaNetaRuta, "0")}${devolucionMalaTiqueteHoy > 0 ? ` · devuelto malo cargado a ruta −${formatoCartones(devolucionMalaTiqueteHoy, "0")}` : ""}${usosTiquetesSinRutaGuardadaHoy > 0 ? ` · tiquetes reutilizados sin salida guardada −${formatoCartones(usosTiquetesSinRutaGuardadaHoy, "0")}` : ""}${otrasSalidasBodega > 0 ? ` + otras ${formatoCartones(otrasSalidasBodega, "0")}` : ""}`} />
+              <KPI etiqueta="Entradas (+)" valor={formatoCartones(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta + Math.max(0, impactoTiquetesHoy))} unidad="cart" tono="ok" sub={`Producido ${formatoCartones(producidoHoyCart, "0")}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${formatoCartones(movBodega.comprado, "0")}` : ""}${devolucionNetaRuta > 0 ? ` · devolución manual +${formatoCartones(devolucionNetaRuta, "0")}` : ""}${impactoTiquetesHoy > 0 ? ` · devoluciones buenas +${formatoCartones(impactoTiquetesHoy, "0")}` : ""}`} />
+              <KPI etiqueta="Salidas (−)" valor={formatoCartones(salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy))} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy) > 0 ? "alerta" : undefined} sub={`Ruta (incluye devolución mala) −${formatoCartones(salidaNetaRuta, "0")}${devolucionMalaTiqueteHoy > 0 ? ` · devueltos malos cargados a ruta −${formatoCartones(devolucionMalaTiqueteHoy, "0")}` : ""}${usosTiquetesSinRutaGuardadaHoy > 0 ? ` · tiquetes reutilizados sin salida guardada −${formatoCartones(usosTiquetesSinRutaGuardadaHoy, "0")}` : ""}${otrasSalidasBodega > 0 ? ` + otras ${formatoCartones(otrasSalidasBodega, "0")}` : ""}`} />
               <KPI etiqueta="Saldo proyectado" valor={formatoCartones(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : ajusteHistoricoBodega ? `= inicial + entradas − salidas · reconciliación histórica ${ajusteHistoricoBodega > 0 ? "+" : ""}${formatoCartones(ajusteHistoricoBodega, "0")} cart` : "= inicial + entradas − salidas"} />
             </div>
 
@@ -6290,9 +6352,10 @@ export default function App({ onCerrarSesion }) {
             )}
 
             {(subBodega === "ruta" || subBodega === "todo") && (
-            <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Los cartones reutilizados se suman a la salida de su ruta; registra cada devolución buena y mala juntas en el kardex de tiquetes.">
+            <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Los cartones reutilizados se suman a la salida de su ruta; registra juntas las devoluciones buenas y malas, con o sin tiquete físico.">
               {repartos.map((r, i) => {
-                const neto = rutaNetaBodega([r]);
+                const idRutaActual = idRepartoBodega(idMovimientoBodegaActual, r, i);
+                const neto = rutaNetaBodega([r]) + cartonesMalosSinTiqueteEnRuta(devolucionesActivasSinTiquete, idMovimientoBodegaActual, idRutaActual);
                 const impactoRutaRepartidor = presentacionRutaNeta(neto);
                 return (
                   <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: i === 0 ? `1px solid ${C.borde}` : "none" }}>
@@ -6453,8 +6516,8 @@ export default function App({ onCerrarSesion }) {
                           {usosRutaActual.some(uso => idsConfirmados.has(String(uso.operacionId || uso.operacion_id || ""))) && <div role="status" style={{ marginTop: 6, padding: 8, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 11.5 }}>
                             Los tiquetes devueltos ya consumidos quedan asociados a esta ruta y protegidos en el historial.
                           </div>}
-                          {Number(r.devBueno || 0) > 0 && <div role="alert" style={{ marginTop: 6, padding: 9, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 12, fontWeight: 700 }}>
-                            ⚠ Esta devolución buena ({formatoCartones(r.devBueno)} cartones) no tiene tiquete. Regístrala con su tiquete físico para que quede disponible en el inventario.
+                          {(Number(r.devBueno || 0) > 0 || Number(r.devMalo || 0) > 0) && <div role="status" style={{ marginTop: 6, padding: 9, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 12, fontWeight: 700 }}>
+                            ℹ Devolución histórica sin tiquete: {formatoCartones(r.devBueno, "0")} buenos y {formatoCartones(r.devMalo, "0")} malos. Se conserva con su saldo original y no crea un tiquete reutilizable.
                           </div>}
                         </div>
                       );
@@ -6476,12 +6539,16 @@ export default function App({ onCerrarSesion }) {
                 fecha={fechaBodega}
                 tiquetes={tiquetesDevolucion}
                 movimientos={movimientosTiquetesDevolucion}
+                movimientosBodega={bodegaMovs}
+                devolucionesSinTiquete={devolucionesSinTiquete}
                 rutasOrigen={rutasOrigenTiquetes}
                 rutasDetalle={rutasFormularioTiquetes}
                 permitirEscritura={["admin", "encargado", "bodega"].includes(miRol)}
                 errorCarga={errorTiquetesDevolucion}
                 ocupado={cargandoFondo || guardando}
                 onRegistrar={registrarDevolucionTiquete}
+                onRegistrarSinTiquete={registrarDevolucionSinTiquete}
+                onQuitarSinTiquete={id => editarDevolucionesSinTiquete(devolucionesSinTiquete.filter(devolucion => String(devolucion.id) !== String(id)))}
                 onCorregir={corregirDevolucionTiquete}
               />
               <button onClick={() => editarRepartosBodega([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
@@ -6512,7 +6579,7 @@ export default function App({ onCerrarSesion }) {
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del día (=)</span><b>{f2Dec(saldoBase)}</b></div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Huevo producido (+)</span><b>{f2Dec(producidoHoyCart)}</b></div>
                 {Number(movBodega.comprado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Comprado (+)</span><b>{Number(movBodega.comprado).toFixed(1)}</b></div>}
-                {impactoTiquetesHoy !== 0 && <div style={{ display: "flex", justifyContent: "space-between", color: impactoTiquetesHoy > 0 ? C.verde : C.alerta }}><span>Movimiento neto de tiquetes (buenos, malos o usos) ({impactoTiquetesHoy > 0 ? "+" : "−"})</span><b>{formatoCartones(Math.abs(impactoTiquetesHoy), "0")}</b></div>}
+                {impactoTiquetesHoy !== 0 && <div style={{ display: "flex", justifyContent: "space-between", color: impactoTiquetesHoy > 0 ? C.verde : C.alerta }}><span>Movimiento por devoluciones y tiquetes ({impactoTiquetesHoy > 0 ? "+" : "−"})</span><b>{formatoCartones(Math.abs(impactoTiquetesHoy), "0")}</b></div>}
                 <div style={{ display: "flex", justifyContent: "space-between", color: impactoRuta.tipo === "devolucion" ? C.verde : C.alerta }}><span>{impactoRuta.etiqueta} ({impactoRuta.signo})</span><b>{f2Dec(impactoRuta.cantidad ?? 0)}</b></div>
                 {Number(movBodega.vendGranja || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Vendido en granja (−)</span><b>{Number(movBodega.vendGranja).toFixed(1)}</b></div>}
                 {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (−)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}

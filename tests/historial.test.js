@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega } from "../src/historial.js";
+import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta } from "../src/historial.js";
 
 test("el período filtra D/M/A e ISO sin confundir años y permite ver todo", () => {
   const items = [{ fecha: "25/09/2025" }, { fecha: "01/09/2026" }, { fecha: "2026-09-26" }, { fecha: "27/09/2026" }];
@@ -83,6 +83,30 @@ test("la devolución mala se imputa a la ruta de origen y los buenos entran en l
   assert.equal(porFecha["2026-10-11"].saldoFinal, 95);
   assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 13);
   assert.equal(porFecha["2026-10-12"].saldoFinal, 108);
+});
+
+test("las nuevas devoluciones sin tiquete suman los buenos al recibir y cargan los malos a la ruta origen", () => {
+  const origen = {
+    id: "b-11", fecha: "11/10/2026", producido: 0, saldoFinal: 100,
+    repartos: [{ id: "r-1", nombre: "Bryan", salida: 100 }],
+  };
+  const recepcion = {
+    id: "b-12", fecha: "12/10/2026", producido: 0, repartos: [],
+    devolucionesSinTiquete: [{
+      id: "sin-tiq-1", fechaRecepcion: "2026-10-12", fechaRutaOrigen: "2026-10-11",
+      rutaMovId: "b-11", rutaId: "r-1", repartidor: "Bryan", cartonesBuenos: 13, cartonesMalos: 5,
+    }],
+  };
+  const antes = structuredClone([origen, recepcion]);
+  const reconstruidos = reconstruirBodega([origen, recepcion], 200, "2026-10-11");
+  const porFecha = Object.fromEntries(reconstruidos.map(m => [fechaHistorialISO(m.fecha), m]));
+
+  assert.equal(porFecha["2026-10-11"].rutaNeta, 105);
+  assert.equal(porFecha["2026-10-11"].saldoFinal, 95);
+  assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 13);
+  assert.equal(porFecha["2026-10-12"].saldoFinal, 108);
+  assert.deepEqual([origen, recepcion], antes, "la reconstrucción solo calcula; no modifica registros originales");
+  assert.equal(cartonesMalosSinTiqueteEnRuta(devolucionesSinTiqueteDeMovimiento([recepcion]), "b-11", "r-1"), 5);
 });
 
 test("reutilizar un tiquete se suma a la ruta sin duplicar el descuento del kardex", () => {

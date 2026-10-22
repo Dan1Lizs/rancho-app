@@ -163,3 +163,14 @@ export function ultimasRutasElegibles(rutas = [], fechaSeleccionada, limite = 4)
       || String(a.repartidor || "").localeCompare(String(b.repartidor || ""), "es"))
     .slice(0, Math.max(0, Number(limite) || 0));
 }
+
+export function rutaMismoDiaPorRepartidor(rutas = [], fechaSeleccionada, repartidor) {
+  const fecha = fechaISODeTiquete(fechaSeleccionada);
+  const nombre = String(repartidor || "").trim().toLocaleLowerCase("es");
+  if (!fecha || !nombre) return null;
+  const coincidencias = (Array.isArray(rutas) ? rutas : []).filter(ruta =>
+    fechaISODeTiquete(ruta.fecha) === fecha
+      && String(ruta.repartidor || "").trim().toLocaleLowerCase("es") === nombre
+  );
+  return coincidencias.length === 1 ? coincidencias[0] : null;
+}
