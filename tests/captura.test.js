@@ -25,3 +25,8 @@ test("una coma decimal no se interpreta como separador de columna", () => {
   assert.equal(fila.p, 22.8);
   assert.equal(fila.valido, true);
 });
+
+test("el pegado masivo admite cartones enteros o medios, pero rechaza fracciones distintas", () => {
+  const filas = parsearTiquetesPegados("201 7 15\n202 4,5 9\n203 7,25 15");
+  assert.deepEqual(filas.map((fila) => fila.valido), [true, true, false]);
+});

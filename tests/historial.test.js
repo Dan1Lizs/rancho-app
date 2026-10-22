@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarHistorial, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega } from "../src/historial.js";
+import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega } from "../src/historial.js";
 
 test("el período filtra D/M/A e ISO sin confundir años y permite ver todo", () => {
   const items = [{ fecha: "25/09/2025" }, { fecha: "01/09/2026" }, { fecha: "2026-09-26" }, { fecha: "27/09/2026" }];
@@ -50,6 +50,59 @@ test("la devolución mala aumenta la salida proyectada; la buena sí regresa al 
   ], 100, "2026-10-01");
   assert.equal(movimiento.rutaNeta, 9);
   assert.equal(movimiento.saldoFinal, 91);
+});
+
+test("las devoluciones por tiquete entran el día recibido y el uso parcial resta en su propio día", () => {
+  const movimientosTiquetes = [
+    { fecha: "2026-10-02", tipo: "devolucion", cartones_delta: 9 },
+    { fecha: "2026-10-03", tipo: "uso", cartones_delta: -4 },
+  ];
+  const reconstruidos = reconstruirBodega([
+    { id: "b-01", fecha: "01/10/2026", producido: 0, repartos: [] },
+    { id: "b-03", fecha: "03/10/2026", producido: 2, repartos: [] },
+  ], 100, "2026-10-01", movimientosTiquetes);
+  const porFecha = Object.fromEntries(reconstruidos.map(m => [fechaHistorialISO(m.fecha), m]));
+  assert.equal(porFecha["2026-10-02"].movimientoSoloTiquetes, true);
+  assert.equal(porFecha["2026-10-02"].saldoFinal, 109);
+  assert.equal(porFecha["2026-10-03"].movimientoTiquetes, -4);
+  assert.equal(porFecha["2026-10-03"].saldoFinal, 107);
+});
+
+test("la devolución mala se imputa a la ruta de origen y los buenos entran en la fecha real", () => {
+  const movimientosTiquetes = [
+    { tipo: "devolucion_mala", fecha: "2026-10-11", fecha_recepcion: "2026-10-12", cartones_delta: -5, ruta_mov_id: "b-11", ruta_id: "r-1" },
+    { tipo: "devolucion", fecha: "2026-10-12", fecha_recepcion: "2026-10-12", cartones_delta: 13, ruta_mov_id: "b-11", ruta_id: "r-1" },
+  ];
+  const reconstruidos = reconstruirBodega([
+    { id: "b-11", fecha: "11/10/2026", producido: 0, repartos: [{ id: "r-1", salida: 100 }] },
+    { id: "b-12", fecha: "12/10/2026", producido: 0, repartos: [] },
+  ], 200, "2026-10-11", movimientosTiquetes);
+  const porFecha = Object.fromEntries(reconstruidos.map(m => [fechaHistorialISO(m.fecha), m]));
+  assert.equal(porFecha["2026-10-11"].movimientoTiquetes, -5);
+  assert.equal(porFecha["2026-10-11"].saldoFinal, 95);
+  assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 13);
+  assert.equal(porFecha["2026-10-12"].saldoFinal, 108);
+});
+
+test("reutilizar un tiquete se suma a la ruta sin duplicar el descuento del kardex", () => {
+  const reconstruidos = reconstruirBodega([
+    { id: "b-01", fecha: "01/10/2026", producido: 0, repartos: [{ id: "r-1", salida: 10 }] },
+  ], 100, "2026-10-01", [
+    { id: "m-1", operacion_id: "uso-1", tipo: "uso", fecha: "2026-10-01", cartones_delta: -5, ruta_mov_id: "b-01", ruta_id: "r-1" },
+  ]);
+  const [movimiento] = reconstruidos;
+  assert.equal(movimiento.repartos[0].tiquetesDevueltos[0].cartones, 5);
+  assert.equal(movimiento.rutaNeta, 15);
+  assert.equal(movimiento.movimientoTiquetes, 0);
+  assert.equal(movimiento.saldoFinal, 85);
+});
+
+test("la producción y el saldo de Bodega conservan el medio cartón", () => {
+  const [movimiento] = reconstruirBodega([
+    { id: "b-01", fecha: "01/10/2026", producido: 148.5, repartos: [] },
+  ], 0, "2026-10-01");
+  assert.equal(movimiento.producido, 148.5);
+  assert.equal(movimiento.saldoFinal, 148.5);
 });
 
 test("recalcula el historial, conserva saltos antiguos sin conteo y es idempotente", () => {

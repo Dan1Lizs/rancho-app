@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { leer, escribir, leerBodegaActual, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirMovimientoPlanta } from "./storage";
+import { leer, escribir, leerBodegaActual, leerTiquetesDevolucionRuta, registrarTiqueteDevolucionRuta, usarTiqueteDevolucionRuta, corregirTiqueteDevolucionRuta, agregarPesajesFaltantes, actualizarPesajePorId, eliminarPesajePorId, agregarRespaldoFaltante, detectarFechasRespaldo, reemplazarFechasRespaldo, eliminarLotePorId, leerCorreccionesProduccion, corregirProduccion, corregirMovimientoPlanta } from "./storage";
 import { cargarBaseConReintentos } from "./cargaInicial";
 import { REFERENCIAS_RAZAS, claveRaza, referenciaRaza, valorCentral } from "./referenciasRazas";
 import { extraerPesajesExcel, fechaPesajeISO, clavePesaje, pesoEnGramos } from "./bienestarImport";
@@ -33,6 +33,8 @@ import { calcularSaldoAlimentoComprado, disponibilidadAlimentoComprado, esConsum
 import { nombreColeccionRespaldo, resumenArchivoRespaldo } from "./respaldo.js";
 import { analizarRuta, serializarRuta } from "./rutas.js";
 import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, loteEnLevante, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
+import { asociarUsosDeTiquetesARepartos, cartonesUsoEnRuta, esCantidadMediaCarton, formatoCartones, impactoTiquetesEnFecha, idOperacionTiquete, idRepartoBodega, rutasBodegaParaTiquetes } from "./features/bodega/tiquetesDevolucion.js";
+import { TiquetesDevolucionBodega } from "./features/bodega/TiquetesDevolucionBodega.jsx";
 import { AlimentoCompradoForm } from "./features/formulas/AlimentoCompradoForm";
 import { AlimentoCompradoPlanta } from "./features/planta/AlimentoCompradoPlanta";
 import "./v10.css";
@@ -53,7 +55,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.1.1";
+const VERSION_APP = "10.2.0";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -534,6 +536,10 @@ export default function App({ onCerrarSesion }) {
   const [medicaciones, setMedicaciones] = useState([]);
   const [fumigaciones, setFumigaciones] = useState([]);
   const [bodegaMovs, setBodegaMovs] = useState([]);
+  const [tiquetesDevolucion, setTiquetesDevolucion] = useState([]);
+  const [movimientosTiquetesDevolucion, setMovimientosTiquetesDevolucion] = useState([]);
+  const [errorTiquetesDevolucion, setErrorTiquetesDevolucion] = useState("");
+  const refrescarTiquetesRef = useRef(null);
   const [plantaMovs, setPlantaMovs] = useState([]);
   const [filtroPlanta, setFiltroPlanta] = useState(() => ({ ...filtroPlantaInicial(), categoria: valorRutaInicial("planta", "categoria", ""), formula: valorRutaInicial("planta", "formula", "") }));
   const [editarDetallePlanta, setEditarDetallePlanta] = useState(null);
@@ -822,7 +828,7 @@ export default function App({ onCerrarSesion }) {
     }, preferencias.borradores.intervaloSegundos * 1000);
     return () => clearTimeout(borradorAutoTimerRef.current);
   }, [capturas, notaDia, fechaCaptura, preferencias.borradores]);
-  
+
   const [fNecFotos, setFNecFotos] = useState([]);
   const [fotosVista, setFotosVista] = useState({});
   const [printDoc, setPrintDoc] = useState(null);
@@ -993,6 +999,17 @@ export default function App({ onCerrarSesion }) {
         leer(K.advAjustes, []), leer(K.nombresUsuarios, {}), leer(K.alimentoCompradoCfg, { cerrado: false, historial: [] }),
       ]);
       const ps = ps0;
+      let movimientosTiquetesActuales = movimientosTiquetesDevolucion;
+      try {
+        const datosTiquetes = await leerTiquetesDevolucionRuta();
+        movimientosTiquetesActuales = datosTiquetes.movimientos || [];
+        setTiquetesDevolucion(datosTiquetes.tiquetes || []);
+        setMovimientosTiquetesDevolucion(movimientosTiquetesActuales);
+        setErrorTiquetesDevolucion("");
+      } catch (error) {
+        console.error("Lectura de tiquetes devueltos:", error);
+        setErrorTiquetesDevolucion(error?.message || "No se pudo leer el kardex de tiquetes devueltos.");
+      }
       const pv = (pv0 && pv0.length) ? pv0 : (siembras.push(escribir(K.planVac, PLAN_VACUNAS_ESTANDAR)), PLAN_VACUNAS_ESTANDAR);
       let rc = rc0 ?? (siembras.push(escribir(K.recetas, SEED_RECETAS)), SEED_RECETAS);
       rc = { ...rc, productosComprados: Array.isArray(rc.productosComprados) ? rc.productosComprados : [] };
@@ -1018,7 +1035,8 @@ export default function App({ onCerrarSesion }) {
       if (mc) setMpConfig({ cobertura: 11, minKg1: 5, ganado: GANADO_SEMILLA, formulaLote: {}, ...mc });
       setMpPedidos(ordenarPorFecha(pedidos)); setRecetas(rc); setMpCat(mcat); setInsumos(ins); setInsumosMovs(ordenarPorFecha(insMovs));
       setPesajes(ordenarPorFecha(ps)); setMedicaciones(ordenarPorFecha(ms)); setFumigaciones(ordenarPorFecha(fs));
-      setBodegaMovs(reconstruirBodega(mv, bcfg?.inicialCart, bcfg?.inicialFecha)); setPlantaMovs(ordenarPorFecha(pl)); setFacturas(ordenarPorFecha(fa)); setBitacora(ordenarPorFecha(bi)); setCostos(cs);
+      const movimientosBodegaCalculados = reconstruirBodega(mv, bcfg?.inicialCart, bcfg?.inicialFecha, movimientosTiquetesActuales);
+      setBodegaMovs(movimientosBodegaCalculados); setPlantaMovs(ordenarPorFecha(pl)); setFacturas(ordenarPorFecha(fa)); setBitacora(ordenarPorFecha(bi)); setCostos(cs);
       setVacunas(ordenarPorFecha(va)); setEnfermedades(ordenarPorFecha(en)); setNecropsias(ordenarPorFecha(ne)); setPlanVac(pv);
       setNucleoInv(nuc0 || {});
       if (cxp0) setCxp({ facturas: [], pagos: [], notas: [], ...cxp0 });
@@ -1053,8 +1071,9 @@ export default function App({ onCerrarSesion }) {
         }
       }
       if (!silencioso) {
-        const elegido = mv.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current && String(m.id) === String(movBodegaIdRef.current))
-          || mv.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current);
+        const movimientosRealesBodega = movimientosBodegaCalculados.filter(m => !m.movimientoSoloTiquetes);
+        const elegido = movimientosRealesBodega.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current && String(m.id) === String(movBodegaIdRef.current))
+          || movimientosRealesBodega.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current);
         const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
         const pasosBase = { salidas: false, devoluciones: false, conteo: false };
         movBodegaIdRef.current = elegido?.id ?? null;
@@ -1065,12 +1084,14 @@ export default function App({ onCerrarSesion }) {
         setMovBodegaId(elegido?.id ?? null);
         if (elegido) {
           setMovBodega({ comprado: elegido.comprado || "", vendGranja: elegido.vendGranja || "", destruido: elegido.destruido || "", regalado: elegido.regalado || "" });
-          setRepartos((elegido.repartos?.length ? elegido.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
+          const repartosCargados = (elegido.repartos?.length ? elegido.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r }));
+          setRepartos(asociarUsosDeTiquetesARepartos(elegido.id, repartosCargados, movimientosTiquetesActuales));
           setObsInv(elegido.obs || "");
           setAjusteBodega(elegido.ajusteConteo == null ? "" : String(elegido.ajusteConteo));
         } else {
           setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
-          setRepartos(repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" })));
+          const repartosCargados = repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }));
+          setRepartos(asociarUsosDeTiquetesARepartos(`bodega-${fechaBodegaRef.current}`, repartosCargados, movimientosTiquetesActuales));
           setObsInv("");
           setAjusteBodega("");
         }
@@ -1413,6 +1434,15 @@ export default function App({ onCerrarSesion }) {
   }));
   const producidoHoyCart = producidoPorGalpon.reduce((s, g) => s + g.cartones, 0);
   const rutaNeta = +rutaNetaBodega(repartos).toFixed(1);
+  const operacionesUsoEnRuta = repartos.flatMap(reparto => reparto.tiquetesDevueltos || []).map(uso => uso.operacionId || uso.operacion_id).filter(Boolean);
+  const movimientosTiquetesFechaBodega = movimientosTiquetesDevolucion.filter(movimiento => fechaHistorialISO(movimiento.fecha) === fechaBodega);
+  const devolucionMalaTiqueteHoy = movimientosTiquetesFechaBodega.filter(movimiento => movimiento.tipo === "devolucion_mala")
+    .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0);
+  const operacionesUsoAsociadas = new Set(operacionesUsoEnRuta.map(String));
+  const usosTiquetesSinRutaGuardadaHoy = movimientosTiquetesFechaBodega
+    .filter(movimiento => movimiento.tipo === "uso" && !operacionesUsoAsociadas.has(String(movimiento.operacion_id || movimiento.id)))
+    .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0);
+  const impactoTiquetesHoy = impactoTiquetesEnFecha(movimientosTiquetesDevolucion, fechaBodega, operacionesUsoEnRuta);
   const impactoRuta = presentacionRutaNeta(rutaNeta);
   const devolucionNetaRuta = impactoRuta.tipo === "devolucion" ? impactoRuta.cantidad : 0;
   const salidaNetaRuta = impactoRuta.tipo === "salida" ? impactoRuta.cantidad : 0;
@@ -1422,11 +1452,27 @@ export default function App({ onCerrarSesion }) {
     if (!previos.length) return Number(bodegaCfg.inicialCart || 0);
     return previos.reduce((mejor, m) => (!mejor || aDate(m.fecha) > aDate(mejor.fecha) ? m : mejor), null).saldoFinal;
   })();
+  const idMovimientoBodegaActual = String(movBodegaIdRef.current || `bodega-${fechaBodega}`);
+  const rutasRegistradasTiquetes = rutasBodegaParaTiquetes(bodegaMovs).filter(ruta => ruta.movimientoId !== idMovimientoBodegaActual);
+  const rutasFormularioTiquetes = repartos.map((reparto, indice) => ({
+    movimientoId: idMovimientoBodegaActual,
+    rutaId: idRepartoBodega(idMovimientoBodegaActual, reparto, indice),
+    fecha: fechaBodega,
+    repartidor: String(reparto.nombre || "").trim(),
+    salida: Number(reparto.salida || 0) + cartonesUsoEnRuta(reparto),
+    cartonesReutilizados: cartonesUsoEnRuta(reparto),
+  }));
+  const rutasOrigenTiquetes = [
+    ...rutasRegistradasTiquetes,
+    ...rutasFormularioTiquetes.filter(ruta => ruta.repartidor && ruta.salida > 0),
+  ].filter(ruta => ruta.fecha <= fechaBodega);
+  const rutasDestinoTiquetes = rutasFormularioTiquetes.filter(ruta => ruta.repartidor);
   const guardarCfgBodega = async (cfg) => { if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; } setBodegaCfg(cfg); await escribir(K.bodegaCfg, cfg); };
   const cambiarFechaBodega = (iso, id = null) => {
     setFechaBodega(iso);
     fechaBodegaRef.current = iso;
-    const mov = id != null ? bodegaMovs.find(m => String(m.id) === String(id)) : bodegaMovs.find(m => fechaHistorialISO(m.fecha) === iso);
+    const movimientoEncontrado = id != null ? bodegaMovs.find(m => String(m.id) === String(id)) : bodegaMovs.find(m => fechaHistorialISO(m.fecha) === iso);
+    const mov = movimientoEncontrado?.movimientoSoloTiquetes ? null : movimientoEncontrado;
     const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
     const pasosBase = { salidas: false, devoluciones: false, conteo: false };
     setMovBodegaId(mov?.id ?? null);
@@ -1438,12 +1484,14 @@ export default function App({ onCerrarSesion }) {
     setMotivoEdicionBodega("");
     if (mov) {
       setMovBodega({ comprado: mov.comprado || "", vendGranja: mov.vendGranja || "", destruido: mov.destruido || "", regalado: mov.regalado || "" });
-      setRepartos((mov.repartos?.length ? mov.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r })));
+      const repartosCargados = (mov.repartos?.length ? mov.repartos : repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }))).map(r => ({ ...r }));
+      setRepartos(asociarUsosDeTiquetesARepartos(mov.id, repartosCargados, movimientosTiquetesDevolucion));
       setObsInv(mov.obs || "");
       setAjusteBodega(mov.ajusteConteo == null ? "" : String(mov.ajusteConteo));
     } else {
       setMovBodega({ comprado: "", vendGranja: "", destruido: "", regalado: "" });
-      setRepartos(repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" })));
+      const repartosCargados = repartidoresBase.map(nombre => ({ nombre, salida: "", devBueno: "", devMalo: "" }));
+      setRepartos(asociarUsosDeTiquetesARepartos(`bodega-${iso}`, repartosCargados, movimientosTiquetesDevolucion));
       setObsInv("");
       setAjusteBodega("");
     }
@@ -1513,17 +1561,101 @@ export default function App({ onCerrarSesion }) {
   const ajusteHistoricoBodega = Number(bodegaMovs.find(m => String(m.id) === String(movBodegaId))?.ajusteHistoricoImplicito || 0);
   const saldoCalculado = saldoBase + Number(movBodega.comprado || 0) + producidoHoyCart
     - rutaNeta - Number(movBodega.vendGranja || 0) - Number(movBodega.destruido || 0) - Number(movBodega.regalado || 0)
-    + ajusteHistoricoBodega;
+    + ajusteHistoricoBodega + impactoTiquetesHoy;
   const hayAjuste = ajusteBodega !== "" && !isNaN(Number(ajusteBodega));
   const saldoFinal = hayAjuste ? Number(ajusteBodega) : saldoCalculado;
   const difAjuste = hayAjuste ? +(Number(ajusteBodega) - saldoCalculado).toFixed(1) : 0;
 
+  const refrescarTiquetesDevolucion = async () => {
+    const datos = await leerTiquetesDevolucionRuta();
+    setTiquetesDevolucion(datos.tiquetes || []);
+    setMovimientosTiquetesDevolucion(datos.movimientos || []);
+    setErrorTiquetesDevolucion("");
+    const idMovimientoFormulario = String(movBodegaIdRef.current || `bodega-${fechaBodegaRef.current || fechaBodega}`);
+    setRepartos(actuales => asociarUsosDeTiquetesARepartos(idMovimientoFormulario, actuales, datos.movimientos || []));
+    const movimientosGuardados = await leerBodegaActual();
+    if (movimientosGuardados) {
+      setBodegaMovs(reconstruirBodega(movimientosGuardados, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, datos.movimientos || []));
+    }
+  };
+  refrescarTiquetesRef.current = refrescarTiquetesDevolucion;
+
+  useEffect(() => {
+    let temporizadorTiquetes = null;
+    const refrescarLigero = () => {
+      clearTimeout(temporizadorTiquetes);
+      temporizadorTiquetes = setTimeout(() => {
+        refrescarTiquetesRef.current?.().catch(error => {
+          console.error("Sincronización de tiquetes devueltos:", error);
+          setErrorTiquetesDevolucion(error?.message || "No se pudo sincronizar el kardex de tiquetes devueltos.");
+        });
+      }, 250);
+    };
+    const canalTiquetes = supabase.channel("bodega-tiquetes-devueltos-en-vivo")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bodega_tiquetes_devolucion" }, refrescarLigero)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bodega_tiquetes_devolucion_movs" }, refrescarLigero)
+      .subscribe();
+    return () => {
+      clearTimeout(temporizadorTiquetes);
+      supabase.removeChannel(canalTiquetes);
+    };
+  }, []);
+
+  const registrarDevolucionTiquete = async ({ numero, cartones, cartonesMalos, ruta }) => {
+    await registrarTiqueteDevolucionRuta({
+      id: idOperacionTiquete(), numero, cartones, cartonesMalos,
+      fechaRecepcion: fechaBodega, fechaRutaOrigen: ruta.fecha,
+      rutaMovId: ruta.movimientoId, rutaId: ruta.rutaId, repartidor: ruta.repartidor,
+    });
+    await refrescarTiquetesDevolucion();
+  };
+
+  const usarDevolucionTiquete = async ({ numero, cartones, ruta }) => {
+    const operacionId = idOperacionTiquete();
+    await usarTiqueteDevolucionRuta({
+      id: operacionId, numero, cartones,
+      fecha: fechaBodega, fechaRuta: ruta.fecha,
+      rutaMovId: ruta.movimientoId, rutaId: ruta.rutaId, repartidor: ruta.repartidor,
+    });
+    setRepartos(actuales => actuales.map((reparto, indice) => {
+      const rutaId = idRepartoBodega(idMovimientoBodegaActual, reparto, indice);
+      if (String(rutaId) !== String(ruta.rutaId)) return reparto;
+      const usos = Array.isArray(reparto.tiquetesDevueltos) ? reparto.tiquetesDevueltos : [];
+      if (usos.some(uso => String(uso.operacionId || uso.operacion_id) === String(operacionId))) return reparto;
+      return {
+        ...reparto,
+        id: ruta.rutaId,
+        tiquetesDevueltos: [...usos, { operacionId, numero, cartones }],
+      };
+    }));
+    await refrescarTiquetesDevolucion();
+    return operacionId;
+  };
+
+  const corregirDevolucionTiquete = async ({ tiquete, numero, cartones, cartonesMalos, motivo }) => {
+    await corregirTiqueteDevolucionRuta({
+      id: tiquete.id, operacionId: idOperacionTiquete(), numero, cartones, cartonesMalos,
+      fecha: fechaBodega, motivo,
+    });
+    await refrescarTiquetesDevolucion();
+  };
+
   const guardarBodega = async () => {
     if (cargandoFondo || guardando) { avisar("⏳ Sincronizando datos — intenta en unos segundos"); return; }
+    const cantidadesBodega = [
+      ["huevo comprado", movBodega.comprado], ["vendido en granja", movBodega.vendGranja],
+      ["destruido", movBodega.destruido], ["regalado", movBodega.regalado], ["conteo físico", ajusteBodega],
+      ...repartos.flatMap(reparto => [[`salida de ${reparto.nombre || "ruta"}`, reparto.salida],
+        [`devolución buena de ${reparto.nombre || "ruta"}`, reparto.devBueno],
+        [`devolución mala de ${reparto.nombre || "ruta"}`, reparto.devMalo]]),
+    ];
+    const cantidadInvalida = cantidadesBodega.find(([, valor]) => valor !== "" && valor != null && !esCantidadMediaCarton(valor));
+    if (cantidadInvalida) { avisar(`⚠ ${cantidadInvalida[0]}: usa cartones enteros o medios cartones (.5).`); return; }
     setGuardando(true);
     try {
-    const actuales = await leerBodegaActual();
-    if (!actuales) { avisar("⚠ No se pudo consultar la bodega actual. No se guardó ningún cambio."); return; }
+    const actualesRemotos = await leerBodegaActual();
+    if (!actualesRemotos) { avisar("⚠ No se pudo consultar la bodega actual. No se guardó ningún cambio."); return; }
+    const actuales = reconstruirBodega(actualesRemotos.filter(m => !m.movimientoSoloTiquetes), bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion).filter(m => !m.movimientoSoloTiquetes);
     const { delDia, elegido, id: idMovimiento } = elegirMovimientoBodega(actuales, fechaBodega, movBodegaIdRef.current);
     if (movBodegaIdRef.current != null && !elegido) { avisar("⚠ Este registro cambió en otro dispositivo. Actualiza y vuelve a elegirlo."); return; }
     if (elegido && movBodegaOriginalRef.current && JSON.stringify(snapshotBodega(elegido)) !== JSON.stringify(movBodegaOriginalRef.current)) { avisar("⚠ El movimiento fue cambiado en otro dispositivo. Actualiza antes de editarlo."); return; }
@@ -1539,7 +1671,7 @@ export default function App({ onCerrarSesion }) {
       fecha: fechaB, producido: +producidoHoyCart.toFixed(1),
       comprado: Number(movBodega.comprado || 0), vendGranja: Number(movBodega.vendGranja || 0),
       destruido: Number(movBodega.destruido || 0), regalado: Number(movBodega.regalado || 0),
-      repartos: repartos.map(r => ({ ...r })), rutaNeta: +rutaNeta.toFixed(1),
+      repartos: repartos.map((r, indice) => ({ ...r, id: idRepartoBodega(idMovimiento, r, indice) })), rutaNeta: +rutaNeta.toFixed(1),
       obs: obsInv, saldoFinal: +saldoFinal.toFixed(1),
       ajusteConteo: hayAjuste ? Number(ajusteBodega) : null, difAjuste: hayAjuste ? difAjuste : null,
     };
@@ -1551,7 +1683,7 @@ export default function App({ onCerrarSesion }) {
         nuevo: snapshotBodega(nuevoMov),
       }];
     }
-    const recalculados = reconstruirBodega([nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)], bodegaCfg.inicialCart, bodegaCfg.inicialFecha).map(m => {
+    const recalculados = reconstruirBodega([nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)], bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion).map(m => {
       if (m.ajusteConteo != null && !isNaN(Number(m.ajusteConteo))) {
         return { ...m, saldoFinal: Number(m.ajusteConteo) };
       }
@@ -1571,10 +1703,12 @@ export default function App({ onCerrarSesion }) {
         anterior: snapshotBodega(previo), nuevo: snapshotBodega(m), duplicadosRetirados: [],
       }] };
     });
-    if (await escribir(K.movs, nuevos)) {
-      setBodegaMovs(nuevos); setMovBodegaId(nuevoMov.id); movBodegaIdRef.current = nuevoMov.id;
-      movBodegaOriginalRef.current = snapshotBodega(nuevos.find(m => String(m.id) === String(nuevoMov.id)));
-      bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(nuevos.find(m => String(m.id) === String(nuevoMov.id)), bodegaCfg.repartidores, pasosBodega);
+    const movimientosBodegaPersistibles = nuevos.filter(m => !m.movimientoSoloTiquetes);
+    if (await escribir(K.movs, movimientosBodegaPersistibles)) {
+      const movimientosBodegaCalculados = reconstruirBodega(movimientosBodegaPersistibles, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion);
+      setBodegaMovs(movimientosBodegaCalculados); setMovBodegaId(nuevoMov.id); movBodegaIdRef.current = nuevoMov.id;
+      movBodegaOriginalRef.current = snapshotBodega(movimientosBodegaCalculados.find(m => String(m.id) === String(nuevoMov.id)));
+      bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(movimientosBodegaCalculados.find(m => String(m.id) === String(nuevoMov.id)), bodegaCfg.repartidores, pasosBodega);
       bodegaEditadaRef.current = false;
       setMotivoEdicionBodega("");
       setAjusteBodega(nuevoMov.ajusteConteo == null ? "" : String(nuevoMov.ajusteConteo));
@@ -1786,7 +1920,7 @@ export default function App({ onCerrarSesion }) {
     finally { setGuardando(false); }
   };
 
-  
+
   const guardarModificacionAjustePlanta = async () => {
     if (!editarAjustePlanta) return;
     const real = Number(editarAjustePlanta.nuevoSaldoReal);
@@ -4120,7 +4254,7 @@ export default function App({ onCerrarSesion }) {
                   <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                     <tbody>
                       <tr><td style={celda}>% de postura granja</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.postura == null ? "— · sin lotes elegibles" : `${dHoy.postura.toFixed(1)}%`}</td>
-                          <td style={celda}>Cartones producidos</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.cartones.toFixed(1)}</td></tr>
+                          <td style={celda}>Cartones producidos</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{formatoCartones(dHoy.cartones)}</td></tr>
                       <tr><td style={celda}>Consumo (g/ave)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.consumo.toFixed(0)}</td>
                           <td style={celda}>Peso prom. huevo</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pesoH ? dHoy.pesoH.toFixed(1) + " g" : "—"}</td></tr>
                       <tr><td style={celda}>% quebrado</td><td style={{ ...celda, fontWeight: 700, textAlign: "right" }}>{dHoy.pctQueb.toFixed(1)}%</td>
@@ -4218,7 +4352,7 @@ export default function App({ onCerrarSesion }) {
           const saldoPrevio = mov ? Number(movimientoPrevio?.saldoFinal ?? bodegaCfg.inicialCart ?? 0) : null;
           const impactoRuta = presentacionRutaNeta(mov?.rutaNeta);
           const fila = (nombre, val, signo) => (val != null && val !== 0) || signo === "=" ? (
-            <tr><td style={celda}>{nombre} ({signo})</td><td style={{ ...celda, fontWeight: signo === "=" ? 700 : 600, textAlign: "right" }}>{Number(val).toFixed(1)}</td></tr>
+            <tr><td style={celda}>{nombre} ({signo})</td><td style={{ ...celda, fontWeight: signo === "=" ? 700 : 600, textAlign: "right" }}>{formatoCartones(val)}</td></tr>
           ) : null;
           return (
             <>
@@ -4232,6 +4366,7 @@ export default function App({ onCerrarSesion }) {
                       {fila("Huevo producido", mov.producido, "+")}
                       {fila("Huevo comprado", mov.comprado, "+")}
                       {fila(impactoRuta.etiqueta, impactoRuta.cantidad, impactoRuta.signo)}
+                      {fila("Tiquetes devueltos / reutilizados", mov.movimientoTiquetes, Number(mov.movimientoTiquetes) >= 0 ? "+" : "−")}
                       {fila("Vendido en granja", mov.vendGranja, "−")}
                       {fila("Destruido / quebrado", mov.destruido, "−")}
                       {fila("Regalado", mov.regalado, "−")}
@@ -4244,21 +4379,35 @@ export default function App({ onCerrarSesion }) {
                     <>
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Detalle por repartidor</div>
                       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-                        <thead><tr><th style={th}>Repartidor</th><th style={th}>Salida</th><th style={th}>Dev. bueno</th><th style={th}>Dev. malo (−)</th><th style={th}>Impacto en saldo</th></tr></thead>
+                        <thead><tr><th style={th}>Repartidor</th><th style={th}>Salida normal</th><th style={th}>Reutilizados</th><th style={th}>Salida total</th><th style={th}>Dev. bueno</th><th style={th}>Dev. malo (−)</th><th style={th}>Impacto en saldo</th></tr></thead>
                         <tbody>
                           {mov.repartos.map((r, i) => (
                             <tr key={i}>
                               <td style={{ ...celda, fontWeight: 600 }}>{r.nombre}</td>
-                              <td style={celda}>{Number(r.salida || 0)}</td>
-                              <td style={celda}>{Number(r.devBueno || 0)}</td>
-                              <td style={celda}>{Number(r.devMalo || 0)}</td>
-                              <td style={{ ...celda, fontWeight: 700 }}>{rutaNetaBodega([r]).toFixed(1)}</td>
+                              <td style={celda}>{formatoCartones(r.salida, "0")}</td>
+                              <td style={celda}>{formatoCartones(cartonesUsoEnRuta(r), "0")}</td>
+                              <td style={{ ...celda, fontWeight: 700 }}>{formatoCartones(Number(r.salida || 0) + cartonesUsoEnRuta(r))}</td>
+                              <td style={celda}>{formatoCartones(r.devBueno, "0")}</td>
+                              <td style={celda}>{formatoCartones(r.devMalo, "0")}</td>
+                              <td style={{ ...celda, fontWeight: 700 }}>{formatoCartones(rutaNetaBodega([r]))}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </>
                   )}
+                  {movimientosTiquetesDevolucion.some(movimiento => fechaHistorialISO(movimiento.fecha) === fechaHistorialISO(mov.fecha)) && <>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Detalle de tiquetes devueltos y reutilizados</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                      <thead><tr><th style={th}>Movimiento</th><th style={th}>Tiquete</th><th style={th}>Ruta vinculada</th><th style={th}>Cartones</th></tr></thead>
+                      <tbody>{movimientosTiquetesDevolucion.filter(m => fechaHistorialISO(m.fecha) === fechaHistorialISO(mov.fecha)).map(m => <tr key={m.id}>
+                        <td style={celda}>{m.tipo === "devolucion" ? "Devolución recibida" : m.tipo === "uso" ? "Uso en ruta" : "Corrección"}</td>
+                        <td style={celda}>#{m.numero}</td>
+                        <td style={celda}>{String(m.fecha_ruta).split("-").reverse().join("/")} · {m.repartidor}</td>
+                        <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{Number(m.cartones_delta) > 0 ? "+" : ""}{f2Dec(m.cartones_delta)}</td>
+                      </tr>)}</tbody>
+                    </table>
+                  </>}
                   {mov.obs && <div style={{ fontSize: 12.5, marginBottom: 14 }}><b>Observaciones:</b> {mov.obs}</div>}
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Movimientos hasta esta fecha</div>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -4555,7 +4704,7 @@ export default function App({ onCerrarSesion }) {
 
   const tabsMovil = tabsVisibles;
 
-  
+
   return (
     <div className={`app-v10 v10-theme-${preferencias.tema} v10-density-${preferencias.densidad} v10-text-${preferencias.tamanoTexto}`} style={{ fontFamily: "'Inter', sans-serif", background: "var(--v10-bg, #F6F6F1)", minHeight: "100vh", color: "var(--v10-text, #1C1F1A)" }}>
       <style>{fuentes}</style>
@@ -5787,7 +5936,7 @@ export default function App({ onCerrarSesion }) {
             return <span style={{ color, fontWeight: 600 }}>{igual ? "=" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(dec)}${unidad}`}</span>;
           };
           const filas = [
-            { n: "Producción", v: `${dHoy.cartones.toFixed(1)} cart`, a: dAyer?.cartones, m: dFechaCercana?.cartones, hoy: dHoy.cartones, u: "" },
+            { n: "Producción", v: `${formatoCartones(dHoy.cartones)} cart`, a: dAyer?.cartones, m: dFechaCercana?.cartones, hoy: dHoy.cartones, u: "" },
             { n: "% Postura", v: dHoy.postura == null ? "—" : `${dHoy.postura.toFixed(1)}%`, a: dAyer?.postura, m: dFechaCercana?.postura, hoy: dHoy.postura, u: " pts" },
             { n: "Consumo", v: `${dHoy.consumo.toFixed(0)} g/ave`, a: dAyer?.consumo, m: dFechaCercana?.consumo, hoy: dHoy.consumo, u: " g", inv: true, dec: 0 },
             { n: "Conversión", v: dHoy.conv ? dHoy.conv.toFixed(2) : "—", a: dAyer?.conv, m: dFechaCercana?.conv, hoy: dHoy.conv, u: "", inv: true, dec: 2 },
@@ -5801,7 +5950,7 @@ export default function App({ onCerrarSesion }) {
               {verReporte("resumen") && <div style={{ background: C.verde, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 14 }}>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>Reporte del día · {fHoy}</div>
                 <div style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.6, opacity: 0.95 }}>
-                  Se produjeron <b>{dHoy.cartones.toFixed(1)} cartones</b>{dHoy.postura == null ? <>; no hay lotes elegibles para calcular postura por edad o estado</> : <> con postura de <b>{dHoy.postura.toFixed(1)}%</b></>}
+                  Se produjeron <b>{formatoCartones(dHoy.cartones)} cartones</b>{dHoy.postura == null ? <>; no hay lotes elegibles para calcular postura por edad o estado</> : <> con postura de <b>{dHoy.postura.toFixed(1)}%</b></>}
                   {dAyer?.postura != null && dHoy.postura != null && <> ({dHoy.postura >= dAyer.postura ? "▲" : "▼"} {Math.abs(dHoy.postura - dAyer.postura).toFixed(1)} pts vs ayer)</>},
                   {brechaGen != null && <> a <b style={{ color: "#F5B845" }}>{brechaGen.toFixed(1)} pts</b> de la meta genética ({metaGenetica.toFixed(1)}%).</>}
                   Mortalidad: <b>{dHoy.muertas}</b>. Quebrado: <b>{dHoy.pctQueb.toFixed(1)}%</b>. Concentrado en planta: <b>{saldoPlanta.toFixed(0)} kg</b>.
@@ -6030,9 +6179,9 @@ export default function App({ onCerrarSesion }) {
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
-              <KPI etiqueta="Entradas (+)" valor={f2Dec(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta)} unidad="cart" tono="ok" sub={`Producido ${producidoHoyCart.toFixed(1)}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${Number(movBodega.comprado).toFixed(1)}` : ""}${devolucionNetaRuta > 0 ? ` · devolución buena neta +${devolucionNetaRuta.toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Salidas (−)" valor={f2Dec(salidaNetaRuta + otrasSalidasBodega)} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega > 0 ? "alerta" : undefined} sub={`Ruta (incluye devolución mala) −${salidaNetaRuta.toFixed(1)}${otrasSalidasBodega > 0 ? ` + otras ${otrasSalidasBodega.toFixed(1)}` : ""}`} />
-              <KPI etiqueta="Saldo proyectado" valor={f2Dec(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : ajusteHistoricoBodega ? `= inicial + entradas − salidas · reconciliación histórica ${ajusteHistoricoBodega > 0 ? "+" : ""}${ajusteHistoricoBodega.toFixed(1)} cart` : "= inicial + entradas − salidas"} />
+              <KPI etiqueta="Entradas (+)" valor={formatoCartones(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta + Math.max(0, impactoTiquetesHoy))} unidad="cart" tono="ok" sub={`Producido ${formatoCartones(producidoHoyCart, "0")}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${formatoCartones(movBodega.comprado, "0")}` : ""}${devolucionNetaRuta > 0 ? ` · devolución manual +${formatoCartones(devolucionNetaRuta, "0")}` : ""}${impactoTiquetesHoy > 0 ? ` · tiquetes devueltos +${formatoCartones(impactoTiquetesHoy, "0")}` : ""}`} />
+              <KPI etiqueta="Salidas (−)" valor={formatoCartones(salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy))} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy) > 0 ? "alerta" : undefined} sub={`Ruta (incluye devolución mala) −${formatoCartones(salidaNetaRuta, "0")}${devolucionMalaTiqueteHoy > 0 ? ` · devuelto malo cargado a ruta −${formatoCartones(devolucionMalaTiqueteHoy, "0")}` : ""}${usosTiquetesSinRutaGuardadaHoy > 0 ? ` · tiquetes reutilizados sin salida guardada −${formatoCartones(usosTiquetesSinRutaGuardadaHoy, "0")}` : ""}${otrasSalidasBodega > 0 ? ` + otras ${formatoCartones(otrasSalidasBodega, "0")}` : ""}`} />
+              <KPI etiqueta="Saldo proyectado" valor={formatoCartones(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : ajusteHistoricoBodega ? `= inicial + entradas − salidas · reconciliación histórica ${ajusteHistoricoBodega > 0 ? "+" : ""}${formatoCartones(ajusteHistoricoBodega, "0")} cart` : "= inicial + entradas − salidas"} />
             </div>
 
             {/* Sub-menú de funciones de Bodega */}
@@ -6075,13 +6224,13 @@ export default function App({ onCerrarSesion }) {
                 <div key={g.galpon} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 14 }}>
                   <span><b>Gallinero {g.galpon}</b> <span style={{ color: C.textoSuave, fontSize: 12 }}>· {g.raza}</span></span>
                   <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: g.cartones > 0 ? C.verde : C.textoSuave }}>
-                    {g.cartones > 0 ? `${g.cartones.toFixed(1)} cart` : "sin registro"}
+                    {g.cartones > 0 ? `${formatoCartones(g.cartones)} cart` : "sin registro"}
                   </span>
                 </div>
               ))}
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 0", fontSize: 14.5 }}>
                 <b>Total granja</b>
-                <b style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.verde }}>{producidoHoyCart.toFixed(1)} cartones</b>
+                <b style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.verde }}>{formatoCartones(producidoHoyCart)} cartones</b>
               </div>
               {subBodega !== "todo" && (
                 <button type="button" onClick={() => setSubBodega("ruta")} style={{ ...btnStyle, background: "#F1F1EA", color: C.texto, marginTop: 12, padding: "10px", fontSize: 13.5 }}>
@@ -6092,7 +6241,7 @@ export default function App({ onCerrarSesion }) {
             )}
 
             {(subBodega === "ruta" || subBodega === "todo") && (
-            <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Saldo: salida − devolución buena + devolución mala (la mala se descuenta)">
+            <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Los cartones reutilizados se suman a la salida de su ruta; registra cada devolución buena y mala juntas en el kardex de tiquetes.">
               {repartos.map((r, i) => {
                 const neto = rutaNetaBodega([r]);
                 const impactoRutaRepartidor = presentacionRutaNeta(neto);
@@ -6152,7 +6301,7 @@ export default function App({ onCerrarSesion }) {
                               ))}
                               {hallados.length > 0 && (
                                 <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: C.verde, color: "#fff" }}>
-                                  Σ {hallados.length} tiq · {totalCart.toFixed(1)} cart{totalKg > 0 ? ` · ${totalKg.toFixed(1)} kg` : ""} → Salida
+                            Σ {hallados.length} tiq · {formatoCartones(totalCart)} cart{totalKg > 0 ? ` · ${totalKg.toFixed(1)} kg` : ""} → Salida
                                 </span>
                               )}
                             </div>
@@ -6161,13 +6310,35 @@ export default function App({ onCerrarSesion }) {
                       );
                     })()}
                     <div style={{ display: "flex", gap: 8 }}>
-                      <input type="text" inputMode="decimal" placeholder="Salida" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
-                      <input type="text" inputMode="decimal" placeholder="Dev. bueno" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
-                      <input type="text" inputMode="decimal" placeholder="Dev. malo" value={r.devMalo} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devMalo: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      <label style={{ flex: 1, fontSize: 11.5, fontWeight: 600, color: C.textoSuave }}>Salida normal
+                        <input type="text" inputMode="decimal" placeholder="0" value={r.salida} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, salida: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      </label>
+                      <label style={{ flex: 1, fontSize: 11.5, fontWeight: 600, color: C.textoSuave }}>Devolución buena sin tiquete
+                        <input type="text" inputMode="decimal" placeholder="0" aria-label="Devolución buena sin tiquete reutilizable" value={r.devBueno} onChange={e => { const rs = [...repartos]; rs[i] = { ...r, devBueno: e.target.value }; editarRepartosBodega(rs); }} style={{ ...inputStyle, flex: 1 }} />
+                      </label>
                     </div>
+                    {cartonesUsoEnRuta(r) > 0 && <div style={{ marginTop: 4, fontSize: 12, color: C.verde, fontWeight: 700 }}>
+                      Salida total: {formatoCartones(r.salida)} + {formatoCartones(cartonesUsoEnRuta(r))} reutilizados = {formatoCartones(Number(r.salida || 0) + cartonesUsoEnRuta(r))} cartones
+                    </div>}
                   </div>
                 );
               })}
+              <TiquetesDevolucionBodega
+                colores={C}
+                estilos={{ input: inputStyle, boton: btnStyle }}
+                fecha={fechaBodega}
+                tiquetes={tiquetesDevolucion}
+                movimientos={movimientosTiquetesDevolucion}
+                rutasOrigen={rutasOrigenTiquetes}
+                rutasDestino={rutasDestinoTiquetes}
+                rutasDetalle={rutasDestinoTiquetes}
+                permitirEscritura={["admin", "encargado", "bodega"].includes(miRol)}
+                errorCarga={errorTiquetesDevolucion}
+                ocupado={cargandoFondo || guardando}
+                onRegistrar={registrarDevolucionTiquete}
+                onUsar={usarDevolucionTiquete}
+                onCorregir={corregirDevolucionTiquete}
+              />
               <button onClick={() => editarRepartosBodega([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}
                 style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>+ Agregar repartidor</button>
             </Seccion>
@@ -6196,6 +6367,7 @@ export default function App({ onCerrarSesion }) {
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Saldo inicial del día (=)</span><b>{f2Dec(saldoBase)}</b></div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Huevo producido (+)</span><b>{f2Dec(producidoHoyCart)}</b></div>
                 {Number(movBodega.comprado || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.verde }}><span>Comprado (+)</span><b>{Number(movBodega.comprado).toFixed(1)}</b></div>}
+                {impactoTiquetesHoy !== 0 && <div style={{ display: "flex", justifyContent: "space-between", color: impactoTiquetesHoy > 0 ? C.verde : C.alerta }}><span>Movimiento neto de tiquetes (buenos, malos o usos) ({impactoTiquetesHoy > 0 ? "+" : "−"})</span><b>{formatoCartones(Math.abs(impactoTiquetesHoy), "0")}</b></div>}
                 <div style={{ display: "flex", justifyContent: "space-between", color: impactoRuta.tipo === "devolucion" ? C.verde : C.alerta }}><span>{impactoRuta.etiqueta} ({impactoRuta.signo})</span><b>{f2Dec(impactoRuta.cantidad ?? 0)}</b></div>
                 {Number(movBodega.vendGranja || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Vendido en granja (−)</span><b>{Number(movBodega.vendGranja).toFixed(1)}</b></div>}
                 {Number(movBodega.destruido || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: C.alerta }}><span>Destruido (−)</span><b>{Number(movBodega.destruido).toFixed(1)}</b></div>}
@@ -6208,7 +6380,7 @@ export default function App({ onCerrarSesion }) {
               <Campo etiqueta="Observaciones del día" type="text" placeholder="Opcional" value={obsInv} onChange={e => editarObsBodega(e.target.value)} />
               {movBodegaId != null && <Campo etiqueta="Motivo del cambio (obligatorio para editar)" type="text" placeholder="Ej. corregir devolución de ruta del 25" value={motivoEdicionBodega} onChange={e => setMotivoEdicionBodega(e.target.value)} />}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "10px 12px", background: C.yemaSuave, borderRadius: 10, marginBottom: 12 }}>
-                <b>Saldo final en bodega (=)</b><b style={{ color: C.verde }}>{saldoFinal.toFixed(1)} cartones</b>
+                <b>Saldo final en bodega (=)</b><b style={{ color: C.verde }}>{formatoCartones(saldoFinal)} cartones</b>
               </div>
               <button onClick={guardarBodega} disabled={guardando} style={btnStyle}>{guardando ? "Guardando…" : "Guardar movimiento del día"}</button>
               <details style={{ marginTop: 12, padding: 10, background: C.verdeSuave, borderRadius: 10 }}><summary style={{ fontWeight: 700 }}>Cierre guiado de bodega</summary>
@@ -6235,15 +6407,30 @@ export default function App({ onCerrarSesion }) {
             </Seccion>
             )}
 
-            {(subBodega === "historial" || subBodega === "todo") && bodegaMovs.length > 0 && (
+            {(subBodega === "historial" || subBodega === "todo") && (bodegaMovs.length > 0 || movimientosTiquetesDevolucion.length > 0) && (
               <Seccion titulo="Historial de bodega">
                 {selectorHistorial("bodega")}
+                <details style={{ margin: "8px 0 12px", padding: 9, background: C.superficie, borderRadius: 9 }}>
+                  <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 700 }}>Kardex de tiquetes devueltos y reutilizados ({historialVisible(movimientosTiquetesDevolucion, "bodega").length} movimientos)</summary>
+                  <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                    {historialVisible(movimientosTiquetesDevolucion, "bodega").map(movimiento => {
+                      const tiquete = tiquetesDevolucion.find(t => String(t.id) === String(movimiento.tiquete_id));
+                      const delta = Number(movimiento.cartones_delta || 0);
+                      return <div key={movimiento.id} style={{ padding: "7px 9px", background: C.fondo, borderRadius: 7, fontSize: 11.5 }}>
+                        <b>{fechaHistorialISO(movimiento.fecha)?.split("-").reverse().join("/")}</b> · {movimiento.tipo === "devolucion" ? "Devolución recibida" : movimiento.tipo === "uso" ? "Uso en ruta" : "Corrección"} · #{movimiento.numero || tiquete?.numero} · <b style={{ color: delta >= 0 ? C.verde : C.alerta }}>{delta > 0 ? "+" : ""}{f2Dec(delta)} cart</b>
+                        <div style={{ color: C.textoSuave, marginTop: 2 }}>Ruta {String(movimiento.fecha_ruta).split("-").reverse().join("/")} · {movimiento.repartidor}{tiquete ? ` · saldo disponible del tiquete: ${f2Dec(tiquete.saldo_cartones)} cart` : ""}</div>
+                        {!!movimiento.motivo && <div style={{ marginTop: 2 }}>{movimiento.motivo}</div>}
+                      </div>;
+                    })}
+                    {!historialVisible(movimientosTiquetesDevolucion, "bodega").length && <div style={{ fontSize: 11.5, color: C.textoSuave }}>Sin movimientos de tiquetes para este período.</div>}
+                  </div>
+                </details>
                 {historialVisible(bodegaMovs, "bodega").map(m => {
                   const duplicados = bodegaMovs.filter(x => fechaHistorialISO(x.fecha) === fechaHistorialISO(m.fecha)).length;
                   const impactoRutaMovimiento = presentacionRutaNeta(Number(m.rutaNeta || 0));
                   return <div key={m.id} data-alerta-id={String(m.id)} style={{ fontSize: 13, padding: "9px 12px", background: C.fondo, borderRadius: 10, marginBottom: 6, outline: String(alertaEnlaceId) === String(m.id) ? `3px solid ${C.yema}` : undefined, outlineOffset: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 7 }}>
-                      <span><b>{m.fecha}</b> · +{m.producido} prod · {impactoRutaMovimiento.etiqueta} ({impactoRutaMovimiento.signo}{impactoRutaMovimiento.cantidad.toFixed(1)}){duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> · cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
+                      <span><b>{m.fecha}</b> · +{m.producido} prod · {impactoRutaMovimiento.etiqueta} ({impactoRutaMovimiento.signo}{impactoRutaMovimiento.cantidad.toFixed(1)}){Number(m.movimientoTiquetes || 0) !== 0 && <b style={{ color: Number(m.movimientoTiquetes) > 0 ? C.verde : C.alerta }}> · tiquetes {Number(m.movimientoTiquetes) > 0 ? "+" : ""}{f2Dec(m.movimientoTiquetes)}</b>}{duplicados > 1 && <b style={{ color: C.alerta }}> · {duplicados} registros de esta fecha</b>}{m.cierreVerificado && <b style={{ color: C.verde }}> · cierre verificado por {mostrarNombre(m.cierreVerificado.responsable)}</b>}</span>
                       <b style={{ color: C.verde }}>= {f2Dec(m.saldoFinal)} cart{m.ajusteConteo != null && <span style={{ color: "#9A6605", fontWeight: 600 }}> (conteo{m.difAjuste ? ` ${m.difAjuste > 0 ? "+" : ""}${m.difAjuste}` : ""})</span>}</b>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
@@ -7073,7 +7260,7 @@ export default function App({ onCerrarSesion }) {
                 <KPI etiqueta="Movimientos registrados" valor={insumosMovs.length} unidad="" />
               </div>
 
- 
+
               <BarraSubmenu
                 subsecciones={[
                   { id: "catalogo", nombre: "Inventario por categoría", icono: "📦" },
@@ -7911,7 +8098,7 @@ export default function App({ onCerrarSesion }) {
                           {resMesLote.map((x, i) => (
                             <tr key={i} style={{ borderTop: `1px solid ${C.borde}`, textAlign: "right" }}>
                               <td style={{ textAlign: "left", padding: "8px 4px", fontWeight: 600 }}>G{x.l.galpon}</td>
-                              <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{x.cart.toFixed(1)}</td>
+                              <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>{formatoCartones(x.cart)}</td>
                               <td style={{ padding: "8px 4px" }}>{x.postura ? `${x.postura.toFixed(1)}%` : "—"}</td>
                               <td style={{ padding: "8px 4px" }}>{x.muertas}</td>
                               <td style={{ padding: "8px 4px" }}>{x.alim.toFixed(0)}</td>
@@ -7920,7 +8107,7 @@ export default function App({ onCerrarSesion }) {
                           ))}
                           <tr style={{ borderTop: `2px solid ${C.verde}`, textAlign: "right", fontWeight: 700 }}>
                             <td style={{ textAlign: "left", padding: "8px 4px" }}>TOTAL</td>
-                            <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif" }}>{totMes.cart.toFixed(1)}</td>
+                            <td style={{ padding: "8px 4px", fontFamily: "'Space Grotesk', sans-serif" }}>{formatoCartones(totMes.cart)}</td>
                             <td style={{ padding: "8px 4px" }}>—</td>
                             <td style={{ padding: "8px 4px" }}>{totMes.muertas}</td>
                             <td style={{ padding: "8px 4px" }}>{totMes.alim.toFixed(0)}</td>

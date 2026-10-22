@@ -1,5 +1,6 @@
 import { fechaHistorialISO } from "./historial.js";
 import { movimientosConFechaFutura } from "./plantaHistorial.js";
+import { esCantidadMediaCarton } from "./features/bodega/tiquetesDevolucion.js";
 
 export function saltosTiquetes(tiquetes) {
   const nums = [...new Set(tiquetes.map(t => String(t.num || "").trim()).filter(x => /^\d+$/.test(x)).map(Number))].sort((a, b) => a - b);
@@ -45,6 +46,12 @@ export function erroresCaptura(capturas, lotes) {
   for (const lote of lotes || []) {
     const captura = capturas?.[lote.id];
     if (!captura) continue;
+    for (const tiquete of captura.tiquetes || []) {
+      const valor = String(tiquete?.cartones ?? "").trim();
+      if (valor && !esCantidadMediaCarton(valor.replace(",", "."))) {
+        errores.push(`G${lote.galpon}: los cartones del tiquete #${tiquete.num || "sin número"} deben ser enteros o terminar en .5.`);
+      }
+    }
     for (const [campo, etiqueta, entero] of campos) {
       const valor = String(captura[campo] ?? "").trim();
       if (!valor) continue;

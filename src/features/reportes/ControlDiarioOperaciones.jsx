@@ -2,6 +2,7 @@ import React from "react";
 import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
 import { rutaNetaBodega } from "../../historial.js";
 import { presentacionRutaNeta } from "../../bodegaResumen.js";
+import { cartonesUsoEnRuta } from "../bodega/tiquetesDevolucion.js";
 import "./control-diario-operaciones.css";
 
 const numero = (valor, decimales = 2) => {
@@ -186,7 +187,9 @@ export function ControlDiarioOperaciones({
   ].filter(Boolean).map((nombre) => mostrarNombre(nombre)))];
 
   const filasRutas = [
-    ["Salida para ruta", ...repartos.map((r) => hayDatosRutas ? numero(r.salida) : "")],
+    ["Salida de tiquetes normales", ...repartos.map((r) => hayDatosRutas ? numero(r.salida) : "")],
+    ["Tiquetes devueltos reutilizados (+)", ...repartos.map((r) => hayDatosRutas ? numero(cartonesUsoEnRuta(r)) : "")],
+    ["Salida total asignada a ruta", ...repartos.map((r) => hayDatosRutas ? numero(numeroSeguro(r.salida) + cartonesUsoEnRuta(r)) : "")],
     ["Huevo devuelto bueno", ...repartos.map((r) => hayDatosRutas ? numero(r.devBueno) : "")],
     ["Huevo devuelto malo (reduce saldo)", ...repartos.map((r) => hayDatosRutas ? numero(r.devMalo) : "")],
     ["Impacto de ruta en saldo (=)", ...repartos.map((r) => {

@@ -118,6 +118,70 @@ export async function leerBodegaActual() {
   return actual;
 }
 
+export async function leerTiquetesDevolucionRuta() {
+  const [tiquetes, movimientos] = await Promise.all([
+    supabase.from("bodega_tiquetes_devolucion")
+      .select("id,numero,fecha_recepcion,fecha_ruta_origen,ruta_mov_id,ruta_id,repartidor,cartones_iniciales,cartones_malos,saldo_cartones,creado_por,creado_en,actualizado_en")
+      .order("fecha_recepcion", { ascending: false }).order("numero"),
+    supabase.from("bodega_tiquetes_devolucion_movs")
+      .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,motivo,por,cuando")
+      .order("fecha", { ascending: false }).order("cuando", { ascending: false }),
+  ]);
+  revisarError(tiquetes.error);
+  revisarError(movimientos.error);
+  if (tiquetes.error) throw tiquetes.error;
+  if (movimientos.error) throw movimientos.error;
+  return { tiquetes: tiquetes.data || [], movimientos: movimientos.data || [] };
+}
+
+export async function registrarTiqueteDevolucionRuta({ id, numero, cartones, cartonesMalos, fechaRecepcion, fechaRutaOrigen, rutaMovId, rutaId, repartidor }) {
+  const { data, error } = await supabase.rpc("registrar_devolucion_tiquete", {
+    p_operacion_id: id,
+    p_numero: numero,
+    p_cartones: cartones,
+    p_cartones_malos: cartonesMalos,
+    p_fecha_recepcion: fechaRecepcion,
+    p_fecha_ruta_origen: fechaRutaOrigen,
+    p_ruta_mov_id: rutaMovId,
+    p_ruta_id: rutaId,
+    p_repartidor: repartidor,
+  });
+  revisarError(error);
+  if (error) throw error;
+  return data;
+}
+
+export async function usarTiqueteDevolucionRuta({ id, numero, cartones, fecha, fechaRuta, rutaMovId, rutaId, repartidor }) {
+  const { data, error } = await supabase.rpc("usar_tiquete_devolucion", {
+    p_operacion_id: id,
+    p_numero: numero,
+    p_cartones: cartones,
+    p_fecha: fecha,
+    p_fecha_ruta: fechaRuta,
+    p_ruta_mov_id: rutaMovId,
+    p_ruta_id: rutaId,
+    p_repartidor: repartidor,
+  });
+  revisarError(error);
+  if (error) throw error;
+  return data;
+}
+
+export async function corregirTiqueteDevolucionRuta({ id, operacionId, numero, cartones, cartonesMalos, fecha, motivo }) {
+  const { data, error } = await supabase.rpc("corregir_tiquete_devolucion", {
+    p_operacion_id: operacionId,
+    p_tiquete_id: id,
+    p_numero: numero,
+    p_cartones_iniciales: cartones,
+    p_cartones_malos: cartonesMalos,
+    p_fecha_correccion: fecha,
+    p_motivo: motivo || null,
+  });
+  revisarError(error);
+  if (error) throw error;
+  return data;
+}
+
 async function escribirColeccion(claveCache, tabla, arregloNuevo) {
   const base = ultimaVersion.get(claveCache) || [];
   const porId = new Map(base.map((it) => [String(it.id), it]));

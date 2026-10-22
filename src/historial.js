@@ -24,8 +24,8 @@ export function filtrarHistorial(items, periodo, hoy = new Date()) {
 }
 
 export function snapshotBodega(m) {
-  const { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito } = m;
-  return { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito };
+  const { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, movimientoTiquetes, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito } = m;
+  return { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, rutaNeta, movimientoTiquetes, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito };
 }
 
 export function elegirMovimientoBodega(actuales, fechaISO, id = null) {
@@ -45,29 +45,120 @@ export function movimientoBodegaDeFecha(movs, fechaISO, id = null) {
 
 const numeroBodega = (valor) => Number.isFinite(Number(valor)) ? Number(valor) : 0;
 const redondearBodega = (valor) => Number(numeroBodega(valor).toFixed(1));
+const idRutaBodega = (movimiento, reparto, indice) => String(reparto?.id || `legacy:${movimiento?.id || "sin-movimiento"}:${indice}`);
+const claveRutaBodega = (movimientoId, rutaId) => `${String(movimientoId ?? "")}::${String(rutaId ?? "")}`;
+const cartonesUsadosDeRuta = reparto => (Array.isArray(reparto?.tiquetesDevueltos) ? reparto.tiquetesDevueltos : [])
+  .reduce((total, uso) => total + numeroBodega(uso.cartones), 0);
+
+function asociarUsosDeTiquetes(movimientos, movimientosTiquetes) {
+  const rutas = new Map();
+  for (const movimiento of movimientos) {
+    (movimiento.repartos || []).forEach((reparto, indice) => {
+      rutas.set(claveRutaBodega(movimiento.id, idRutaBodega(movimiento, reparto, indice)), {
+        movimiento, reparto, indice,
+      });
+    });
+  }
+
+  const porRuta = new Map();
+  const operacionesAsociadas = new Set();
+  for (const uso of Array.isArray(movimientosTiquetes) ? movimientosTiquetes : []) {
+    if (uso.tipo !== "uso") continue;
+    const clave = claveRutaBodega(uso.ruta_mov_id, uso.ruta_id);
+    if (!rutas.has(clave)) continue;
+    const lista = porRuta.get(clave) || [];
+    lista.push({
+      operacionId: String(uso.operacion_id ?? uso.operacionId ?? uso.id ?? ""),
+      tiqueteId: String(uso.tiquete_id ?? uso.tiqueteId ?? ""),
+      numero: String(uso.numero || ""),
+      cartones: Math.abs(numeroBodega(uso.cartones_delta ?? uso.cartonesDelta)),
+      fecha: uso.fecha,
+    });
+    porRuta.set(clave, lista);
+    operacionesAsociadas.add(String(uso.operacion_id ?? uso.operacionId ?? uso.id ?? ""));
+  }
+
+  const resultado = movimientos.map(movimiento => ({
+    ...movimiento,
+    ...(Array.isArray(movimiento.repartos) ? { repartos: movimiento.repartos.map((reparto, indice) => {
+      const clave = claveRutaBodega(movimiento.id, idRutaBodega(movimiento, reparto, indice));
+      const previos = Array.isArray(reparto.tiquetesDevueltos) ? reparto.tiquetesDevueltos : [];
+      const combinados = new Map(previos.map(uso => [String(uso.operacionId ?? uso.operacion_id ?? ""), uso]));
+      for (const uso of porRuta.get(clave) || []) combinados.set(uso.operacionId, uso);
+      return { ...reparto, tiquetesDevueltos: [...combinados.values()] };
+    }) } : {}),
+  }));
+
+  return { movimientos: resultado, operacionesAsociadas };
+}
 
 export function rutaNetaBodega(repartos = []) {
   return (Array.isArray(repartos) ? repartos : []).reduce((suma, reparto) =>
-    suma + numeroBodega(reparto.salida) - numeroBodega(reparto.devBueno) + numeroBodega(reparto.devMalo), 0);
+    suma + numeroBodega(reparto.salida) + cartonesUsadosDeRuta(reparto)
+      - numeroBodega(reparto.devBueno) + numeroBodega(reparto.devMalo), 0);
 }
 
 function rutaNetaAnterior(repartos, rutaNetaGuardada) {
   if (!Array.isArray(repartos)) return numeroBodega(rutaNetaGuardada);
   return repartos.reduce((suma, reparto) =>
-    suma + numeroBodega(reparto.salida) - numeroBodega(reparto.devBueno) - numeroBodega(reparto.devMalo), 0);
+    suma + numeroBodega(reparto.salida) + cartonesUsadosDeRuta(reparto)
+      - numeroBodega(reparto.devBueno) - numeroBodega(reparto.devMalo), 0);
 }
 
 function cambioDiarioBodega(movimiento, rutaNeta) {
   return numeroBodega(movimiento.producido) + numeroBodega(movimiento.comprado) - rutaNeta
-    - numeroBodega(movimiento.vendGranja) - numeroBodega(movimiento.destruido) - numeroBodega(movimiento.regalado);
+    - numeroBodega(movimiento.vendGranja) - numeroBodega(movimiento.destruido) - numeroBodega(movimiento.regalado)
+    + numeroBodega(movimiento.movimientoTiquetes);
 }
 
-export function reconstruirBodega(movs, inicialCart, apertura) {
-  const ordenados = [...movs].sort((a, b) =>
+export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquetes = []) {
+  const aperturaISO = fechaHistorialISO(apertura);
+  const impactoPorFecha = new Map();
+  const fechasConEventos = new Set();
+  const originales = Array.isArray(movs) ? movs : [];
+  const { movimientos: movimientosConUsos, operacionesAsociadas } = asociarUsosDeTiquetes(originales, movimientosTiquetes);
+  for (const movimiento of Array.isArray(movimientosTiquetes) ? movimientosTiquetes : []) {
+    const fecha = fechaHistorialISO(movimiento.fecha);
+    const delta = Number(movimiento.cartones_delta ?? movimiento.cartonesDelta ?? 0);
+    if (!fecha || !Number.isFinite(delta) || (aperturaISO && fecha < aperturaISO)) continue;
+    fechasConEventos.add(fecha);
+    const operacion = String(movimiento.operacion_id ?? movimiento.operacionId ?? movimiento.id ?? "");
+    if (operacionesAsociadas.has(operacion)) continue;
+    impactoPorFecha.set(fecha, (impactoPorFecha.get(fecha) || 0) + delta);
+  }
+
+  const porDia = new Set(movimientosConUsos.map(m => fechaHistorialISO(m.fecha)));
+  const filasSinBodega = [...impactoPorFecha.entries()]
+    .filter(([fecha, impacto]) => impacto !== 0 && !porDia.has(fecha))
+    .map(([fecha, impacto]) => {
+      const [anio, mes, dia] = fecha.split("-");
+      return {
+        id: `bodega-${fecha}`,
+        fecha: `${dia}/${mes}/${anio}`,
+        producido: 0,
+        comprado: 0,
+        vendGranja: 0,
+        destruido: 0,
+        regalado: 0,
+        repartos: [],
+        rutaNeta: 0,
+        movimientoTiquetes: impacto,
+        movimientoSoloTiquetes: true,
+      };
+    });
+
+  const ordenados = [...movimientosConUsos, ...filasSinBodega].map(movimiento => {
+    const fecha = fechaHistorialISO(movimiento.fecha);
+    return {
+      ...movimiento,
+      movimientoTiquetes: fechasConEventos.has(fecha)
+        ? redondearBodega(impactoPorFecha.get(fecha) || 0)
+        : numeroBodega(movimiento.movimientoTiquetes),
+    };
+  }).sort((a, b) =>
     fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)) || String(a.id || "").localeCompare(String(b.id || "")));
   if (!ordenados.length) return [];
 
-  const aperturaISO = fechaHistorialISO(apertura);
   const primeraFecha = fechaHistorialISO(ordenados[0].fecha);
   const anclarPrimerCierre = Boolean(aperturaISO && primeraFecha && primeraFecha < aperturaISO);
   const saldoInicial = numeroBodega(inicialCart);

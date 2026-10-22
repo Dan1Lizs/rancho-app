@@ -27,7 +27,7 @@ export function parsearTiquetesPegados(texto, usados = []) {
       p,
       pesoPromHuevo: c > 0 && p > 0 ? (p * 1000) / (c * 30) : null,
       duplicado,
-      valido: Boolean(num) && c > 0 && p > 0 && !duplicado,
+      valido: Boolean(num) && c > 0 && Math.abs(c * 2 - Math.round(c * 2)) < 0.000001 && p > 0 && !duplicado,
     };
   });
 }

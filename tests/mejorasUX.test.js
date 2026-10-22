@@ -29,6 +29,14 @@ test("el guardado detiene cantidades negativas, no numéricas, fraccionadas o su
   assert.ok(errores.some(x => x.includes("superar las aves")));
 });
 
+test("la captura de cartones admite enteros y medios cartones, no fracciones distintas", () => {
+  const errores = erroresCaptura({
+    lote1: { tiquetes: [{ num: "1", cartones: "7.25" }, { num: "2", cartones: "4.5" }] },
+  }, [{ id: "lote1", galpon: 1, aves: 100 }]);
+  assert.equal(errores.length, 1);
+  assert.match(errores[0], /enteros o terminar en \.5/);
+});
+
 test("la secuencia se comparte entre gallineros, incluso con un registro guardado", () => {
   const fecha = "28/09/2026";
   const capturas = { G1: { tiquetes: [{ num: "7001" }, { num: "7002" }, { num: "7003" }, { num: "7005" }] }, G3: { tiquetes: [] } };
