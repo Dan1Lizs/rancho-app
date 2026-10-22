@@ -121,6 +121,156 @@ export function devolucionesSinTiqueteDeMovimiento(movimientos = []) {
   );
 }
 
+export function historialDevolucionesSinTiquete(movimientos = []) {
+  const historicas = [];
+  for (const movimiento of Array.isArray(movimientos) ? movimientos : []) {
+    (movimiento.repartos || []).forEach((reparto, indice) => {
+      const buenos = numeroBodega(reparto.devBueno);
+      const malos = numeroBodega(reparto.devMalo);
+      if (buenos <= 0 && malos <= 0) return;
+      const rutaId = idRutaBodega(movimiento, reparto, indice);
+      historicas.push({
+        id: `legado:${movimiento.id}:${rutaId}`,
+        tipo: "legado",
+        fecha: fechaHistorialISO(movimiento.fecha),
+        fechaRuta: fechaHistorialISO(movimiento.fecha),
+        movimientoRecepcionId: String(movimiento.id),
+        rutaMovId: String(movimiento.id),
+        rutaId,
+        repartidor: reparto.nombre || "Sin repartidor indicado",
+        buenos,
+        malos,
+        origenHistorico: true,
+        original: { buenos, malos, rutaMovId: String(movimiento.id), rutaId },
+      });
+    });
+    (movimiento.devolucionesSinTiquete || []).forEach(devolucion => {
+      historicas.push({
+        id: `sin-tiquete:${devolucion.id}`,
+        tipo: "nueva",
+        fecha: fechaHistorialISO(devolucion.fechaRecepcion || movimiento.fecha),
+        fechaRuta: fechaHistorialISO(devolucion.fechaRutaOrigen),
+        movimientoRecepcionId: String(movimiento.id),
+        devolucionId: String(devolucion.id),
+        rutaMovId: String(devolucion.rutaMovId ?? devolucion.ruta_mov_id ?? ""),
+        rutaId: String(devolucion.rutaId ?? devolucion.ruta_id ?? ""),
+        repartidor: devolucion.repartidor || "Sin repartidor indicado",
+        buenos: numeroBodega(devolucion.cartonesBuenos ?? devolucion.cartones_buenos),
+        malos: numeroBodega(devolucion.cartonesMalos ?? devolucion.cartones_malos),
+        origenHistorico: false,
+        original: devolucion,
+      });
+    });
+  }
+  return historicas.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.id.localeCompare(b.id));
+}
+
+export function aplicarEdicionDevolucionSinTiquete(movimientos = [], {
+  registro, ruta, cartonesBuenos, cartonesMalos, motivo, por, fechaHora = new Date().toISOString(),
+}) {
+  if (!registro?.id || !ruta?.movimientoId || !ruta?.rutaId) throw new Error("Selecciona una ruta válida para la devolución.");
+  if (!String(motivo || "").trim()) throw new Error("Escribe el motivo de la corrección.");
+  const fechaRecepcion = fechaHistorialISO(registro.fecha);
+  const fechaRuta = fechaHistorialISO(ruta.fecha);
+  if (!fechaRecepcion || !fechaRuta || fechaRuta > fechaRecepcion) {
+    throw new Error("La ruta de origen debe ser de la fecha de recepción o anterior.");
+  }
+  const originales = Array.isArray(movimientos) ? movimientos : [];
+  const indiceRecepcion = originales.findIndex(movimiento => String(movimiento.id) === String(registro.movimientoRecepcionId));
+  if (indiceRecepcion < 0) throw new Error("La devolución cambió en otro dispositivo. Actualiza el historial y vuelve a editarla.");
+  const movimientoRecepcion = originales[indiceRecepcion];
+  let devolucion;
+  let anterior;
+
+  if (registro.tipo === "legado") {
+    const indiceReparto = (movimientoRecepcion.repartos || []).findIndex((reparto, indice) =>
+      idRutaBodega(movimientoRecepcion, reparto, indice) === String(registro.rutaId));
+    const reparto = movimientoRecepcion.repartos?.[indiceReparto];
+    if (!reparto || numeroBodega(reparto.devBueno) !== numeroBodega(registro.original?.buenos)
+      || numeroBodega(reparto.devMalo) !== numeroBodega(registro.original?.malos)) {
+      throw new Error("La devolución cambió en otro dispositivo. Actualiza el historial y vuelve a editarla.");
+    }
+    anterior = {
+      fechaRecepcion,
+      fechaRutaOrigen: fechaRecepcion,
+      rutaMovId: String(movimientoRecepcion.id),
+      rutaId: String(registro.rutaId),
+      repartidor: reparto.nombre || "Sin repartidor indicado",
+      cartonesBuenos: numeroBodega(reparto.devBueno),
+      cartonesMalos: numeroBodega(reparto.devMalo),
+      origen: "registro histórico de Bodega",
+    };
+    devolucion = {
+      id: `correccion-sin-tiquete:${registro.id}`,
+      origenLegacyId: registro.id,
+      fechaRecepcion,
+      fechaRutaOrigen: fechaRuta,
+      rutaMovId: String(ruta.movimientoId),
+      rutaId: String(ruta.rutaId),
+      repartidor: String(ruta.repartidor || "Sin indicar"),
+      cartonesBuenos: numeroBodega(cartonesBuenos),
+      cartonesMalos: numeroBodega(cartonesMalos),
+      historialEdiciones: [],
+    };
+    const repartos = movimientoRecepcion.repartos.map((item, indice) => indice === indiceReparto
+      ? { ...item, devBueno: 0, devMalo: 0 }
+      : item);
+    const registroCambio = {
+      fechaHora, por: por || "Sin indicar", motivo: String(motivo).trim(),
+      anterior, nuevo: { ...devolucion },
+    };
+    devolucion.historialEdiciones = [registroCambio];
+    const recibidas = Array.isArray(movimientoRecepcion.devolucionesSinTiquete) ? movimientoRecepcion.devolucionesSinTiquete : [];
+    const actualizado = {
+      ...movimientoRecepcion,
+      repartos,
+      devolucionesSinTiquete: [...recibidas, devolucion],
+    };
+    return originales.map((movimiento, indice) => indice === indiceRecepcion ? actualizado : movimiento);
+  }
+
+  const devoluciones = Array.isArray(movimientoRecepcion.devolucionesSinTiquete) ? movimientoRecepcion.devolucionesSinTiquete : [];
+  const indiceDevolucion = devoluciones.findIndex(item => String(item.id) === String(registro.devolucionId));
+  const actual = devoluciones[indiceDevolucion];
+  if (!actual || JSON.stringify(actual) !== JSON.stringify(registro.original)) {
+    throw new Error("La devolución cambió en otro dispositivo. Actualiza el historial y vuelve a editarla.");
+  }
+  anterior = {
+    fechaRecepcion: fechaHistorialISO(actual.fechaRecepcion || movimientoRecepcion.fecha),
+    fechaRutaOrigen: fechaHistorialISO(actual.fechaRutaOrigen),
+    rutaMovId: String(actual.rutaMovId ?? actual.ruta_mov_id ?? ""),
+    rutaId: String(actual.rutaId ?? actual.ruta_id ?? ""),
+    repartidor: actual.repartidor || "Sin repartidor indicado",
+    cartonesBuenos: numeroBodega(actual.cartonesBuenos ?? actual.cartones_buenos),
+    cartonesMalos: numeroBodega(actual.cartonesMalos ?? actual.cartones_malos),
+  };
+  devolucion = {
+    ...actual,
+    fechaRutaOrigen: fechaRuta,
+    rutaMovId: String(ruta.movimientoId),
+    rutaId: String(ruta.rutaId),
+    repartidor: String(ruta.repartidor || "Sin indicar"),
+    cartonesBuenos: numeroBodega(cartonesBuenos),
+    cartonesMalos: numeroBodega(cartonesMalos),
+  };
+  const registroCambio = {
+    fechaHora, por: por || "Sin indicar", motivo: String(motivo).trim(),
+    anterior, nuevo: {
+      fechaRecepcion,
+      fechaRutaOrigen: fechaRuta,
+      rutaMovId: String(ruta.movimientoId),
+      rutaId: String(ruta.rutaId),
+      repartidor: String(ruta.repartidor || "Sin indicar"),
+      cartonesBuenos: numeroBodega(cartonesBuenos),
+      cartonesMalos: numeroBodega(cartonesMalos),
+    },
+  };
+  devolucion.historialEdiciones = [...(actual.historialEdiciones || []), registroCambio];
+  return originales.map((movimiento, indice) => indice === indiceRecepcion
+    ? { ...movimiento, devolucionesSinTiquete: devoluciones.map((item, i) => i === indiceDevolucion ? devolucion : item) }
+    : movimiento);
+}
+
 export function cartonesMalosSinTiqueteEnRuta(devoluciones = [], movimientoId, rutaId) {
   return (Array.isArray(devoluciones) ? devoluciones : []).reduce((total, devolucion) => {
     const coincide = String(devolucion.rutaMovId ?? devolucion.ruta_mov_id ?? "") === String(movimientoId ?? "")

@@ -5,9 +5,12 @@ import {
   esCantidadMediaCarton,
   formatoCartones,
   fechaISODeTiquete,
+  idRepartoBodega,
+  rutasBodegaParaTiquetes,
   numeroCartones,
   rutaMismoDiaPorRepartidor,
 } from "./tiquetesDevolucion.js";
+import { historialDevolucionesSinTiquete } from "../../historial.js";
 
 const fechaCorta = (fecha) => String(fecha || "").slice(0, 10).split("-").reverse().join("/");
 const claveRuta = (ruta) => `${ruta.movimientoId}::${ruta.rutaId}`;
@@ -40,6 +43,7 @@ export function TiquetesDevolucionBodega({
   onRegistrar,
   onRegistrarSinTiquete,
   onQuitarSinTiquete,
+  onEditarSinTiquete,
   onCorregir,
 }) {
   const fechaAnteriorRef = useRef(fecha);
@@ -54,6 +58,12 @@ export function TiquetesDevolucionBodega({
   const [edicionCartones, setEdicionCartones] = useState("");
   const [edicionCartonesMalos, setEdicionCartonesMalos] = useState("");
   const [edicionMotivo, setEdicionMotivo] = useState("");
+  const [edicionSinTiquete, setEdicionSinTiquete] = useState(null);
+  const [edicionSinTiqueteBuenos, setEdicionSinTiqueteBuenos] = useState("");
+  const [edicionSinTiqueteMalos, setEdicionSinTiqueteMalos] = useState("");
+  const [edicionSinTiqueteRuta, setEdicionSinTiqueteRuta] = useState("");
+  const [edicionSinTiqueteMotivo, setEdicionSinTiqueteMotivo] = useState("");
+  const [busquedaRutaEdicion, setBusquedaRutaEdicion] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [guardando, setGuardando] = useState(false);
 
@@ -69,32 +79,33 @@ export function TiquetesDevolucionBodega({
     devolucionesMalas: movimientos.filter(m => m.tipo === "devolucion_mala" && String(m.ruta_mov_id) === String(ruta.movimientoId) && String(m.ruta_id) === String(ruta.rutaId)),
     usos: movimientos.filter(m => m.tipo === "uso" && String(m.ruta_mov_id) === String(ruta.movimientoId) && String(m.ruta_id) === String(ruta.rutaId)),
   })).filter(item => item.devoluciones.length || item.devolucionesMalas.length || item.usos.length);
-  const historialSinTiquete = useMemo(() => {
-    const anteriores = movimientosBodega.flatMap(movimiento => (movimiento.repartos || []).flatMap((reparto, indice) => {
-      const buenos = Number(reparto.devBueno || 0);
-      const malos = Number(reparto.devMalo || 0);
-      if (buenos <= 0 && malos <= 0) return [];
-      return [{
-        id: `legado:${movimiento.id}:${reparto.id || indice}`,
-        fecha: movimiento.fecha,
-        fechaRuta: movimiento.fecha,
-        repartidor: reparto.nombre || "Sin repartidor indicado",
-        buenos,
-        malos,
-        origenHistorico: true,
-      }];
+  const historialSinTiquete = useMemo(() => historialDevolucionesSinTiquete(movimientosBodega), [movimientosBodega]);
+  const rutasHistorial = useMemo(() => {
+    const porClave = new Map(rutasBodegaParaTiquetes(movimientosBodega)
+      .map(ruta => [`${ruta.movimientoId}::${ruta.rutaId}`, ruta]));
+    movimientosBodega.forEach(movimiento => (movimiento.repartos || []).forEach((reparto, indice) => {
+      const fechaRuta = fechaISODeTiquete(movimiento.fecha);
+      if (!fechaRuta) return;
+      const rutaId = idRepartoBodega(movimiento.id, reparto, indice);
+      const clave = `${movimiento.id}::${rutaId}`;
+      if (!porClave.has(clave)) porClave.set(clave, {
+        movimientoId: String(movimiento.id), rutaId, fecha: fechaRuta,
+        repartidor: String(reparto.nombre || "Repartidor"), salida: Number(reparto.salida || 0),
+      });
     }));
-    const nuevas = movimientosBodega.flatMap(movimiento => (movimiento.devolucionesSinTiquete || []).map(devolucion => ({
-      id: `sin-tiquete:${devolucion.id}`,
-      fecha: devolucion.fechaRecepcion || movimiento.fecha,
-      fechaRuta: devolucion.fechaRutaOrigen,
-      repartidor: devolucion.repartidor || "Sin repartidor indicado",
-      buenos: Number(devolucion.cartonesBuenos || 0),
-      malos: Number(devolucion.cartonesMalos || 0),
-      origenHistorico: false,
-    })));
-    return [...anteriores, ...nuevas].sort((a, b) => fechaISODeTiquete(b.fecha).localeCompare(fechaISODeTiquete(a.fecha)));
+    return [...porClave.values()];
   }, [movimientosBodega]);
+  const rutasEdicionVisibles = useMemo(() => {
+    if (!edicionSinTiquete) return [];
+    const corte = fechaISODeTiquete(edicionSinTiquete.fecha);
+    const consulta = busquedaRutaEdicion.trim().toLocaleLowerCase("es");
+    return rutasHistorial
+      .filter(ruta => fechaISODeTiquete(ruta.fecha) && fechaISODeTiquete(ruta.fecha) <= corte)
+      .filter(ruta => !consulta || `${ruta.repartidor} ${fechaCorta(ruta.fecha)}`.toLocaleLowerCase("es").includes(consulta))
+      .sort((a, b) => fechaISODeTiquete(b.fecha).localeCompare(fechaISODeTiquete(a.fecha))
+        || String(a.repartidor).localeCompare(String(b.repartidor), "es"));
+  }, [rutasHistorial, edicionSinTiquete, busquedaRutaEdicion]);
+  const rutasEdicionPorClave = useMemo(() => new Map(rutasHistorial.map(ruta => [`${ruta.movimientoId}::${ruta.rutaId}`, ruta])), [rutasHistorial]);
 
   useEffect(() => {
     if (fechaAnteriorRef.current !== fecha) {
@@ -195,6 +206,37 @@ export function TiquetesDevolucionBodega({
     if (guardado) setEdicionId("");
   };
 
+  const comenzarEdicionSinTiquete = devolucion => {
+    setEdicionSinTiquete(devolucion);
+    setEdicionSinTiqueteBuenos(String(devolucion.buenos));
+    setEdicionSinTiqueteMalos(String(devolucion.malos));
+    setEdicionSinTiqueteRuta(`${devolucion.rutaMovId}::${devolucion.rutaId}`);
+    setEdicionSinTiqueteMotivo("");
+    setBusquedaRutaEdicion("");
+    setMensaje("");
+  };
+
+  const guardarEdicionSinTiquete = async evento => {
+    evento.preventDefault();
+    const ruta = rutasEdicionPorClave.get(edicionSinTiqueteRuta);
+    if (!ruta) { setMensaje("Selecciona una ruta de origen válida."); return; }
+    const buenos = numeroCartones(edicionSinTiqueteBuenos || 0);
+    const malos = numeroCartones(edicionSinTiqueteMalos || 0);
+    if (!Number.isFinite(buenos) || buenos < 0 || !Number.isFinite(malos) || malos < 0
+      || buenos + malos <= 0 || !esCantidadMediaCarton(buenos) || !esCantidadMediaCarton(malos)) {
+      setMensaje("Los cartones buenos y malos deben ser enteros o terminar en .5, y el total debe ser mayor que cero."); return;
+    }
+    if (!edicionSinTiqueteMotivo.trim()) { setMensaje("Escribe el motivo de la corrección para conservar la auditoría."); return; }
+    const guardado = await ejecutar(() => onEditarSinTiquete({
+      registro: edicionSinTiquete,
+      ruta,
+      cartonesBuenos: buenos,
+      cartonesMalos: malos,
+      motivo: edicionSinTiqueteMotivo.trim(),
+    }), "Devolución corregida; los saldos de Bodega y la ruta quedaron recalculados.");
+    if (guardado) setEdicionSinTiquete(null);
+  };
+
   const estiloInput = { ...estilos.input, minWidth: 0 };
   const estiloBoton = { ...estilos.boton, width: "auto", margin: 0, padding: "10px 14px", fontSize: 13 };
 
@@ -203,7 +245,7 @@ export function TiquetesDevolucionBodega({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
         <div>
           <h4 id="titulo-tiquetes-devueltos" style={{ margin: 0, fontSize: 15 }}>Devoluciones e inventario reutilizable</h4>
-          <div style={{ marginTop: 4, fontSize: 12, color: colores.textoSuave }}>Las devoluciones con tiquete conservan su saldo reutilizable; las nuevas sin tiquete quedan en el movimiento de Bodega. Los registros antiguos se consultan aparte y no se modifican.</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: colores.textoSuave }}>Las devoluciones con tiquete conservan su saldo reutilizable; las devoluciones sin tiquete pueden corregirse desde el historial con motivo y recalculan Bodega y la ruta asignada.</div>
         </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: netoHoy >= 0 ? colores.verde : colores.alerta }}>
           Movimiento neto hoy: {netoHoy > 0 ? "+" : ""}{formatoCartones(netoHoy, "0")} cart
@@ -352,7 +394,7 @@ export function TiquetesDevolucionBodega({
       </details>
 
       <details style={{ marginTop: 8 }}>
-        <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Historial de devoluciones sin tiquete ({historialSinTiquete.length}) · solo consulta</summary>
+        <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Historial de devoluciones sin tiquete ({historialSinTiquete.length})</summary>
         {!historialSinTiquete.length ? <div style={{ color: colores.textoSuave, marginTop: 7, fontSize: 12 }}>No hay devoluciones sin tiquete guardadas.</div> : <div style={{ overflowX: "auto", marginTop: 7 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, minWidth: 440 }}>
             <thead><tr>
@@ -361,19 +403,61 @@ export function TiquetesDevolucionBodega({
               <th style={{ textAlign: "left", padding: 6 }}>Repartidor</th>
               <th style={{ textAlign: "right", padding: 6 }}>Buenos</th>
               <th style={{ textAlign: "right", padding: 6 }}>Malos</th>
-              <th style={{ textAlign: "left", padding: 6 }}>Registro</th>
+              <th style={{ textAlign: "left", padding: 6 }}>Registro / acciones</th>
             </tr></thead>
-            <tbody>{historialSinTiquete.map(devolucion => <tr key={devolucion.id}>
-              <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}` }}>{fechaCorta(devolucion.fecha)}</td>
-              <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}` }}>{fechaCorta(devolucion.fechaRuta)}</td>
-              <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}` }}>{devolucion.repartidor}</td>
-              <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}`, textAlign: "right", color: colores.verde, fontWeight: 700 }}>+{formatoCartones(devolucion.buenos, "0")}</td>
-              <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}`, textAlign: "right", color: colores.alerta, fontWeight: 700 }}>{formatoCartones(devolucion.malos, "0")}</td>
-              <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}`, color: colores.textoSuave }}>{devolucion.origenHistorico ? "Histórico original · sin cambios" : "Bodega"}</td>
-            </tr>)}</tbody>
+            <tbody>{historialSinTiquete.map(devolucion => <React.Fragment key={devolucion.id}>
+              <tr>
+                <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}` }}>{fechaCorta(devolucion.fecha)}</td>
+                <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}` }}>{fechaCorta(devolucion.fechaRuta)}</td>
+                <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}` }}>{devolucion.repartidor}</td>
+                <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}`, textAlign: "right", color: colores.verde, fontWeight: 700 }}>+{formatoCartones(devolucion.buenos, "0")}</td>
+                <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}`, textAlign: "right", color: colores.alerta, fontWeight: 700 }}>{formatoCartones(devolucion.malos, "0")}</td>
+                <td style={{ padding: 6, borderTop: `1px solid ${colores.borde}`, color: colores.textoSuave }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span>{devolucion.origenHistorico ? "Histórico" : "Bodega"}</span>
+                    {permitirEscritura && onEditarSinTiquete && <button type="button" disabled={ocupado || guardando} onClick={() => edicionSinTiquete?.id === devolucion.id ? setEdicionSinTiquete(null) : comenzarEdicionSinTiquete(devolucion)} style={{ padding: "4px 8px", border: `1px solid ${colores.borde}`, borderRadius: 6, background: colores.superficie, color: colores.texto, cursor: "pointer" }}>{edicionSinTiquete?.id === devolucion.id ? "Cancelar" : "Editar"}</button>}
+                  </div>
+                  {!!devolucion.original?.historialEdiciones?.length && <details style={{ marginTop: 4 }}>
+                    <summary style={{ cursor: "pointer", fontSize: 11 }}>Ver correcciones ({devolucion.original.historialEdiciones.length})</summary>
+                    {devolucion.original.historialEdiciones.map((cambio, indice) => <div key={`${devolucion.id}-cambio-${indice}`} style={{ marginTop: 4, color: colores.texto, fontSize: 11 }}>
+                      {cambio.fechaHora ? new Date(cambio.fechaHora).toLocaleString("es") : "Corrección"} · {cambio.por || "Sin indicar"} · {cambio.motivo || "Sin motivo"}
+                    </div>)}
+                  </details>}
+                </td>
+              </tr>
+              {edicionSinTiquete?.id === devolucion.id && <tr><td colSpan={6} style={{ padding: 8, borderTop: `1px solid ${colores.borde}`, background: colores.fondo}}>
+                <form onSubmit={guardarEdicionSinTiquete} style={{ display: "grid", gap: 8 }}>
+                  <b>Corregir devolución recibida el {fechaCorta(devolucion.fecha)}</b>
+                  <label style={{ fontSize: 12, fontWeight: 600 }}>Ruta de origen
+                    <input type="search" value={busquedaRutaEdicion} onChange={evento => setBusquedaRutaEdicion(evento.target.value)} placeholder="Filtrar por repartidor o fecha…" style={estiloInput} />
+                    <select required value={edicionSinTiqueteRuta} onChange={evento => setEdicionSinTiqueteRuta(evento.target.value)} style={{ ...estiloInput, marginTop: 5 }}>
+                      <option value="">Seleccionar ruta…</option>
+                      {edicionSinTiqueteRuta && !rutasEdicionVisibles.some(ruta => `${ruta.movimientoId}::${ruta.rutaId}` === edicionSinTiqueteRuta) && rutasEdicionPorClave.has(edicionSinTiqueteRuta) && <option value={edicionSinTiqueteRuta}>{mostrarOpcionRuta(rutasEdicionPorClave.get(edicionSinTiqueteRuta))} · selección actual</option>}
+                      {rutasEdicionVisibles.map(ruta => <option key={`${ruta.movimientoId}::${ruta.rutaId}`} value={`${ruta.movimientoId}::${ruta.rutaId}`}>{mostrarOpcionRuta(ruta)}</option>)}
+                    </select>
+                    {!rutasEdicionVisibles.length && <span style={{ display: "block", color: colores.alerta, marginTop: 4 }}>No hay rutas anteriores a la fecha de recepción que coincidan con el filtro.</span>}
+                  </label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <label style={{ flex: "1 1 120px", fontSize: 12, fontWeight: 600 }}>Cartones buenos
+                      <input type="text" inputMode="decimal" value={edicionSinTiqueteBuenos} onChange={evento => setEdicionSinTiqueteBuenos(evento.target.value)} style={estiloInput} />
+                    </label>
+                    <label style={{ flex: "1 1 120px", fontSize: 12, fontWeight: 600 }}>Cartones malos
+                      <input type="text" inputMode="decimal" value={edicionSinTiqueteMalos} onChange={evento => setEdicionSinTiqueteMalos(evento.target.value)} style={estiloInput} />
+                    </label>
+                  </div>
+                  <label style={{ fontSize: 12, fontWeight: 600 }}>Motivo de corrección (obligatorio)
+                    <input required value={edicionSinTiqueteMotivo} onChange={evento => setEdicionSinTiqueteMotivo(evento.target.value)} placeholder="Explica qué se corrigió" style={estiloInput} />
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <button type="submit" disabled={ocupado || guardando || !permitirEscritura} style={estiloBoton}>{guardando ? "Guardando…" : "Guardar corrección y recalcular saldos"}</button>
+                    <span style={{ color: colores.textoSuave, fontSize: 11 }}>La fecha recibida se conserva. Solo se permiten rutas de esa fecha o anteriores.</span>
+                  </div>
+                </form>
+              </td></tr>}
+            </React.Fragment>)}</tbody>
           </table>
         </div>}
-        <div style={{ marginTop: 7, fontSize: 11, color: colores.textoSuave }}>Las devoluciones históricas se muestran tal como están guardadas; no se convierten en inventario reutilizable ni alteran saldos.</div>
+        <div style={{ marginTop: 7, fontSize: 11, color: colores.textoSuave }}>Toda corrección requiere motivo, queda auditada y recalcula el saldo de Bodega desde la fecha de recepción y los cartones malos en la ruta elegida.</div>
       </details>
     </section>
   );

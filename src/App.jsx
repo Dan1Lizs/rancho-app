@@ -8,7 +8,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, aplicarEdicionDevolucionSinTiquete } from "./historial";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, hayCambiosFormularioBodega, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
@@ -55,7 +55,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.0";
+const VERSION_APP = "10.4.1";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1653,6 +1653,92 @@ export default function App({ onCerrarSesion }) {
       fecha: fechaBodega, motivo,
     });
     await refrescarTiquetesDevolucion();
+  };
+
+  const corregirDevolucionSinTiqueteHistorial = async ({ registro, ruta, cartonesBuenos, cartonesMalos, motivo }) => {
+    if (!["admin", "encargado", "bodega"].includes(miRol)) throw new Error("Tu usuario no tiene permiso para corregir devoluciones de Bodega.");
+    const buenos = numeroCartones(cartonesBuenos);
+    const malos = numeroCartones(cartonesMalos);
+    if (!Number.isFinite(buenos) || buenos < 0 || !Number.isFinite(malos) || malos < 0
+      || buenos + malos <= 0 || !esCantidadMediaCarton(buenos) || !esCantidadMediaCarton(malos)) {
+      throw new Error("Los cartones buenos y malos deben ser enteros o terminar en .5, y el total debe ser mayor que cero.");
+    }
+    if (!String(motivo || "").trim()) throw new Error("Escribe el motivo de la corrección.");
+    setGuardando(true);
+    try {
+      const actualesRemotos = await leerBodegaActual();
+      if (!actualesRemotos) throw new Error("No se pudo consultar la Bodega actual. No se guardó ningún cambio.");
+      const rutasActuales = rutasBodegaParaTiquetes(actualesRemotos);
+      const rutaActual = rutasActuales.find(item => String(item.movimientoId) === String(ruta.movimientoId)
+        && String(item.rutaId) === String(ruta.rutaId));
+      const fechaRecepcion = fechaHistorialISO(registro.fecha);
+      if (!rutaActual || !fechaRecepcion || fechaHistorialISO(rutaActual.fecha) > fechaRecepcion) {
+        throw new Error("La ruta elegida ya no está disponible o es posterior a la recepción. Actualiza el historial y vuelve a elegirla.");
+      }
+      const movimientosBase = reconstruirBodega(
+        actualesRemotos, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      ).filter(movimiento => !movimiento.movimientoSoloTiquetes);
+      const fechaHora = new Date().toISOString();
+      const actor = window.__usuarioEmail || completadoPor || "Sin indicar";
+      const movimientosEditados = aplicarEdicionDevolucionSinTiquete(movimientosBase, {
+        registro, ruta: rutaActual, cartonesBuenos: buenos, cartonesMalos: malos,
+        motivo, por: actor, fechaHora,
+      });
+      const recalculados = reconstruirBodega(
+        movimientosEditados, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      ).filter(movimiento => !movimiento.movimientoSoloTiquetes);
+      const originalesPorId = new Map(movimientosBase.map(movimiento => [String(movimiento.id), movimiento]));
+      const movimientosAfectados = new Set(recalculados.filter(movimiento => {
+        const previo = originalesPorId.get(String(movimiento.id));
+        return !previo || JSON.stringify(snapshotBodega(previo)) !== JSON.stringify(snapshotBodega(movimiento));
+      }).map(movimiento => String(movimiento.id)));
+      if (movimientosAfectados.has(String(movBodegaIdRef.current || "")) && bodegaTieneCambios) {
+        throw new Error("Primero guarda o descarta los cambios sin enviar de esta fecha. Luego podrás corregir la devolución histórica sin sobrescribirlos.");
+      }
+      const idMovimientoRecepcion = String(registro.movimientoRecepcionId);
+      const motivoAuditoria = `Corrección de devolución sin tiquete: ${String(motivo).trim()}`;
+      const movimientosConAuditoria = recalculados.map(movimiento => {
+        const previo = originalesPorId.get(String(movimiento.id));
+        const esMovimientoRecepcion = String(movimiento.id) === idMovimientoRecepcion;
+        const saldoCambio = previo && Number(previo.saldoFinal) !== Number(movimiento.saldoFinal);
+        if (!esMovimientoRecepcion && !saldoCambio) return movimiento;
+        const motivoMovimiento = esMovimientoRecepcion
+          ? motivoAuditoria
+          : `Saldo recalculado por corrección de devolución recibida el ${registro.fecha}: ${String(motivo).trim()}`;
+        return {
+          ...movimiento,
+          historialEdiciones: [...(previo?.historialEdiciones || []), {
+            fechaHora, por: actor, motivo: motivoMovimiento,
+            anterior: previo ? snapshotBodega(previo) : null,
+            nuevo: snapshotBodega(movimiento),
+          }],
+        };
+      });
+      if (!await escribir(K.movs, movimientosConAuditoria)) {
+        throw new Error("La devolución o sus saldos cambiaron en otro dispositivo. Actualiza Bodega y vuelve a intentar.");
+      }
+      const movimientosCalculados = reconstruirBodega(
+        movimientosConAuditoria, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      );
+      setBodegaMovs(movimientosCalculados);
+      const idSeleccionado = String(movBodegaIdRef.current || "");
+      const movimientoSeleccionado = movimientosCalculados.find(item => String(item.id) === idSeleccionado);
+      if (movimientoSeleccionado && movimientosAfectados.has(idSeleccionado)) {
+        const pasosBase = { salidas: false, devoluciones: false, conteo: false };
+        const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
+        setMovBodega({ comprado: movimientoSeleccionado.comprado || "", vendGranja: movimientoSeleccionado.vendGranja || "", destruido: movimientoSeleccionado.destruido || "", regalado: movimientoSeleccionado.regalado || "" });
+        setRepartos(asociarUsosDeTiquetesARepartos(movimientoSeleccionado.id, movimientoSeleccionado.repartos || [], movimientosTiquetesDevolucion));
+        setDevolucionesSinTiquete(movimientoSeleccionado.devolucionesSinTiquete || []);
+        setObsInv(movimientoSeleccionado.obs || "");
+        setAjusteBodega(movimientoSeleccionado.ajusteConteo == null ? "" : String(movimientoSeleccionado.ajusteConteo));
+        setPasosBodega(pasosBase);
+        movBodegaOriginalRef.current = snapshotBodega(movimientoSeleccionado);
+        bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(movimientoSeleccionado, repartidoresBase, pasosBase);
+        bodegaEditadaRef.current = false;
+      }
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const guardarBodega = async () => {
@@ -6549,6 +6635,7 @@ export default function App({ onCerrarSesion }) {
                 onRegistrar={registrarDevolucionTiquete}
                 onRegistrarSinTiquete={registrarDevolucionSinTiquete}
                 onQuitarSinTiquete={id => editarDevolucionesSinTiquete(devolucionesSinTiquete.filter(devolucion => String(devolucion.id) !== String(id)))}
+                onEditarSinTiquete={corregirDevolucionSinTiqueteHistorial}
                 onCorregir={corregirDevolucionTiquete}
               />
               <button onClick={() => editarRepartosBodega([...repartos, { nombre: "", tiq: "", tiquetesDet: [], salida: "", devBueno: "", devMalo: "" }])}

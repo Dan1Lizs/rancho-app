@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta } from "../src/historial.js";
+import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, historialDevolucionesSinTiquete, aplicarEdicionDevolucionSinTiquete } from "../src/historial.js";
 
 test("el período filtra D/M/A e ISO sin confundir años y permite ver todo", () => {
   const items = [{ fecha: "25/09/2025" }, { fecha: "01/09/2026" }, { fecha: "2026-09-26" }, { fecha: "27/09/2026" }];
@@ -107,6 +107,61 @@ test("las nuevas devoluciones sin tiquete suman los buenos al recibir y cargan l
   assert.equal(porFecha["2026-10-12"].saldoFinal, 108);
   assert.deepEqual([origen, recepcion], antes, "la reconstrucción solo calcula; no modifica registros originales");
   assert.equal(cartonesMalosSinTiqueteEnRuta(devolucionesSinTiqueteDeMovimiento([recepcion]), "b-11", "r-1"), 5);
+});
+
+test("el historial normaliza devoluciones antiguas y nuevas para permitir su corrección", () => {
+  const movimientos = [
+    { id: "b-10", fecha: "10/10/2026", repartos: [{ id: "r-10", nombre: "Ana", devBueno: 3, devMalo: 1 }] },
+    { id: "b-12", fecha: "12/10/2026", devolucionesSinTiquete: [{
+      id: "d-12", fechaRecepcion: "2026-10-12", fechaRutaOrigen: "2026-10-11",
+      rutaMovId: "b-11", rutaId: "r-11", repartidor: "Luis", cartonesBuenos: 4, cartonesMalos: 0,
+    }] },
+  ];
+  const historial = historialDevolucionesSinTiquete(movimientos);
+  assert.equal(historial.length, 2);
+  assert.equal(historial[0].tipo, "nueva");
+  assert.equal(historial[0].fecha, "2026-10-12");
+  assert.equal(historial[1].tipo, "legado");
+  assert.equal(historial[1].rutaId, "r-10");
+});
+
+test("corregir una devolución histórica convierte el registro viejo, reasigna la ruta y recalcula balances", () => {
+  const movimientos = [
+    { id: "b-10", fecha: "10/10/2026", producido: 0, repartos: [{ id: "r-10", nombre: "Ana", salida: 20 }] },
+    { id: "b-11", fecha: "11/10/2026", producido: 0, repartos: [{ id: "r-11", nombre: "Luis", salida: 30 }] },
+    { id: "b-12", fecha: "12/10/2026", producido: 0, repartos: [{ id: "r-12", nombre: "Ana", salida: 40, devBueno: 10, devMalo: 2 }] },
+  ];
+  const preCorreccion = reconstruirBodega(movimientos, 100, "2026-10-10");
+  const legado = historialDevolucionesSinTiquete(preCorreccion).find(item => item.id === "legado:b-12:r-12");
+  const editados = aplicarEdicionDevolucionSinTiquete(preCorreccion, {
+    registro: legado,
+    ruta: { movimientoId: "b-11", rutaId: "r-11", fecha: "2026-10-11", repartidor: "Luis" },
+    cartonesBuenos: 8, cartonesMalos: 1, motivo: "Conteo físico corregido", por: "encargado",
+    fechaHora: "2026-10-13T12:00:00.000Z",
+  });
+  const porFecha = Object.fromEntries(reconstruirBodega(editados, 100, "2026-10-10")
+    .map(movimiento => [fechaHistorialISO(movimiento.fecha), movimiento]));
+  const rutaAnterior = editados.find(m => m.id === "b-12");
+
+  assert.equal(rutaAnterior.repartos[0].devBueno, 0);
+  assert.equal(rutaAnterior.repartos[0].devMalo, 0);
+  assert.equal(porFecha["2026-10-11"].rutaNeta, 31);
+  assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 8);
+  assert.equal(porFecha["2026-10-12"].saldoFinal, 17);
+  const guardada = historialDevolucionesSinTiquete(editados)[0];
+  assert.equal(guardada.rutaId, "r-11");
+  assert.equal(guardada.original.historialEdiciones[0].motivo, "Conteo físico corregido");
+  const corregidaDeNuevo = aplicarEdicionDevolucionSinTiquete(editados, {
+    registro: guardada,
+    ruta: { movimientoId: "b-10", rutaId: "r-10", fecha: "2026-10-10", repartidor: "Ana" },
+    cartonesBuenos: 7.5, cartonesMalos: 0.5, motivo: "Segundo ajuste con medio cartón", por: "admin",
+    fechaHora: "2026-10-14T12:00:00.000Z",
+  });
+  const historialCorregidoDeNuevo = historialDevolucionesSinTiquete(corregidaDeNuevo);
+  assert.equal(historialCorregidoDeNuevo.length, 1, "editar varias veces no duplica la devolución");
+  assert.equal(historialCorregidoDeNuevo[0].buenos, 7.5);
+  assert.equal(historialCorregidoDeNuevo[0].malos, 0.5);
+  assert.equal(historialCorregidoDeNuevo[0].original.historialEdiciones.length, 2);
 });
 
 test("reutilizar un tiquete se suma a la ruta sin duplicar el descuento del kardex", () => {
