@@ -38,9 +38,11 @@ test("el kardex suma entradas, usos y correcciones solo en su fecha efectiva", (
     { fecha: "2026-10-01", cartones_delta: 12, tipo: "devolucion" },
     { fecha: "2026-10-02", operacion_id: "op-uso", cartones_delta: -5, tipo: "uso" },
     { fecha: "2026-10-02", cartones_delta: 2, tipo: "correccion" },
+    { fecha: "2026-10-02", cartones_delta: -3, tipo: "devolucion_mala" },
   ];
   assert.equal(impactoTiquetesEnFecha(movimientos, "2026-10-01"), 12);
   assert.equal(impactoTiquetesEnFecha(movimientos, "2026-10-02"), -3);
+  assert.equal(impactoTiquetesEnFecha([{ fecha: "2026-10-02", cartones_delta: -3, tipo: "devolucion_mala" }], "2026-10-02"), 0, "los cartones malos no alteran el kardex");
   assert.equal(impactoTiquetesEnFecha(movimientos, "2026-10-02", ["op-uso"]), 2);
 });
 

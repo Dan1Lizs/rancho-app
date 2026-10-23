@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ajustarMovimientosTiquetesReporte, entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "../src/features/reportes/calculosControlDiario.js";
+import { rutaNetaBodega } from "../src/historial.js";
 
 test("la suma de producción conserva medios cartones y tolera datos numéricos en texto", () => {
   assert.equal(sumarCartonesProduccion([49, "40", "59,5", 0]), 148.5);
@@ -29,7 +30,7 @@ test("un conteo físico prevalece y la diferencia queda visible", () => {
   assert.equal(saldo.ajusteConteo, 0.5);
 });
 
-test("el reporte separa los buenos recibidos hoy de los malos cargados a la ruta de origen", () => {
+test("el reporte conserva los malos como dato, pero no los aplica al saldo", () => {
   const movimientosBodega = [
     { id: "b-11", fecha: "11/10/2026", repartos: [{ id: "r-bryan-11", nombre: "Bryan", salida: 100 }] },
     { id: "b-12", fecha: "12/10/2026", repartos: [], devolucionesSinTiquete: [{
@@ -56,10 +57,12 @@ test("el reporte separa los buenos recibidos hoy de los malos cargados a la ruta
   assert.equal(recibidosHoy.detalleRutas[0].malosVinculados, 0);
   assert.equal(cargadosAlOrigen.detalleRutas[0].malosVinculados, 5);
 
-  const saldoTrasSalidaYMalos = saldoBodegaReporte(200, 0, { movimientoTiquetes: 0 }, 105);
+  const salidaRuta = rutaNetaBodega([{ salida: 100, devMalo: 5 }]);
+  const saldoTrasSalidaYMalos = saldoBodegaReporte(200, 0, { movimientoTiquetes: 0 }, salidaRuta);
   const saldoTrasDevolucionBuena = saldoBodegaReporte(saldoTrasSalidaYMalos.saldoFinal, 0, { movimientoTiquetes: 13 }, 0);
-  assert.equal(saldoTrasSalidaYMalos.saldoFinal, 95);
-  assert.equal(saldoTrasDevolucionBuena.saldoFinal, 108);
+  assert.equal(salidaRuta, 100);
+  assert.equal(saldoTrasSalidaYMalos.saldoFinal, 100);
+  assert.equal(saldoTrasDevolucionBuena.saldoFinal, 113);
 });
 
 

@@ -18,6 +18,6 @@ export function ResumenMovimientoBodega({ movimiento }) {
   return <div style={{ fontSize: 12, lineHeight: 1.6, padding: "8px 10px", marginTop: 6, background: "#F6F6F1", borderRadius: 8 }}>
     <b>{movimiento.fecha}</b> · Producido: {valorBodega(movimiento.producido, "cart")} · {impactoRuta.etiqueta}{impactoRuta.signo ? ` (${impactoRuta.signo})` : ""}: {impactoRuta.cantidad == null ? "—" : valorBodega(impactoRuta.cantidad, "cart")} · Saldo final: <b>{valorBodega(movimiento.saldoFinal, "cart")}</b>
     {!!movimiento.obs && <div>Observaciones: {movimiento.obs}</div>}
-    {(movimiento.repartos || []).map((r, i) => <div key={i}>{r.nombre || "Repartidor"}: salida {valorBodega(r.salida, "cart")}, devolución buena {valorBodega(r.devBueno, "cart")}, devolución mala {valorBodega(r.devMalo, "cart")}</div>)}
+    {(movimiento.repartos || []).map((r, i) => <div key={i}>{r.nombre || "Repartidor"}: salida {valorBodega(r.salida, "cart")}, devolución buena {valorBodega(r.devBueno, "cart")}, cartones malos anotados (informativos; no afectan saldo) {valorBodega(r.devMalo, "cart")}</div>)}
   </div>;
 }

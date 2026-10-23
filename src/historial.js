@@ -98,14 +98,14 @@ function asociarUsosDeTiquetes(movimientos, movimientosTiquetes) {
 export function rutaNetaBodega(repartos = []) {
   return (Array.isArray(repartos) ? repartos : []).reduce((suma, reparto) =>
     suma + numeroBodega(reparto.salida) + cartonesUsadosDeRuta(reparto)
-      - numeroBodega(reparto.devBueno) + numeroBodega(reparto.devMalo), 0);
+      - numeroBodega(reparto.devBueno), 0);
 }
 
 function rutaNetaAnterior(repartos, rutaNetaGuardada) {
   if (!Array.isArray(repartos)) return numeroBodega(rutaNetaGuardada);
   return repartos.reduce((suma, reparto) =>
     suma + numeroBodega(reparto.salida) + cartonesUsadosDeRuta(reparto)
-      - numeroBodega(reparto.devBueno) - numeroBodega(reparto.devMalo), 0);
+      - numeroBodega(reparto.devBueno), 0);
 }
 
 function cambioDiarioBodega(movimiento, rutaNeta) {
@@ -286,13 +286,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
   const originales = Array.isArray(movs) ? movs : [];
   const { movimientos: movimientosConUsos, operacionesAsociadas } = asociarUsosDeTiquetes(originales, movimientosTiquetes);
   const devolucionesSinTiquete = devolucionesSinTiqueteDeMovimiento(originales);
-  const malasPorRuta = new Map();
   for (const devolucion of devolucionesSinTiquete) {
-    const movimientoId = String(devolucion.rutaMovId ?? devolucion.ruta_mov_id ?? "");
-    const rutaId = String(devolucion.rutaId ?? devolucion.ruta_id ?? "");
-    if (!movimientoId || !rutaId) continue;
-    const clave = claveRutaBodega(movimientoId, rutaId);
-    malasPorRuta.set(clave, (malasPorRuta.get(clave) || 0) + numeroBodega(devolucion.cartonesMalos ?? devolucion.cartones_malos));
     const fechaRecepcion = fechaHistorialISO(devolucion.fechaRecepcion);
     const buenos = numeroBodega(devolucion.cartonesBuenos ?? devolucion.cartones_buenos);
     if (fechaRecepcion && buenos !== 0 && (!aperturaISO || fechaRecepcion >= aperturaISO)) {
@@ -303,6 +297,12 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
   for (const movimiento of Array.isArray(movimientosTiquetes) ? movimientosTiquetes : []) {
     const fecha = fechaHistorialISO(movimiento.fecha);
     const delta = Number(movimiento.cartones_delta ?? movimiento.cartonesDelta ?? 0);
+    // Los cartones malos quedan en historial, pero no mueven existencias.
+    // Se marca la fecha para limpiar agregados históricos que ya los incluían.
+    if (String(movimiento.tipo || "") === "devolucion_mala") {
+      if (fecha) fechasConEventos.add(fecha);
+      continue;
+    }
     if (!fecha || !Number.isFinite(delta) || (aperturaISO && fecha < aperturaISO)) continue;
     fechasConEventos.add(fecha);
     const operacion = String(movimiento.operacion_id ?? movimiento.operacionId ?? movimiento.id ?? "");
@@ -356,9 +356,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
     const rutaCorrecta = tieneDetalleRutas
       ? rutaNetaBodega(movimiento.repartos)
       : numeroBodega(movimiento.rutaNeta);
-    const impactoMalasRuta = (movimiento.repartos || []).reduce((total, reparto, indice) =>
-      total + (malasPorRuta.get(claveRutaBodega(movimiento.id, idRutaBodega(movimiento, reparto, indice))) || 0), 0);
-    const rutaCorrectaConMalas = rutaCorrecta + impactoMalasRuta;
+    const rutaInventario = rutaCorrecta;
     // El anclaje histórico se calcula con la lógica original; si incorporáramos
     // aquí la devolución nueva, el ajuste implícito podría neutralizar su efecto.
     const rutaAnterior = rutaNetaAnterior(movimiento.repartos, movimiento.rutaNeta);
@@ -375,7 +373,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
       saldoAnteriorGuardado = saldoGuardado ?? saldoFinal;
       return {
         ...movimiento,
-        rutaNeta: redondearBodega(rutaCorrectaConMalas),
+        rutaNeta: redondearBodega(rutaInventario),
         versionSaldoBodega: 2,
         ajusteHistoricoImplicito: versionNueva ? numeroBodega(movimiento.ajusteHistoricoImplicito) : 0,
         saldoFinal,

@@ -55,7 +55,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.5";
+const VERSION_APP = "10.4.6";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1441,7 +1441,7 @@ export default function App({ onCerrarSesion }) {
   const devolucionesActivasSinTiquete = [...devolucionesDeOtrosDias, ...devolucionesSinTiquete];
   const malasSinTiquetePorRutaActual = repartos.reduce((total, reparto, indice) => total
     + cartonesMalosSinTiqueteEnRuta(devolucionesActivasSinTiquete, idMovimientoBodegaActual, idRepartoBodega(idMovimientoBodegaActual, reparto, indice)), 0);
-  const rutaNeta = +(rutaNetaBodega(repartos) + malasSinTiquetePorRutaActual).toFixed(1);
+  const rutaNeta = +rutaNetaBodega(repartos).toFixed(1);
   const buenasSinTiqueteHoy = devolucionesSinTiquete.reduce((total, devolucion) => total + numeroCartones(devolucion.cartonesBuenos || 0), 0);
   const operacionesUsoEnRuta = repartos.flatMap(reparto => reparto.tiquetesDevueltos || []).map(uso => uso.operacionId || uso.operacion_id).filter(Boolean);
   const movimientosTiquetesFechaBodega = movimientosTiquetesDevolucion.filter(movimiento => fechaHistorialISO(movimiento.fecha) === fechaBodega);
@@ -1461,18 +1461,7 @@ export default function App({ onCerrarSesion }) {
     if (!previos.length) return Number(bodegaCfg.inicialCart || 0);
     return previos.reduce((mejor, m) => (!mejor || aDate(m.fecha) > aDate(mejor.fecha) ? m : mejor), null).saldoFinal;
   })();
-  const sumarMalosPorRuta = lista => (lista || []).reduce((mapa, devolucion) => {
-    const clave = String(devolucion.rutaMovId ?? devolucion.ruta_mov_id ?? "");
-    if (clave) mapa.set(clave, (mapa.get(clave) || 0) + numeroCartones(devolucion.cartonesMalos ?? devolucion.cartones_malos));
-    return mapa;
-  }, new Map());
-  const malosAntesGuardados = sumarMalosPorRuta(bodegaMovs.find(m => String(m.id) === idMovimientoBodegaActual)?.devolucionesSinTiquete);
-  const malosAntesFormulario = sumarMalosPorRuta(devolucionesSinTiquete);
-  const movimientosPreviosIds = new Set(bodegaMovs.filter(m => aDate(m.fecha) < aDate(fechaB)).map(m => String(m.id)));
-  const cambioMalosPrevios = [...new Set([...malosAntesGuardados.keys(), ...malosAntesFormulario.keys()])]
-    .filter(movimientoId => movimientosPreviosIds.has(movimientoId))
-    .reduce((total, movimientoId) => total + (malosAntesFormulario.get(movimientoId) || 0) - (malosAntesGuardados.get(movimientoId) || 0), 0);
-  const saldoBase = Number(saldoBaseGuardado || 0) - cambioMalosPrevios;
+  const saldoBase = Number(saldoBaseGuardado || 0);
   const rutasRegistradasTiquetes = rutasBodegaParaTiquetes(bodegaMovs).filter(ruta => ruta.movimientoId !== idMovimientoBodegaActual);
   const rutasFormularioTiquetes = repartos.map((reparto, indice) => ({
     movimientoId: idMovimientoBodegaActual,
@@ -4597,10 +4586,10 @@ export default function App({ onCerrarSesion }) {
                     <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                       <thead><tr><th style={th}>Movimiento</th><th style={th}>Tiquete</th><th style={th}>Ruta vinculada</th><th style={th}>Cartones</th></tr></thead>
                       <tbody>{movimientosTiquetesDevolucion.filter(m => fechaHistorialISO(m.fecha) === fechaHistorialISO(mov.fecha)).map(m => <tr key={m.id}>
-                        <td style={celda}>{m.tipo === "devolucion" ? "Devolución recibida" : m.tipo === "uso" ? "Uso en ruta" : "Corrección"}</td>
+                        <td style={celda}>{m.tipo === "devolucion" ? "Devolución recibida" : m.tipo === "devolucion_mala" ? "Quebrados (informativo)" : m.tipo === "uso" ? "Uso en ruta" : "Corrección"}</td>
                         <td style={celda}>#{m.numero}</td>
                         <td style={celda}>{String(m.fecha_ruta).split("-").reverse().join("/")} · {m.repartidor}</td>
-                        <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{Number(m.cartones_delta) > 0 ? "+" : ""}{f2Dec(m.cartones_delta)}</td>
+                        <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{m.tipo === "devolucion_mala" ? f2Dec(Math.abs(Number(m.cartones_delta || 0))) : `${Number(m.cartones_delta) > 0 ? "+" : ""}${f2Dec(m.cartones_delta)}`}</td>
                       </tr>)}</tbody>
                     </table>
                   </>}
@@ -6377,7 +6366,7 @@ export default function App({ onCerrarSesion }) {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
               <KPI etiqueta="Entradas (+)" valor={formatoCartones(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta + Math.max(0, impactoTiquetesHoy))} unidad="cart" tono="ok" sub={`Producido ${formatoCartones(producidoHoyCart, "0")}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${formatoCartones(movBodega.comprado, "0")}` : ""}${devolucionNetaRuta > 0 ? ` · devolución manual +${formatoCartones(devolucionNetaRuta, "0")}` : ""}${impactoTiquetesHoy > 0 ? ` · devoluciones buenas +${formatoCartones(impactoTiquetesHoy, "0")}` : ""}`} />
-              <KPI etiqueta="Salidas (−)" valor={formatoCartones(salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy))} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy) > 0 ? "alerta" : undefined} sub={`Ruta (incluye devolución mala) −${formatoCartones(salidaNetaRuta, "0")}${devolucionMalaTiqueteHoy > 0 ? ` · devueltos malos cargados a ruta −${formatoCartones(devolucionMalaTiqueteHoy, "0")}` : ""}${usosTiquetesSinRutaGuardadaHoy > 0 ? ` · tiquetes reutilizados sin salida guardada −${formatoCartones(usosTiquetesSinRutaGuardadaHoy, "0")}` : ""}${otrasSalidasBodega > 0 ? ` + otras ${formatoCartones(otrasSalidasBodega, "0")}` : ""}`} />
+              <KPI etiqueta="Salidas (−)" valor={formatoCartones(salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy))} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy) > 0 ? "alerta" : undefined} sub={`Ruta −${formatoCartones(salidaNetaRuta, "0")}${devolucionMalaTiqueteHoy > 0 ? ` · quebrados anotados ${formatoCartones(devolucionMalaTiqueteHoy, "0")} (sin efecto en saldo)` : ""}${usosTiquetesSinRutaGuardadaHoy > 0 ? ` · tiquetes reutilizados sin salida guardada −${formatoCartones(usosTiquetesSinRutaGuardadaHoy, "0")}` : ""}${otrasSalidasBodega > 0 ? ` + otras ${formatoCartones(otrasSalidasBodega, "0")}` : ""}`} />
               <KPI etiqueta="Saldo proyectado" valor={formatoCartones(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : ajusteHistoricoBodega ? `= inicial + entradas − salidas · reconciliación histórica ${ajusteHistoricoBodega > 0 ? "+" : ""}${formatoCartones(ajusteHistoricoBodega, "0")} cart` : "= inicial + entradas − salidas"} />
             </div>
 
@@ -6440,8 +6429,7 @@ export default function App({ onCerrarSesion }) {
             {(subBodega === "ruta" || subBodega === "todo") && (
             <Seccion num="2" titulo="Salida a ruta por repartidor" sub="Los cartones reutilizados se suman a la salida de su ruta; registra juntas las devoluciones buenas y malas, con o sin tiquete físico.">
               {repartos.map((r, i) => {
-                const idRutaActual = idRepartoBodega(idMovimientoBodegaActual, r, i);
-                const neto = rutaNetaBodega([r]) + cartonesMalosSinTiqueteEnRuta(devolucionesActivasSinTiquete, idMovimientoBodegaActual, idRutaActual);
+                const neto = rutaNetaBodega([r]);
                 const impactoRutaRepartidor = presentacionRutaNeta(neto);
                 return (
                   <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: i === 0 ? `1px solid ${C.borde}` : "none" }}>
@@ -6603,7 +6591,7 @@ export default function App({ onCerrarSesion }) {
                             Los tiquetes devueltos ya consumidos quedan asociados a esta ruta y protegidos en el historial.
                           </div>}
                           {(Number(r.devBueno || 0) > 0 || Number(r.devMalo || 0) > 0) && <div role="status" style={{ marginTop: 6, padding: 9, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 12, fontWeight: 700 }}>
-                            ℹ Devolución histórica sin tiquete: {formatoCartones(r.devBueno, "0")} buenos y {formatoCartones(r.devMalo, "0")} malos. Se conserva con su saldo original y no crea un tiquete reutilizable.
+                            ℹ Devolución histórica sin tiquete: {formatoCartones(r.devBueno, "0")} buenos y {formatoCartones(r.devMalo, "0")} malos anotados; los malos son informativos y no cambian el saldo. No crea un tiquete reutilizable.
                           </div>}
                         </div>
                       );
@@ -6715,8 +6703,9 @@ export default function App({ onCerrarSesion }) {
                     {historialVisible(movimientosTiquetesDevolucion, "bodega").map(movimiento => {
                       const tiquete = tiquetesDevolucion.find(t => String(t.id) === String(movimiento.tiquete_id));
                       const delta = Number(movimiento.cartones_delta || 0);
+                      const esDevolucionMala = movimiento.tipo === "devolucion_mala";
                       return <div key={movimiento.id} style={{ padding: "7px 9px", background: C.fondo, borderRadius: 7, fontSize: 11.5 }}>
-                        <b>{fechaHistorialISO(movimiento.fecha)?.split("-").reverse().join("/")}</b> · {movimiento.tipo === "devolucion" ? "Devolución recibida" : movimiento.tipo === "uso" ? "Uso en ruta" : "Corrección"} · #{movimiento.numero || tiquete?.numero} · <b style={{ color: delta >= 0 ? C.verde : C.alerta }}>{delta > 0 ? "+" : ""}{f2Dec(delta)} cart</b>
+                        <b>{fechaHistorialISO(movimiento.fecha)?.split("-").reverse().join("/")}</b> · {movimiento.tipo === "devolucion" ? "Devolución recibida" : esDevolucionMala ? "Quebrados (informativo)" : movimiento.tipo === "uso" ? "Uso en ruta" : "Corrección"} · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esDevolucionMala ? "#A75A00" : delta >= 0 ? C.verde : C.alerta }}>{esDevolucionMala ? f2Dec(Math.abs(delta)) : `${delta > 0 ? "+" : ""}${f2Dec(delta)}`} cart{esDevolucionMala ? " · no modifica inventario" : ""}</b>
                         <div style={{ color: C.textoSuave, marginTop: 2 }}>Ruta {String(movimiento.fecha_ruta).split("-").reverse().join("/")} · {movimiento.repartidor}{tiquete ? ` · saldo disponible del tiquete: ${f2Dec(tiquete.saldo_cartones)} cart` : ""}</div>
                         {!!movimiento.motivo && <div style={{ marginTop: 2 }}>{movimiento.motivo}</div>}
                       </div>;

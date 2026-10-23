@@ -144,10 +144,10 @@ export function ControlDiarioOperaciones({
   const buenosRecibidosHoy = buenosLegadosHoy + resumenDevoluciones.buenosExplicitosHoy;
   const malosVinculadosHoy = detalleRutas.reduce((total, detalle) => total + detalle.malosVinculados, 0);
   const rutaNetaLegada = movimientoBodega?.repartos ? rutaNetaBodega(movimientoBodega.repartos) : numeroSeguro(movimientoBodega?.rutaNeta);
-  // El neto reconstruido incluye devoluciones malas asociadas a rutas de este día.
   // Los buenos legados se separan como entrada para que el reporte no los oculte dentro del neto.
+  // Los malos se muestran como información de quebrados y no afectan el saldo.
   const salidaRutaHoy = movimientoBodega?.repartos
-    ? rutaNetaLegada + buenosLegadosHoy + malosVinculadosHoy
+    ? rutaNetaLegada + buenosLegadosHoy
     : rutaNetaLegada;
   const ajustesTiquetesReporte = ajustarMovimientosTiquetesReporte({
     movimientoTiquetes: movimientoBodega?.movimientoTiquetes,
@@ -233,13 +233,12 @@ export function ControlDiarioOperaciones({
     ["Huevo devuelto bueno (recibido hoy, +)", ...repartos.map((r, indice) => {
       return hayDatosRutas ? numero(numeroSeguro(r.devBueno) + (detalleRutas[indice]?.buenosExplicitos || 0)) : "";
     })],
-    ["Huevo devuelto malo (cargado a ruta de origen)", ...repartos.map((r, indice) => {
+    ["Huevo devuelto malo (solo informativo; no afecta saldo)", ...repartos.map((r, indice) => {
       return hayDatosRutas ? numero(numeroSeguro(r.devMalo) + (detalleRutas[indice]?.malosVinculados || 0)) : "";
     })],
-    ["Impacto neto de la ruta en este día (=)", ...repartos.map((r, indice) => {
+    ["Impacto de la ruta en inventario (=)", ...repartos.map((r, indice) => {
       if (!hayDatosRutas) return "";
-      const neto = rutaNetaBodega([r]) + (detalleRutas[indice]?.malosVinculados || 0)
-        - (detalleRutas[indice]?.buenosExplicitos || 0);
+      const neto = rutaNetaBodega([r]) - (detalleRutas[indice]?.buenosExplicitos || 0);
       const impacto = presentacionRutaNeta(neto);
       return `${impacto.signo}${numero(impacto.cantidad)}`;
     })],
@@ -249,7 +248,7 @@ export function ControlDiarioOperaciones({
     ["Saldo de huevo en bodega (=)", numero(saldoInicialBodega)],
     ["(+) Entrada de huevo comprado", numero(movimientoBodega?.comprado)],
     ["(+) Entrada de huevo producido", numero(entradasBodega)],
-    ["(-) Salida por rutas y devoluciones malas de origen", numero(salidaRutaHoy)],
+    ["(-) Salida por rutas", numero(salidaRutaHoy)],
     ["(+) Entrada por devolución buena recibida hoy", numero(buenosRecibidosHoy)],
     ["(-) Salida de huevo vendido en granja", numero(movimientoBodega?.vendGranja)],
     ["(-) Huevo destruido o quebrado", numero(movimientoBodega?.destruido)],
@@ -293,7 +292,7 @@ export function ControlDiarioOperaciones({
             <Cuadricula className="op-compact" columnas={["Concepto", ...repartos.map((r) => r.nombre || "Ruta")]} filas={filasRutas} />
             <div className="op-route-total">
               Entrada por devolución buena recibida hoy (+): <b>{numero(buenosRecibidosHoy)} cartones</b>
-              {hayDevolucionesLegadas && <small className="op-route-note">Una devolución del formato anterior queda en la fecha/ruta registrada. Si llegó otro día, asígnala en Historial de Bodega para cargar los malos a su ruta de origen.</small>}
+              {hayDevolucionesLegadas && <small className="op-route-note">Las devoluciones buenas suman al inventario al recibirse. Los cartones malos se conservan como registro informativo y no alteran el saldo.</small>}
             </div>
           </div>
         </div>

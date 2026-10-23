@@ -43,14 +43,14 @@ test("al imprimir Bodega, el movimiento elegido pertenece a la fecha visible", (
 });
 
 
-test("la devolución mala aumenta la salida proyectada; la buena sí regresa al saldo", () => {
-  assert.equal(rutaNetaBodega([{ salida: 10, devBueno: 3, devMalo: 2 }]), 9);
+test("la devolución mala es informativa; la buena sí regresa al saldo", () => {
+  assert.equal(rutaNetaBodega([{ salida: 10, devBueno: 3, devMalo: 2 }]), 7);
   assert.equal(rutaNetaBodega([{ salida: 0, tiquetesDevueltos: [{ cartones: "0,5" }] }]), 0.5);
   const [movimiento] = reconstruirBodega([
     { id: "hoy", fecha: "01/10/2026", producido: 0, repartos: [{ salida: 10, devBueno: 3, devMalo: 2 }] },
   ], 100, "2026-10-01");
-  assert.equal(movimiento.rutaNeta, 9);
-  assert.equal(movimiento.saldoFinal, 91);
+  assert.equal(movimiento.rutaNeta, 7);
+  assert.equal(movimiento.saldoFinal, 93);
 });
 
 test("las devoluciones por tiquete entran el día recibido y el uso parcial resta en su propio día", () => {
@@ -69,7 +69,7 @@ test("las devoluciones por tiquete entran el día recibido y el uso parcial rest
   assert.equal(porFecha["2026-10-03"].saldoFinal, 107);
 });
 
-test("la devolución mala se imputa a la ruta de origen y los buenos entran en la fecha real", () => {
+test("la devolución mala se conserva en historial sin afectar saldo; los buenos entran en la fecha real", () => {
   const movimientosTiquetes = [
     { tipo: "devolucion_mala", fecha: "2026-10-11", fecha_recepcion: "2026-10-12", cartones_delta: -5, ruta_mov_id: "b-11", ruta_id: "r-1" },
     { tipo: "devolucion", fecha: "2026-10-12", fecha_recepcion: "2026-10-12", cartones_delta: 13, ruta_mov_id: "b-11", ruta_id: "r-1" },
@@ -79,13 +79,13 @@ test("la devolución mala se imputa a la ruta de origen y los buenos entran en l
     { id: "b-12", fecha: "12/10/2026", producido: 0, repartos: [] },
   ], 200, "2026-10-11", movimientosTiquetes);
   const porFecha = Object.fromEntries(reconstruidos.map(m => [fechaHistorialISO(m.fecha), m]));
-  assert.equal(porFecha["2026-10-11"].movimientoTiquetes, -5);
-  assert.equal(porFecha["2026-10-11"].saldoFinal, 95);
+  assert.equal(porFecha["2026-10-11"].movimientoTiquetes, 0);
+  assert.equal(porFecha["2026-10-11"].saldoFinal, 100);
   assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 13);
-  assert.equal(porFecha["2026-10-12"].saldoFinal, 108);
+  assert.equal(porFecha["2026-10-12"].saldoFinal, 113);
 });
 
-test("las nuevas devoluciones sin tiquete suman los buenos al recibir y cargan los malos a la ruta origen", () => {
+test("las nuevas devoluciones sin tiquete suman los buenos al recibir y solo registran los malos", () => {
   const origen = {
     id: "b-11", fecha: "11/10/2026", producido: 0, saldoFinal: 100,
     repartos: [{ id: "r-1", nombre: "Bryan", salida: 100 }],
@@ -101,8 +101,8 @@ test("las nuevas devoluciones sin tiquete suman los buenos al recibir y cargan l
   const reconstruidos = reconstruirBodega([origen, recepcion], 200, "2026-10-11");
   const porFecha = Object.fromEntries(reconstruidos.map(m => [fechaHistorialISO(m.fecha), m]));
 
-  assert.equal(porFecha["2026-10-11"].rutaNeta, 105);
-  assert.equal(porFecha["2026-10-11"].saldoFinal, 95);
+  assert.equal(porFecha["2026-10-11"].rutaNeta, 100);
+  assert.equal(porFecha["2026-10-11"].saldoFinal, 100);
   assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 13);
   assert.equal(porFecha["2026-10-12"].saldoFinal, 108);
   assert.deepEqual([origen, recepcion], antes, "la reconstrucción solo calcula; no modifica registros originales");
@@ -145,9 +145,9 @@ test("corregir una devolución histórica convierte el registro viejo, reasigna 
 
   assert.equal(rutaAnterior.repartos[0].devBueno, 0);
   assert.equal(rutaAnterior.repartos[0].devMalo, 0);
-  assert.equal(porFecha["2026-10-11"].rutaNeta, 31);
+  assert.equal(porFecha["2026-10-11"].rutaNeta, 30);
   assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 8);
-  assert.equal(porFecha["2026-10-12"].saldoFinal, 17);
+  assert.equal(porFecha["2026-10-12"].saldoFinal, 18);
   const guardada = historialDevolucionesSinTiquete(editados)[0];
   assert.equal(guardada.rutaId, "r-11");
   assert.equal(guardada.original.historialEdiciones[0].motivo, "Conteo físico corregido");
@@ -194,9 +194,9 @@ test("recalcula el historial, conserva saltos antiguos sin conteo y es idempoten
   ];
   const primero = reconstruirBodega(legado, 0, "2026-10-01");
   const porFecha = [...primero].reverse();
-  assert.deepEqual(porFecha.map(m => m.saldoFinal), [1000, 989, 1014, 1000]);
+  assert.deepEqual(porFecha.map(m => m.saldoFinal), [1000, 995, 1020, 1000]);
   assert.equal(porFecha[2].ajusteHistoricoImplicito, 25);
-  assert.equal(porFecha[3].difAjuste, -14);
+  assert.equal(porFecha[3].difAjuste, -20);
   const segundo = reconstruirBodega(primero, 0, "2026-10-01");
   assert.deepEqual(segundo.map(m => ({
     fecha: m.fecha, rutaNeta: m.rutaNeta, saldoFinal: m.saldoFinal,

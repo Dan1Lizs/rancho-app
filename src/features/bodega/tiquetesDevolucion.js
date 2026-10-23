@@ -41,6 +41,7 @@ export function impactoTiquetesEnFecha(movimientos = [], fecha, operacionesExclu
   return (Array.isArray(movimientos) ? movimientos : []).reduce((total, movimiento) => {
     const fechaMovimiento = fechaISODeTiquete(movimiento.fecha);
     if (fechaMovimiento !== claveFecha || excluidas.has(String(movimiento.operacion_id ?? movimiento.operacionId ?? ""))) return total;
+    if (movimiento.tipo === "devolucion_mala") return total;
     return total + Number(movimiento.cartones_delta ?? movimiento.cartonesDelta ?? 0);
   }, 0);
 }
