@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { entradaProducidaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "../src/features/reportes/calculosControlDiario.js";
+import { entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "../src/features/reportes/calculosControlDiario.js";
 
 test("la suma de producción conserva medios cartones y tolera datos numéricos en texto", () => {
   assert.equal(sumarCartonesProduccion([49, "40", "59,5", 0]), 148.5);
@@ -28,3 +28,37 @@ test("un conteo físico prevalece y la diferencia queda visible", () => {
   assert.equal(saldo.saldoFinal, 675);
   assert.equal(saldo.ajusteConteo, 0.5);
 });
+
+test("el reporte separa los buenos recibidos hoy de los malos cargados a la ruta de origen", () => {
+  const movimientosBodega = [
+    { id: "b-11", fecha: "11/10/2026", repartos: [{ id: "r-bryan-11", nombre: "Bryan", salida: 100 }] },
+    { id: "b-12", fecha: "12/10/2026", repartos: [], devolucionesSinTiquete: [{
+      id: "dev-12", fechaRecepcion: "2026-10-12", fechaRutaOrigen: "2026-10-11",
+      rutaMovId: "b-11", rutaId: "r-bryan-11", repartidor: "Bryan", cartonesBuenos: 13, cartonesMalos: 5,
+    }] },
+  ];
+
+  const recibidosHoy = resumenDevolucionesRutaReporte({
+    movimientosBodega,
+    fecha: "2026-10-12",
+    movimientoId: "b-12",
+    repartos: [{ nombre: "Bryan" }],
+  });
+  const cargadosAlOrigen = resumenDevolucionesRutaReporte({
+    movimientosBodega,
+    fecha: "2026-10-11",
+    movimientoId: "b-11",
+    repartos: movimientosBodega[0].repartos,
+  });
+
+  assert.equal(recibidosHoy.buenosExplicitosHoy, 13);
+  assert.equal(recibidosHoy.detalleRutas[0].buenosExplicitos, 13);
+  assert.equal(recibidosHoy.detalleRutas[0].malosVinculados, 0);
+  assert.equal(cargadosAlOrigen.detalleRutas[0].malosVinculados, 5);
+
+  const saldoTrasSalidaYMalos = saldoBodegaReporte(200, 0, { movimientoTiquetes: 0 }, 105);
+  const saldoTrasDevolucionBuena = saldoBodegaReporte(saldoTrasSalidaYMalos.saldoFinal, 0, { movimientoTiquetes: 13 }, 0);
+  assert.equal(saldoTrasSalidaYMalos.saldoFinal, 95);
+  assert.equal(saldoTrasDevolucionBuena.saldoFinal, 108);
+});
+

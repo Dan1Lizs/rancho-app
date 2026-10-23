@@ -3,12 +3,14 @@ import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
 import { rutaNetaBodega } from "../../historial.js";
 import { presentacionRutaNeta } from "../../bodegaResumen.js";
 import { cartonesUsoEnRuta } from "../bodega/tiquetesDevolucion.js";
-import { entradaProducidaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
+import { claveRepartidorReporte, entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
 import "./control-diario-operaciones.css";
 
 const numero = (valor, decimales = 2) => {
-  if (valor === "" || valor == null || !Number.isFinite(Number(valor))) return "";
-  return new Intl.NumberFormat("es-CR", { maximumFractionDigits: decimales }).format(Number(valor));
+  if (valor === "" || valor == null) return "";
+  const cantidad = Number(String(valor).trim().replace(",", "."));
+  if (!Number.isFinite(cantidad)) return "";
+  return new Intl.NumberFormat("es-CR", { maximumFractionDigits: decimales }).format(cantidad);
 };
 
 const isoDe = (fecha) => {
@@ -24,7 +26,10 @@ const fechaCorta = (fecha) => {
 };
 
 const tieneDato = (valor) => valor !== "" && valor != null;
-const numeroSeguro = (valor) => Number.isFinite(Number(valor)) ? Number(valor) : 0;
+const numeroSeguro = (valor) => {
+  const cantidad = Number(String(valor ?? "").trim().replace(",", "."));
+  return Number.isFinite(cantidad) ? cantidad : 0;
+};
 
 function Cuadricula({ columnas, filas, encabezado = true, className = "" }) {
   return (
@@ -114,15 +119,42 @@ export function ControlDiarioOperaciones({
   const saldoInicialBodega = previosBodega[0]?.saldoFinal
     ?? (aperturaBodega && fechaISO < aperturaBodega ? "" : (bodegaCfg.inicialCart ?? ""));
   const entradasBodega = entradaProducidaReporte(registrosDia, movimientoBodega, produccion);
-  const repartos = movimientoBodega?.repartos?.length
+  const repartosBase = movimientoBodega?.repartos?.length
     ? movimientoBodega.repartos
     : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map((nombre) => ({ nombre }));
-  const rutaNeta = movimientoBodega?.repartos
-    ? rutaNetaBodega(movimientoBodega.repartos)
-    : (movimientoBodega?.rutaNeta ?? "");
-  const impactoRuta = presentacionRutaNeta(rutaNeta);
-  const saldoBodega = saldoBodegaReporte(saldoInicialBodega, entradasBodega, movimientoBodega, rutaNeta);
-  const hayDatosRutas = Boolean(movimientoBodega?.repartos?.length);
+  const resumenDevolucionesInicial = resumenDevolucionesRutaReporte({
+    movimientosBodega: bodegaMovs,
+    fecha: fechaISO,
+    movimientoId: movimientoBodega?.id,
+    repartos: repartosBase,
+  });
+  const nombresDevolucionHoy = Object.entries(resumenDevolucionesInicial.nombresPorRepartidor)
+    .filter(([clave]) => !repartosBase.some((r) => claveRepartidorReporte(r.nombre) === clave))
+    .map(([, nombre]) => nombre);
+  const repartos = [...repartosBase, ...nombresDevolucionHoy.map((nombre) => ({ nombre }))];
+  const resumenDevoluciones = resumenDevolucionesRutaReporte({
+    movimientosBodega: bodegaMovs,
+    fecha: fechaISO,
+    movimientoId: movimientoBodega?.id,
+    repartos,
+  });
+  const detalleRutas = resumenDevoluciones.detalleRutas;
+  const buenosLegadosHoy = (movimientoBodega?.repartos || []).reduce((total, r) => total + numeroSeguro(r.devBueno), 0);
+  const hayDevolucionesLegadas = (movimientoBodega?.repartos || []).some((r) => numeroSeguro(r.devBueno) > 0 || numeroSeguro(r.devMalo) > 0);
+  const buenosRecibidosHoy = buenosLegadosHoy + resumenDevoluciones.buenosExplicitosHoy;
+  const malosVinculadosHoy = detalleRutas.reduce((total, detalle) => total + detalle.malosVinculados, 0);
+  const rutaNetaLegada = movimientoBodega?.repartos ? rutaNetaBodega(movimientoBodega.repartos) : numeroSeguro(movimientoBodega?.rutaNeta);
+  // El neto reconstruido incluye devoluciones malas asociadas a rutas de este día.
+  // Los buenos legados se separan como entrada para que el reporte no los oculte dentro del neto.
+  const salidaRutaHoy = movimientoBodega?.repartos
+    ? rutaNetaLegada + buenosLegadosHoy + malosVinculadosHoy
+    : rutaNetaLegada;
+  const movimientoParaSaldo = movimientoBodega
+    ? { ...movimientoBodega, movimientoTiquetes: numeroSeguro(movimientoBodega.movimientoTiquetes) + buenosLegadosHoy }
+    : movimientoBodega;
+  const saldoBodega = saldoBodegaReporte(saldoInicialBodega, entradasBodega, movimientoParaSaldo, salidaRutaHoy);
+  const hayDatosRutas = Boolean(movimientoBodega?.repartos?.length || buenosRecibidosHoy || malosVinculadosHoy);
+  const otrosMovimientosTiquetes = numeroSeguro(movimientoBodega?.movimientoTiquetes) - resumenDevoluciones.buenosExplicitosHoy;
 
   const fumigacionesDia = fumigaciones.filter((f) => isoDe(f.fecha) === fechaISO);
   const medicacionesDia = medicaciones.filter((m) => isoDe(m.fecha) === fechaISO);
@@ -191,24 +223,31 @@ export function ControlDiarioOperaciones({
     ["Salida de tiquetes normales", ...repartos.map((r) => hayDatosRutas ? numero(r.salida) : "")],
     ["Tiquetes devueltos reutilizados (+)", ...repartos.map((r) => hayDatosRutas ? numero(cartonesUsoEnRuta(r)) : "")],
     ["Salida total asignada a ruta", ...repartos.map((r) => hayDatosRutas ? numero(numeroSeguro(r.salida) + cartonesUsoEnRuta(r)) : "")],
-    ["Huevo devuelto bueno", ...repartos.map((r) => hayDatosRutas ? numero(r.devBueno) : "")],
-    ["Huevo devuelto malo (reduce saldo)", ...repartos.map((r) => hayDatosRutas ? numero(r.devMalo) : "")],
-    ["Impacto de ruta en saldo (=)", ...repartos.map((r) => {
+    ["Huevo devuelto bueno (recibido hoy, +)", ...repartos.map((r, indice) => {
+      return hayDatosRutas ? numero(numeroSeguro(r.devBueno) + (detalleRutas[indice]?.buenosExplicitos || 0)) : "";
+    })],
+    ["Huevo devuelto malo (cargado a ruta de origen)", ...repartos.map((r, indice) => {
+      return hayDatosRutas ? numero(numeroSeguro(r.devMalo) + (detalleRutas[indice]?.malosVinculados || 0)) : "";
+    })],
+    ["Impacto neto de la ruta en este día (=)", ...repartos.map((r, indice) => {
       if (!hayDatosRutas) return "";
-      const neto = rutaNetaBodega([r]);
+      const neto = rutaNetaBodega([r]) + (detalleRutas[indice]?.malosVinculados || 0)
+        - (detalleRutas[indice]?.buenosExplicitos || 0);
       const impacto = presentacionRutaNeta(neto);
       return `${impacto.signo}${numero(impacto.cantidad)}`;
     })],
   ];
+  const movimientoTiquetesResidual = otrosMovimientosTiquetes;
   const filasInventarioBodega = [
     ["Saldo de huevo en bodega (=)", numero(saldoInicialBodega)],
     ["(+) Entrada de huevo comprado", numero(movimientoBodega?.comprado)],
     ["(+) Entrada de huevo producido", numero(entradasBodega)],
-    [`${impactoRuta.signo ? `(${impactoRuta.signo}) ` : ""}${impactoRuta.etiqueta}`, impactoRuta.cantidad == null ? "" : numero(impactoRuta.cantidad)],
+    ["(-) Salida por rutas y devoluciones malas de origen", numero(salidaRutaHoy)],
+    ["(+) Entrada por devolución buena recibida hoy", numero(buenosRecibidosHoy)],
     ["(-) Salida de huevo vendido en granja", numero(movimientoBodega?.vendGranja)],
     ["(-) Huevo destruido o quebrado", numero(movimientoBodega?.destruido)],
     ["(-) Huevo regalado / salida gratis", numero(movimientoBodega?.regalado)],
-    ...(Number(movimientoBodega?.movimientoTiquetes || 0) ? [["(+/−) Movimiento de tiquetes", `${Number(movimientoBodega.movimientoTiquetes) > 0 ? "+" : "−"}${numero(Math.abs(Number(movimientoBodega.movimientoTiquetes)))}`]] : []),
+    ...(Math.abs(movimientoTiquetesResidual) > 0.000001 ? [["(+/−) Otros movimientos de tiquetes", `${movimientoTiquetesResidual > 0 ? "+" : "−"}${numero(Math.abs(movimientoTiquetesResidual))}`]] : []),
     ...(Number(movimientoBodega?.ajusteHistoricoImplicito || 0) ? [["(+/−) Reconciliación histórica conservada", `${Number(movimientoBodega.ajusteHistoricoImplicito) > 0 ? "+" : "−"}${numero(Math.abs(Number(movimientoBodega.ajusteHistoricoImplicito)))}`]] : []),
     ...(saldoBodega.ajusteConteo ? [["(+/−) Diferencia por conteo físico", `${saldoBodega.ajusteConteo > 0 ? "+" : "−"}${numero(Math.abs(saldoBodega.ajusteConteo))}`]] : []),
     ["SALDO FINAL EN BODEGA (=)", numero(saldoBodega.saldoFinal)],
@@ -245,7 +284,10 @@ export function ControlDiarioOperaciones({
           </div>
           <div><TituloSeccion>3. SALIDA DIARIA DE HUEVO</TituloSeccion>
             <Cuadricula className="op-compact" columnas={["Concepto", ...repartos.map((r) => r.nombre || "Ruta")]} filas={filasRutas} />
-            <div className="op-route-total">{impactoRuta.etiqueta}{impactoRuta.signo ? ` (${impactoRuta.signo})` : ""}: <b>{impactoRuta.cantidad == null ? "" : numero(impactoRuta.cantidad)} cartones</b></div>
+            <div className="op-route-total">
+              Entrada por devolución buena recibida hoy (+): <b>{numero(buenosRecibidosHoy)} cartones</b>
+              {hayDevolucionesLegadas && <small className="op-route-note">Una devolución del formato anterior queda en la fecha/ruta registrada. Si llegó otro día, asígnala en Historial de Bodega para cargar los malos a su ruta de origen.</small>}
+            </div>
           </div>
         </div>
 
@@ -312,3 +354,4 @@ export function ControlDiarioOperaciones({
     </div>
   );
 }
+
