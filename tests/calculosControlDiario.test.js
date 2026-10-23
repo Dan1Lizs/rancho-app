@@ -85,3 +85,19 @@ test("conserva otros movimientos reales al separar una devolución histórica", 
   assert.equal(ajuste.otrosMovimientos, -2);
   assert.equal(ajuste.movimientoParaSaldo, 11);
 });
+
+test("la devolución buena se cuenta una sola vez aunque el día sea anterior a la apertura", () => {
+  const ajuste = ajustarMovimientosTiquetesReporte({
+    movimientoTiquetes: 13,
+    buenosExplicitosHoy: 13,
+    movimientoTiquetesYaIncluyeBuenosExplicitos: true,
+  });
+  assert.equal(ajuste.otrosMovimientos, 0);
+  assert.equal(ajuste.movimientoParaSaldo, 13);
+
+  const saldo = saldoBodegaReporte(526.5, 148.5, {
+    regalado: 1,
+    movimientoTiquetes: ajuste.movimientoParaSaldo,
+  }, 0);
+  assert.equal(saldo.saldoFinal, 687);
+});

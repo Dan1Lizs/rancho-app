@@ -22,19 +22,19 @@ export function ajustarMovimientosTiquetesReporte({
   movimientoTiquetes = 0,
   buenosLegadosHoy = 0,
   buenosExplicitosHoy = 0,
-  fecha,
-  fechaApertura,
+  movimientoTiquetesYaIncluyeBuenosExplicitos = false,
 } = {}) {
-  const fechaSeleccionada = fechaReporteISO(fecha);
-  const apertura = fechaReporteISO(fechaApertura);
   const buenos = cartonesReporte(buenosExplicitosHoy);
-  const buenosIncluidosEnReconstruccion = apertura && fechaSeleccionada < apertura ? 0 : buenos;
+  // Las devoluciones buenas explícitas también se reflejan en movimientoTiquetes
+  // cuando existe un movimiento diario reconstruido/guardado. Restarlas por
+  // fecha de apertura hacía que las fechas históricas las contaran dos veces.
+  const buenosIncluidosEnMovimiento = movimientoTiquetesYaIncluyeBuenosExplicitos ? buenos : 0;
   const movimiento = cartonesReporte(movimientoTiquetes);
 
   return {
     movimientoParaSaldo: movimiento + cartonesReporte(buenosLegadosHoy)
-      + buenos - buenosIncluidosEnReconstruccion,
-    otrosMovimientos: movimiento - buenosIncluidosEnReconstruccion,
+      + buenos - buenosIncluidosEnMovimiento,
+    otrosMovimientos: movimiento - buenosIncluidosEnMovimiento,
   };
 }
 

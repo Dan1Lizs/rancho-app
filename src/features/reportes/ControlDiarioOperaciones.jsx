@@ -155,8 +155,7 @@ export function ControlDiarioOperaciones({
     movimientoTiquetes: movimientoBodega?.movimientoTiquetes,
     buenosLegadosHoy,
     buenosExplicitosHoy: resumenDevoluciones.buenosExplicitosHoy,
-    fecha: fechaISO,
-    fechaApertura: aperturaBodega,
+    movimientoTiquetesYaIncluyeBuenosExplicitos: Boolean(movimientoBodega),
   });
   const movimientoParaSaldo = movimientoBodega || ajustesTiquetesReporte.movimientoParaSaldo
     ? { ...(movimientoBodega || {}), movimientoTiquetes: ajustesTiquetesReporte.movimientoParaSaldo }
