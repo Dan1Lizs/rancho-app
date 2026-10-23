@@ -10,6 +10,29 @@ export function fechaHistorialISO(fecha) {
   return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : "";
 }
 
+const numeroBodega = (valor) => {
+  const numero = Number(String(valor ?? "").trim().replace(",", "."));
+  return Number.isFinite(numero) ? numero : 0;
+};
+
+export function saldoInicialBodegaEnFecha(movs, inicialCart, apertura, fecha) {
+  const fechaISO = fechaHistorialISO(fecha);
+  const aperturaISO = fechaHistorialISO(apertura);
+  if (!fechaISO) return null;
+
+  const periodoAbierto = Boolean(aperturaISO && fechaISO >= aperturaISO);
+  const previos = (Array.isArray(movs) ? movs : [])
+    .filter(movimiento => {
+      const fechaMovimiento = fechaHistorialISO(movimiento.fecha);
+      return fechaMovimiento && fechaMovimiento < fechaISO
+        && (!periodoAbierto || fechaMovimiento >= aperturaISO);
+    })
+    .sort((a, b) => fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)));
+  if (previos.length) return numeroBodega(previos.at(-1).saldoFinal);
+  if (periodoAbierto || !aperturaISO) return numeroBodega(inicialCart);
+  return null;
+}
+
 export function filtrarHistorial(items, periodo, hoy = new Date()) {
   if (periodo === "todo") return items;
   const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
@@ -344,14 +367,23 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
 
   const primeraFecha = fechaHistorialISO(ordenados[0].fecha);
   const anclarPrimerCierre = Boolean(aperturaISO && primeraFecha && primeraFecha < aperturaISO);
+  const hayHistorialAntesDeApertura = Boolean(aperturaISO && ordenados.some(movimiento => fechaHistorialISO(movimiento.fecha) < aperturaISO));
   const saldoInicial = numeroBodega(inicialCart);
   const primerSaldoGuardado = ordenados[0].ajusteConteo != null
     ? numeroBodega(ordenados[0].ajusteConteo)
     : (ordenados[0].saldoFinal != null ? numeroBodega(ordenados[0].saldoFinal) : saldoInicial);
   let saldo = anclarPrimerCierre ? primerSaldoGuardado : saldoInicial;
   let saldoAnteriorGuardado = anclarPrimerCierre ? primerSaldoGuardado : saldoInicial;
+  let aperturaAplicada = false;
 
   const reconstruidos = ordenados.map((movimiento, indice) => {
+    const fechaMovimientoISO = fechaHistorialISO(movimiento.fecha);
+    const primerMovimientoDesdeApertura = Boolean(hayHistorialAntesDeApertura && fechaMovimientoISO >= aperturaISO && !aperturaAplicada);
+    if (primerMovimientoDesdeApertura) {
+      saldo = saldoInicial;
+      saldoAnteriorGuardado = saldoInicial;
+      aperturaAplicada = true;
+    }
     const tieneDetalleRutas = Array.isArray(movimiento.repartos);
     const rutaCorrecta = tieneDetalleRutas
       ? rutaNetaBodega(movimiento.repartos)
@@ -365,7 +397,8 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
     const conteoFisico = movimiento.ajusteConteo != null ? numeroBodega(movimiento.ajusteConteo) : null;
     const saldoGuardado = conteoFisico ?? (movimiento.saldoFinal != null ? numeroBodega(movimiento.saldoFinal) : null);
     const versionNueva = Number(movimiento.versionSaldoBodega) >= 2;
-    const primeraAnclada = indice === 0 && anclarPrimerCierre;
+    const dentroDelPeriodoDeApertura = Boolean(hayHistorialAntesDeApertura && fechaMovimientoISO >= aperturaISO);
+    const primeraAnclada = indice === 0 && anclarPrimerCierre && !primerMovimientoDesdeApertura;
 
     if (primeraAnclada) {
       const saldoFinal = saldoGuardado ?? saldoInicial;
@@ -380,21 +413,25 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
       };
     }
 
-    const ajusteHistoricoImplicito = versionNueva
+    const ajusteHistoricoImplicito = dentroDelPeriodoDeApertura
+      ? 0
+      : versionNueva
       ? numeroBodega(movimiento.ajusteHistoricoImplicito)
       : (conteoFisico != null || saldoGuardado == null
         ? 0
         : redondearBodega(saldoGuardado - saldoProyectadoAnterior));
     const ajusteHistorico = Math.abs(ajusteHistoricoImplicito) < 0.05 ? 0 : ajusteHistoricoImplicito;
-    const saldoCalculado = saldo + cambioDiarioBodega(movimiento, rutaCorrectaConMalas) + ajusteHistorico;
+    const saldoCalculado = saldo + cambioDiarioBodega(movimiento, rutaInventario) + ajusteHistorico;
     const saldoFinal = conteoFisico ?? redondearBodega(saldoCalculado);
 
     saldo = saldoFinal;
-    saldoAnteriorGuardado = saldoGuardado ?? redondearBodega(saldoProyectadoAnterior);
+    saldoAnteriorGuardado = primerMovimientoDesdeApertura
+      ? saldoFinal
+      : saldoGuardado ?? redondearBodega(saldoProyectadoAnterior);
 
     return {
       ...movimiento,
-      rutaNeta: redondearBodega(rutaCorrectaConMalas),
+      rutaNeta: redondearBodega(rutaInventario),
       versionSaldoBodega: 2,
       ajusteHistoricoImplicito: ajusteHistorico,
       saldoFinal,

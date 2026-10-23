@@ -8,7 +8,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, aplicarEdicionDevolucionSinTiquete } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, aplicarEdicionDevolucionSinTiquete } from "./historial";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, hayCambiosFormularioBodega, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
@@ -22,6 +22,7 @@ import { Campo } from "./components/Campo";
 import { ModalDialog } from "./components/ModalDialog";
 import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
 import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
+import { capturaTieneDatosOperativos } from "./features/captura/estadoCaptura.js";
 import { ControlDiarioOperaciones } from "./features/reportes/ControlDiarioOperaciones";
 import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
 import { baseDeRegistro, registroCambioDesdeBase } from "./concurrencia";
@@ -32,7 +33,7 @@ import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAle
 import { calcularSaldoAlimentoComprado, disponibilidadAlimentoComprado, esConsumoAlimentoComprado } from "./alimentoComprado";
 import { nombreColeccionRespaldo, resumenArchivoRespaldo } from "./respaldo.js";
 import { analizarRuta, serializarRuta } from "./rutas.js";
-import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, loteEnLevante, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
+import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, loteEnLevante, loteExistiaEnFecha, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
 import { asociarUsosDeTiquetesARepartos, buscarTiqueteDevuelto, cartonesInformativosMovimiento, cartonesUsoEnRuta, esCantidadMediaCarton, formatoCartones, impactoTiquetesEnFecha, idOperacionTiquete, idRepartoBodega, numeroCartones, rutasBodegaParaTiquetes, saldoDisponibleTiquete, ultimasRutasElegibles } from "./features/bodega/tiquetesDevolucion.js";
 import { TiquetesDevolucionBodega } from "./features/bodega/TiquetesDevolucionBodega.jsx";
 import { AlimentoCompradoForm } from "./features/formulas/AlimentoCompradoForm";
@@ -55,7 +56,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.8";
+const VERSION_APP = "10.4.9";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -752,11 +753,15 @@ export default function App({ onCerrarSesion }) {
       return;
     }
     const dmy = fechaCaptura.split("-").reverse().join("/");
-    const bases = Object.fromEntries(lotes.map(lote => [
+    const lotesDelDia = lotes.filter(lote => loteExistiaEnFecha(lote, fechaCaptura));
+    const idsExistentes = new Set(lotesDelDia.map(lote => String(lote.id)));
+    const capturasBorradorValidas = Object.fromEntries(Object.entries(borradorDisponible.capturas || {})
+      .filter(([id]) => idsExistentes.has(String(id))));
+    const bases = Object.fromEntries(lotesDelDia.map(lote => [
       lote.id,
       construirCaptura(lote, dmy, registros, medicaciones, fumigaciones) || capturaVacia(),
     ]));
-    const capturasCambiadas = capturasDiferentesDeBase(borradorDisponible.capturas, bases);
+    const capturasCambiadas = capturasDiferentesDeBase(capturasBorradorValidas, bases);
     const notaBase = bitacora.find(nota => nota.fecha === dmy)?.texto || "";
     const notaBorrador = String(borradorDisponible.nota || "");
     const notaCambiada = borradorDisponible.notaSucia === true
@@ -792,6 +797,7 @@ export default function App({ onCerrarSesion }) {
     const dmy = iso.split("-").reverse().join("/");
     let cargados = 0;
     const nuevas = Object.fromEntries(lotes.map(l => {
+      if (!loteExistiaEnFecha(l, iso)) return [l.id, capturaVacia()];
       const c2 = construirCaptura(l, dmy, registros, medicaciones, fumigaciones);
       if (c2) cargados++;
       return [l.id, c2 || capturaVacia()];
@@ -1087,12 +1093,17 @@ export default function App({ onCerrarSesion }) {
         }
       }
       {
-        const dmy = (fechaCapturaRef.current || hoyISO()).split("-").reverse().join("/");
+        const fechaDia = fechaCapturaRef.current || hoyISO();
+        const dmy = fechaDia.split("-").reverse().join("/");
         const rsOrd = ordenarPorFecha(rs);
         setCapturas(prev => {
           const nuevas = { ...prev };
           ls.forEach(l => {
             if (suciosRef.current[l.id]) return;
+            if (!loteExistiaEnFecha(l, fechaDia)) {
+              nuevas[l.id] = capturaVacia();
+              return;
+            }
             const c2 = construirCaptura(l, dmy, rsOrd, ms, fs);
             nuevas[l.id] = c2 || prev[l.id] || capturaVacia();
           });
@@ -1228,15 +1239,24 @@ export default function App({ onCerrarSesion }) {
     const soloLote = soloLoteId ? lotes.find(x => x.id === soloLoteId) : null;
     setGuardando(true);
     const fecha = (fechaCaptura || hoyISO()).split("-").reverse().join("/");
+    const lotesDelDia = lotes.filter(l => loteExistiaEnFecha(l, fechaCaptura));
+    if (soloLoteId && !lotesDelDia.some(l => String(l.id) === String(soloLoteId))) {
+      avisar("⚠ No se puede guardar un control anterior a la fecha de nacimiento del lote."); setGuardando(false); return;
+    }
     const vigentes = await leer(K.registros, null);
     if (!vigentes) { avisar("⚠ No se pudo comprobar la producción actual. Intenta de nuevo."); setGuardando(false); return; }
-    const aGuardar = lotes.filter(l => {
+    const aGuardar = lotesDelDia.filter(l => {
       if ((soloLoteId && l.id !== soloLoteId) || !capturas[l.id]) return false;
       const captura = capturas[l.id];
-      return Boolean(totalesGalpon(captura).huevos || captura.quebrados || captura.muertas || captura.alimento6am || captura.alimento1pm || captura.aguaL || captura.dx || captura.trabajos && Object.values(captura.trabajos).some(Boolean));
+      return capturaTieneDatosOperativos(captura, totalesGalpon(captura).huevos > 0);
     });
     const erroresFormulario = erroresCaptura(capturas, aGuardar);
     if (erroresFormulario.length) { avisar(`⚠ No se guardó: ${erroresFormulario[0]}${erroresFormulario.length > 1 ? ` (+${erroresFormulario.length - 1} más)` : ""}`); setGuardando(false); return; }
+    const produccionFueraDeEtapa = aGuardar.find(l => loteEnLevante(l, fechaCaptura)
+      && (totalesGalpon(capturas[l.id]).huevos > 0 || Number(capturas[l.id]?.quebrados || 0) > 0));
+    if (produccionFueraDeEtapa) {
+      avisar(`⚠ G${produccionFueraDeEtapa.galpon}: producción y huevo quebrado no aplican antes de la etapa de postura. No se guardó el control.`); setGuardando(false); return;
+    }
     if (aGuardar.some(l => vigentes.filter(r => r.fecha === fecha && r.lote === l.id).length > 1)) {
       avisar("⚠ Hay controles duplicados para esta fecha. Corrígelos desde Historial antes de guardar."); setGuardando(false); return;
     }
@@ -1288,7 +1308,7 @@ export default function App({ onCerrarSesion }) {
     }
     {
       const enFormulario = [];
-      lotes.forEach(l => {
+      lotesDelDia.forEach(l => {
         if (soloLoteId && l.id !== soloLoteId) return;
         (capturas[l.id]?.tiquetes || []).forEach(t => { if (t.num && t.cartones) enFormulario.push(String(t.num).trim()); });
       });
@@ -1324,11 +1344,12 @@ export default function App({ onCerrarSesion }) {
     });
     const insumosMovsBase = insumosMovs.filter(m2 => !(m2.auto && m2.fecha === fecha && m2.tipo === "salida" && esDelGalpon(m2)));
     const nuevosLotes = lotes.map(l => {
+      if (!loteExistiaEnFecha(l, fechaCaptura)) return l;
       if (soloLoteId && l.id !== soloLoteId) return l;
       const c = capturas[l.id];
       const t = totalesGalpon(c);
       const alimTotal = n2Dec(Number(c?.alimento6am || 0) + Number(c?.alimento1pm || 0));
-      if (t.huevos === 0 && !c?.muertas && !alimTotal) return l;
+      if (!capturaTieneDatosOperativos(c, t.huevos > 0)) return l;
       const previo = registros.find(r => r.fecha === fecha && r.lote === l.id);
       if (previo) {
         reemplazados.push(previo);
@@ -1392,7 +1413,7 @@ export default function App({ onCerrarSesion }) {
         movsAuto.push({ fecha, itemId: item.id, tipo: "salida", cantidad: cant, detalle: origen, por: completadoPor, auto: true });
       }
     };
-    lotes.forEach(l => {
+    lotesDelDia.forEach(l => {
       if (soloLoteId && l.id !== soloLoteId) return;
       const c = capturas[l.id]; if (!c) return;
       c.meds.forEach(m2 => m2.producto && descontarInsumo(m2.producto, m2.dosis, `Medicación G${l.galpon}`));
@@ -1444,6 +1465,12 @@ export default function App({ onCerrarSesion }) {
 
   // ── Bodega ──
   const activos = lotes.filter(l => l.estado !== "cerrado").sort((a, b) => Number(a.galpon) - Number(b.galpon));
+  const activosControl = activos.filter(l => loteExistiaEnFecha(l, fechaCaptura));
+  useEffect(() => {
+    if (vista !== "captura" || !activosControl.length) return;
+    if (activosControl.some(l => String(l.id) === String(galponActivo))) return;
+    setGalponActivo(activosControl[0].id);
+  }, [vista, fechaCaptura, galponActivo, lotes]);
   const filasExcelVisibles = filtrarLista(excelPesajes.map((p, indice) => {
     const l = lotes.find(x => x.id === p.lote);
     const existe = p.lote && pesajes.some(x => clavePesaje(x.lote, x.fecha) === clavePesaje(p.lote, p.fecha));
@@ -1451,9 +1478,13 @@ export default function App({ onCerrarSesion }) {
   }), filtroExcel);
   const filasConfPesajes = conflictosPesaje ? filtrarLista(conflictosPesaje.items.map(x => ({ ...x, lote: x.nuevo.lote, fecha: x.nuevo.fecha, texto: `${x.nuevo.fecha} G${x.galpon} ${lotes.find(l => l.id === x.nuevo.lote)?.raza || ""}` })), filtroConfPesajes) : [];
   const filasConfRespaldo = conflictosRespaldo ? filtrarLista(conflictosRespaldo.items.map(x => ({ ...x, texto: `${x.fecha} ${x.lote} ${x.tabla} ${lotes.find(l => l.id === x.lote)?.raza || ""}`, estado: x.tabla === "pesajes" ? "Pesaje" : "Control diario" })), filtroConfRespaldo) : [];
-  const regsHoy = registros.filter(r => r.fecha === hoyStr());
+  const registrosExistentes = registros.filter(registro => {
+    const lote = lotes.find(item => String(item.id) === String(registro.lote));
+    return !lote || loteExistiaEnFecha(lote, registro.fecha);
+  });
+  const regsHoy = registrosExistentes.filter(r => r.fecha === hoyStr());
   const fechaB = (fechaBodega || hoyISO()).split("-").reverse().join("/");
-  const regsFechaB = registros.filter(r => r.fecha === fechaB);
+  const regsFechaB = registrosExistentes.filter(r => r.fecha === fechaB);
   const producidoPorGalpon = activos.map(l => ({
     galpon: l.galpon, raza: l.raza,
     cartones: regsFechaB.filter(r => r.lote === l.id).reduce((s, r) => s + r.cartones, 0),
@@ -1479,11 +1510,7 @@ export default function App({ onCerrarSesion }) {
   const devolucionNetaRuta = impactoRuta.tipo === "devolucion" ? impactoRuta.cantidad : 0;
   const salidaNetaRuta = impactoRuta.tipo === "salida" ? impactoRuta.cantidad : 0;
   const otrasSalidasBodega = Number(movBodega.vendGranja || 0) + Number(movBodega.destruido || 0) + Number(movBodega.regalado || 0);
-  const saldoBaseGuardado = (() => {
-    const previos = bodegaMovs.filter(m => aDate(m.fecha) < aDate(fechaB));
-    if (!previos.length) return Number(bodegaCfg.inicialCart || 0);
-    return previos.reduce((mejor, m) => (!mejor || aDate(m.fecha) > aDate(mejor.fecha) ? m : mejor), null).saldoFinal;
-  })();
+  const saldoBaseGuardado = saldoInicialBodegaEnFecha(bodegaMovs, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, fechaB);
   const saldoBase = Number(saldoBaseGuardado || 0);
   const rutasRegistradasTiquetes = rutasBodegaParaTiquetes(bodegaMovs).filter(ruta => ruta.movimientoId !== idMovimientoBodegaActual);
   const rutasFormularioTiquetes = repartos.map((reparto, indice) => ({
@@ -4874,29 +4901,30 @@ export default function App({ onCerrarSesion }) {
     );
   }
 
-  const cap = capturas[galponActivo] || capturaVacia();
+  const loteActivo = activosControl.find(l => String(l.id) === String(galponActivo)) || activosControl[0] || null;
+  const galponCapturaId = loteActivo?.id || galponActivo;
+  const cap = capturas[galponCapturaId] || capturaVacia();
   const setCap = (cambios) => {
-    const clave = `${fechaCaptura}|${galponActivo}`;
+    const clave = `${fechaCaptura}|${galponCapturaId}`;
     const dmy = fechaCaptura.split("-").reverse().join("/");
-    const lote = lotes.find(x => x.id === galponActivo);
+    const lote = lotes.find(x => String(x.id) === String(galponCapturaId));
     const baseCaptura = lote
       ? construirCaptura(lote, dmy, registros, medicaciones, fumigaciones) || capturaVacia()
       : capturaVacia();
-    const actual = capturas[galponActivo] || capturaVacia();
+    const actual = capturas[galponCapturaId] || capturaVacia();
     const siguiente = { ...actual, ...cambios };
     if (formulariosIguales(siguiente, baseCaptura)) {
-      delete suciosRef.current[galponActivo];
+      delete suciosRef.current[galponCapturaId];
       delete basesEdicionRef.current[clave];
     } else {
       if (!Object.prototype.hasOwnProperty.call(basesEdicionRef.current, clave)) {
-        basesEdicionRef.current[clave] = baseDeRegistro(registros, dmy, galponActivo);
+        basesEdicionRef.current[clave] = baseDeRegistro(registros, dmy, galponCapturaId);
       }
-      suciosRef.current[galponActivo] = true;
+      suciosRef.current[galponCapturaId] = true;
     }
-    setCapturas(prev => ({ ...prev, [galponActivo]: siguiente }));
+    setCapturas(prev => ({ ...prev, [galponCapturaId]: siguiente }));
   };
   const tGal = totalesGalpon(cap);
-  const loteActivo = lotes.find(l => l.id === galponActivo);
   const tiquetesCompartidos = tiquetesDelDia(capturas, registros, fechaCaptura.split("-").reverse().join("/"), Object.keys(suciosRef.current));
 
   // Aplicar tiquetes pegados desde Excel (Punto 22)
@@ -5231,7 +5259,7 @@ export default function App({ onCerrarSesion }) {
           </>
         }
       >
-        {activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => {
+        {activosControl.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id).map(l => {
           const c = capturas[l.id];
           const t = totalesGalpon(c);
           const anterior = registros.find(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id);
@@ -5242,7 +5270,7 @@ export default function App({ onCerrarSesion }) {
             </div>
           );
         })}
-        {observacionesCaptura(capturas, activos.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => (
+        {observacionesCaptura(capturas, activosControl.filter(l => revisionGuardado === "todos" || revisionGuardado === l.id), tiquetesCompartidos).map((a, i) => (
           <div key={i} style={{ color: C.alerta, fontSize: 12, marginTop: 6, fontWeight: 500 }}>⚠ {a}</div>
         ))}
       </ModalDialog>
@@ -5670,7 +5698,7 @@ export default function App({ onCerrarSesion }) {
 
             {/* Matriz Visual: Qué falta registrar hoy (Punto 11) */}
             <MatrizQueFaltaHoy
-              activos={activos}
+              activos={activosControl}
               registros={registros}
               capturas={capturas}
               fechaCaptura={fechaCaptura}
@@ -5692,8 +5720,8 @@ export default function App({ onCerrarSesion }) {
             )}
 
             <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-              <div style={{ fontSize: 11, alignSelf: "center" }}>{activos.filter(l => registros.some(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id)).length}/{activos.length} guardados</div>
-              {activos.map(l => {
+              <div style={{ fontSize: 11, alignSelf: "center" }}>{activosControl.filter(l => registros.some(r => r.fecha === fechaCaptura.split("-").reverse().join("/") && r.lote === l.id)).length}/{activosControl.length} guardados</div>
+              {activosControl.map(l => {
                 const lleno = totalesGalpon(capturas[l.id]).huevos > 0;
                 return (
                   <button key={l.id} onClick={() => setGalponActivo(l.id)} style={{
@@ -5707,8 +5735,15 @@ export default function App({ onCerrarSesion }) {
                 );
               })}
             </div>
+            {!loteActivo && <div role="status" style={{ padding: 12, marginBottom: 12, borderRadius: 10, background: C.verdeSuave, color: C.verde, fontSize: 13 }}>
+              En esta fecha todavía no había galpones nacidos para registrar. El control por galpón estará disponible desde la fecha de nacimiento de cada lote.
+            </div>}
+            {loteActivo && <>
             {loteActivo && <div style={{ fontSize: 12.5, color: C.textoSuave, marginBottom: 10, marginTop: -6 }}>
               Gallinero {loteActivo.galpon} · {loteActivo.raza} · nacidas {loteActivo.nac.split("-").reverse().join("/")} · <b>{semanasDe(loteActivo.nac).toFixed(1)} semanas</b> · {loteActivo.aves.toLocaleString()} aves
+            </div>}
+            {loteEnLevante(loteActivo, fechaCaptura) && <div role="status" style={{ padding: 9, marginBottom: 10, borderRadius: 9, background: C.verdeSuave, color: C.verde, fontSize: 12.5 }}>
+              Etapa de levante / pre-postura: no se capturan producción ni huevo quebrado. Alimentación, mortalidad, agua y chequeos siguen disponibles.
             </div>}
 
             {/* Valores sugeridos del último control (Punto 16) */}
@@ -5742,6 +5777,7 @@ export default function App({ onCerrarSesion }) {
               );
             })()}
 
+            {!loteEnLevante(loteActivo, fechaCaptura) ? <>
             <Seccion accion={<BotonGuardaMini />} num="1" titulo="Producción por tiquete" sub="Número de tiquete, cartones y peso (kg) — incluye cálculo de peso promedio por huevo">
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
                 <button
@@ -5828,6 +5864,7 @@ export default function App({ onCerrarSesion }) {
                 );
               })()}
             </Seccion>
+            </> : null}
 
             <Seccion accion={<BotonGuardaMini />} num="3" titulo="Gallinas muertas" sub="El saldo se calcula solo: saldo inicial − muertas = saldo final">
               {(() => {
@@ -6084,8 +6121,8 @@ export default function App({ onCerrarSesion }) {
                 return (
                   <>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <Sel campo="cascara" etiqueta="Calidad de cáscara" ops={["Buena", "Regular", "Mala (frágil)"]} />
-                      <Sel campo="cresta" etiqueta="Color de cresta" ops={["Rojo normal", "Roja intensa", "Pálida", "Morada/oscura"]} />
+                      {!loteEnLevante(loteActivo, fechaCaptura) && <Sel campo="cascara" etiqueta="Calidad de cáscara" ops={["Buena", "Regular", "Mala (frágil)"]} />}
+                      {!loteEnLevante(loteActivo, fechaCaptura) && <Sel campo="cresta" etiqueta="Color de cresta" ops={["Rojo normal", "Roja intensa", "Pálida", "Morada/oscura"]} />}
                       <Sel campo="consumoObs" etiqueta="Consumo alimento observado" ops={["Normal", "Bajo", "Seleccionan / botan"]} />
                       <Sel campo="aguaObs" etiqueta="Consumo agua observado" ops={["Normal", "Bajo", "Alto"]} />
                       <Sel campo="heces" etiqueta="Consistencia de heces" ops={["Normal", "Diarrea", "Con sangre"]} />
@@ -6101,11 +6138,12 @@ export default function App({ onCerrarSesion }) {
                       <Campo tercio etiqueta="Horas de luz" unidad="horas" type="text" inputMode="decimal" placeholder="16" value={ch.luz || ""} onChange={e => setCh("luz", e.target.value)} />
                     </div>
                     <Campo etiqueta="Observaciones del chequeo" type="text" placeholder="ej. tolvas llenas al fondo, poca actividad" value={ch.obs || ""} onChange={e => setCh("obs", e.target.value)} />
-                    <button onClick={() => setPrintDoc({ tipo: "medidas", lote: galponActivo })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir boleta de medidas de producción</button>
+                    {!loteEnLevante(loteActivo, fechaCaptura) && <button onClick={() => setPrintDoc({ tipo: "medidas", lote: galponActivo })} style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, background: "#F1F1EA", color: C.texto, border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>🖨 Imprimir boleta de medidas de producción</button>}
                   </>
                 );
               })()}
             </Seccion>
+            </>}
 
             <Seccion titulo="Bitácora de novedades" sub="UNA sola para toda la granja — compartida entre los gallineros y guardada con el control">
               <textarea value={notaDia} onChange={e => { const valor = e.target.value; const fecha = fechaCaptura.split("-").reverse().join("/"); const base = bitacora.find(nota => nota.fecha === fecha)?.texto || ""; notaSuciaRef.current = String(valor).trim() !== String(base).trim(); setNotaDia(valor); }} placeholder="ej. Se detectó gotera en G2, llegó pedido de maíz..." rows={3}

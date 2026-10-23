@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, historialDevolucionesSinTiquete, aplicarEdicionDevolucionSinTiquete } from "../src/historial.js";
+import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, historialDevolucionesSinTiquete, aplicarEdicionDevolucionSinTiquete } from "../src/historial.js";
 
 test("el período filtra D/M/A e ISO sin confundir años y permite ver todo", () => {
   const items = [{ fecha: "25/09/2025" }, { fecha: "01/09/2026" }, { fecha: "2026-09-26" }, { fecha: "27/09/2026" }];
@@ -205,4 +205,32 @@ test("recalcula el historial, conserva saltos antiguos sin conteo y es idempoten
     fecha: m.fecha, rutaNeta: m.rutaNeta, saldoFinal: m.saldoFinal,
     difAjuste: m.difAjuste, ajusteHistoricoImplicito: m.ajusteHistoricoImplicito,
   })));
+});
+
+test("la apertura de Bodega reinicia el saldo desde su fecha y conserva los cierres anteriores", () => {
+  const movimientos = [
+    { id: "18", fecha: "18/10/2026", producido: 0, rutaNeta: 0, saldoFinal: 1000 },
+    { id: "19", fecha: "19/10/2026", producido: 0, repartos: [{ salida: 42 }], saldoFinal: -42 },
+    { id: "20", fecha: "20/10/2026", producido: 10, repartos: [], saldoFinal: 500 },
+    { id: "21", fecha: "21/10/2026", producido: 5, repartos: [], saldoFinal: 120 },
+  ];
+  const antes = structuredClone(movimientos);
+  const porFecha = Object.fromEntries(reconstruirBodega(movimientos, 916, "2026-10-20").map(m => [fechaHistorialISO(m.fecha), m]));
+  assert.equal(porFecha["2026-10-18"].saldoFinal, 1000);
+  assert.equal(porFecha["2026-10-19"].saldoFinal, -42);
+  assert.equal(porFecha["2026-10-20"].saldoFinal, 926);
+  assert.equal(porFecha["2026-10-21"].saldoFinal, 931);
+  assert.deepEqual(movimientos, antes, "los movimientos originales quedan intactos");
+});
+
+test("el saldo inicial consultado respeta la fecha de apertura", () => {
+  const movimientos = [
+    { fecha: "18/10/2026", saldoFinal: 1000 },
+    { fecha: "19/10/2026", saldoFinal: -42 },
+    { fecha: "20/10/2026", saldoFinal: 926 },
+  ];
+  assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-19"), 1000);
+  assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-20"), 916);
+  assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-21"), 926);
+  assert.equal(saldoInicialBodegaEnFecha([], 916, "2026-10-20", "2026-10-19"), null);
 });

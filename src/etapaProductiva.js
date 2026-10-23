@@ -10,6 +10,12 @@ export function semanasDelLoteEnFecha(lote, fecha) {
   if (!nac || !dia) return NaN;
   return (Date.parse(`${dia}T00:00:00Z`) - Date.parse(`${nac}T00:00:00Z`)) / DIAS_SEMANA;
 }
+export function loteExistiaEnFecha(lote, fecha) {
+  const nacimiento = fechaHistorialISO(lote?.nac);
+  const dia = fechaHistorialISO(fecha);
+  return !nacimiento || !dia || dia >= nacimiento;
+}
+
 export function estadoProductivoEnFecha(lote, fecha) {
   const dia = fechaHistorialISO(fecha);
   const historial = (lote?.historialEstadoProd || [])

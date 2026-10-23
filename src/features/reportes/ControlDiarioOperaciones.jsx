@@ -1,6 +1,7 @@
 import React from "react";
 import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
-import { rutaNetaBodega } from "../../historial.js";
+import { rutaNetaBodega, saldoInicialBodegaEnFecha } from "../../historial.js";
+import { loteExistiaEnFecha } from "../../etapaProductiva.js";
 import { presentacionRutaNeta } from "../../bodegaResumen.js";
 import { cartonesUsoEnRuta } from "../bodega/tiquetesDevolucion.js";
 import { ajustarMovimientosTiquetesReporte, claveRepartidorReporte, entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
@@ -63,8 +64,12 @@ export function ControlDiarioOperaciones({
 }) {
   const fechaISO = isoDe(fecha);
   const fechaDMY = fechaCorta(fechaISO);
-  const registrosDia = registros.filter((r) => isoDe(r.fecha) === fechaISO);
   const lotePorId = new Map(lotes.map((l) => [String(l.id), l]));
+  const registrosValidos = registros.filter(registro => {
+    const lote = lotePorId.get(String(registro.lote));
+    return !lote || loteExistiaEnFecha(lote, registro.fecha);
+  });
+  const registrosDia = registrosValidos.filter((r) => isoDe(r.fecha) === fechaISO);
   const galponDe = (registro) => Number(lotePorId.get(String(registro.lote))?.galpon || registro.galpon || 0);
   const fechasDespues = (registro) => isoDe(registro.fecha) > fechaISO;
 
@@ -72,7 +77,7 @@ export function ControlDiarioOperaciones({
     const regs = registrosDia.filter((r) => galponDe(r) === galpon);
     const lotesDelGalpon = regs.map((r) => lotePorId.get(String(r.lote))).filter(Boolean);
     const lote = lotesDelGalpon[0] || lotes
-      .filter((l) => Number(l.galpon) === galpon && l.nac && l.nac <= fechaISO)
+      .filter((l) => Number(l.galpon) === galpon && l.nac && loteExistiaEnFecha(l, fechaISO))
       .sort((a, b) => String(b.nac).localeCompare(String(a.nac)))[0];
     let tiquetes = regs.flatMap((r) => (r.tiquetes || [])
       .filter((t) => t && (t.num || tieneDato(t.cartones) || tieneDato(t.peso)))
@@ -105,7 +110,7 @@ export function ControlDiarioOperaciones({
       && (!l.cerradoFecha || isoDe(l.cerradoFecha) >= fechaISO));
     const lotesParaSaldo = lotesDelGalpon.length ? lotesDelGalpon : lotesEnFecha;
     const saldoAves = lotesParaSaldo.length ? lotesParaSaldo.reduce((s, l) => {
-      const bajasPosteriores = registros.filter((r) => String(r.lote) === String(l.id) && fechasDespues(r))
+      const bajasPosteriores = registrosValidos.filter((r) => String(r.lote) === String(l.id) && fechasDespues(r))
         .reduce((total, r) => total + numeroSeguro(r.muertas), 0);
       return s + numeroSeguro(l.aves) + bajasPosteriores;
     }, 0) : "";
@@ -113,11 +118,8 @@ export function ControlDiarioOperaciones({
   });
 
   const movimientoBodega = bodegaMovs.filter((m) => isoDe(m.fecha) === fechaISO)[0] || null;
-  const previosBodega = bodegaMovs.filter((m) => isoDe(m.fecha) < fechaISO)
-    .sort((a, b) => isoDe(b.fecha).localeCompare(isoDe(a.fecha)));
   const aperturaBodega = isoDe(bodegaCfg.inicialFecha);
-  const saldoInicialBodega = previosBodega[0]?.saldoFinal
-    ?? (aperturaBodega && fechaISO < aperturaBodega ? "" : (bodegaCfg.inicialCart ?? ""));
+  const saldoInicialBodega = saldoInicialBodegaEnFecha(bodegaMovs, bodegaCfg.inicialCart, aperturaBodega, fechaISO) ?? "";
   const entradasBodega = entradaProducidaReporte(registrosDia, movimientoBodega, produccion);
   const repartosBase = movimientoBodega?.repartos?.length
     ? movimientoBodega.repartos
@@ -182,7 +184,7 @@ export function ControlDiarioOperaciones({
     categoria,
     fechaHasta: hastaInclusive ? fechaISO : diaAnteriorISO,
     movimientos: movimientosPlanta,
-    registros,
+    registros: registrosValidos,
     saldoInicial: categoria === "Aves" ? plantaCfg.inicialAves : plantaCfg.inicialGanado,
     fechaApertura: plantaCfg.inicialFecha,
     usoPorFormula,

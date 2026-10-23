@@ -1,6 +1,12 @@
+test("un lote solo existe desde su fecha de nacimiento, inclusive", () => {
+  const lote = { id: "G4", nac: "2026-10-22" };
+  assert.equal(loteExistiaEnFecha(lote, "2026-10-21"), false);
+  assert.equal(loteExistiaEnFecha(lote, "22/10/2026"), true);
+});
+
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loteCuentaPostura, loteEnLevante, motivoExclusionPostura, resumenPostura } from "../src/etapaProductiva.js";
+import { loteCuentaPostura, loteEnLevante, loteExistiaEnFecha, motivoExclusionPostura, resumenPostura } from "../src/etapaProductiva.js";
 
 test("pollitas menores a la edad configurada no entran en los KPIs de postura", () => {
   const lote = { id: "P1", nac: "2026-10-15", aves: 1000 };
