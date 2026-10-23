@@ -27,6 +27,15 @@ export function fechaISODeTiquete(fecha) {
   return dmy ? `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}` : "";
 }
 
+// El dato de quebrados se guarda aparte y nunca forma parte del delta de inventario.
+export function cartonesInformativosMovimiento(movimiento) {
+  const informado = movimiento?.cartones_informativos ?? movimiento?.cartonesInformativos;
+  if (informado !== undefined && informado !== null && Number.isFinite(Number(informado))) return Number(informado);
+  return movimiento?.tipo === "devolucion_mala"
+    ? Math.abs(Number(movimiento.cartones_delta ?? movimiento.cartonesDelta ?? 0))
+    : 0;
+}
+
 export function idOperacionTiquete() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, caracter => {

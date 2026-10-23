@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buscarTiqueteDevuelto,
   asociarUsosDeTiquetesARepartos,
+  cartonesInformativosMovimiento,
   cartonesUsadosTiquete,
   esCantidadMediaCarton,
   formatoCartones,
@@ -44,6 +45,13 @@ test("el kardex suma entradas, usos y correcciones solo en su fecha efectiva", (
   assert.equal(impactoTiquetesEnFecha(movimientos, "2026-10-02"), -3);
   assert.equal(impactoTiquetesEnFecha([{ fecha: "2026-10-02", cartones_delta: -3, tipo: "devolucion_mala" }], "2026-10-02"), 0, "los cartones malos no alteran el kardex");
   assert.equal(impactoTiquetesEnFecha(movimientos, "2026-10-02", ["op-uso"]), 2);
+});
+
+test("los quebrados y sus correcciones son informativos y no alteran el delta de inventario", () => {
+  assert.equal(cartonesInformativosMovimiento({ tipo: "devolucion_mala", cartones_delta: 0, cartones_informativos: 5 }), 5);
+  assert.equal(cartonesInformativosMovimiento({ tipo: "devolucion_mala", cartones_delta: -5 }), 5, "compatibilidad con eventos históricos");
+  assert.equal(cartonesInformativosMovimiento({ tipo: "correccion", cartones_delta: 0, cartones_informativos: -1.5 }), -1.5);
+  assert.equal(impactoTiquetesEnFecha([{ tipo: "correccion", fecha: "2026-10-02", cartones_delta: 0, cartones_informativos: -1.5 }], "2026-10-02"), 0);
 });
 
 test("normaliza fechas históricas y crea identificadores de operación válidos para Postgres", () => {

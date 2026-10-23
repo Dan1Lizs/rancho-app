@@ -33,7 +33,7 @@ import { calcularSaldoAlimentoComprado, disponibilidadAlimentoComprado, esConsum
 import { nombreColeccionRespaldo, resumenArchivoRespaldo } from "./respaldo.js";
 import { analizarRuta, serializarRuta } from "./rutas.js";
 import { EDAD_POSTURA_SEMANAS_DEFAULT, estadoProductivoEnFecha, loteCuentaPostura, loteEnLevante, resumenPostura, registroCuentaPostura } from "./etapaProductiva";
-import { asociarUsosDeTiquetesARepartos, buscarTiqueteDevuelto, cartonesUsoEnRuta, esCantidadMediaCarton, formatoCartones, impactoTiquetesEnFecha, idOperacionTiquete, idRepartoBodega, numeroCartones, rutasBodegaParaTiquetes, saldoDisponibleTiquete, ultimasRutasElegibles } from "./features/bodega/tiquetesDevolucion.js";
+import { asociarUsosDeTiquetesARepartos, buscarTiqueteDevuelto, cartonesInformativosMovimiento, cartonesUsoEnRuta, esCantidadMediaCarton, formatoCartones, impactoTiquetesEnFecha, idOperacionTiquete, idRepartoBodega, numeroCartones, rutasBodegaParaTiquetes, saldoDisponibleTiquete, ultimasRutasElegibles } from "./features/bodega/tiquetesDevolucion.js";
 import { TiquetesDevolucionBodega } from "./features/bodega/TiquetesDevolucionBodega.jsx";
 import { AlimentoCompradoForm } from "./features/formulas/AlimentoCompradoForm";
 import { AlimentoCompradoPlanta } from "./features/planta/AlimentoCompradoPlanta";
@@ -55,7 +55,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.6";
+const VERSION_APP = "10.4.7";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1446,7 +1446,7 @@ export default function App({ onCerrarSesion }) {
   const operacionesUsoEnRuta = repartos.flatMap(reparto => reparto.tiquetesDevueltos || []).map(uso => uso.operacionId || uso.operacion_id).filter(Boolean);
   const movimientosTiquetesFechaBodega = movimientosTiquetesDevolucion.filter(movimiento => fechaHistorialISO(movimiento.fecha) === fechaBodega);
   const devolucionMalaTiqueteHoy = movimientosTiquetesFechaBodega.filter(movimiento => movimiento.tipo === "devolucion_mala")
-    .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0) + malasSinTiquetePorRutaActual;
+    .reduce((total, movimiento) => total + Math.abs(cartonesInformativosMovimiento(movimiento)), 0) + malasSinTiquetePorRutaActual;
   const operacionesUsoAsociadas = new Set(operacionesUsoEnRuta.map(String));
   const usosTiquetesSinRutaGuardadaHoy = movimientosTiquetesFechaBodega
     .filter(movimiento => movimiento.tipo === "uso" && !operacionesUsoAsociadas.has(String(movimiento.operacion_id || movimiento.id)))
@@ -4586,10 +4586,10 @@ export default function App({ onCerrarSesion }) {
                     <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                       <thead><tr><th style={th}>Movimiento</th><th style={th}>Tiquete</th><th style={th}>Ruta vinculada</th><th style={th}>Cartones</th></tr></thead>
                       <tbody>{movimientosTiquetesDevolucion.filter(m => fechaHistorialISO(m.fecha) === fechaHistorialISO(mov.fecha)).map(m => <tr key={m.id}>
-                        <td style={celda}>{m.tipo === "devolucion" ? "Devolución recibida" : m.tipo === "devolucion_mala" ? "Quebrados (informativo)" : m.tipo === "uso" ? "Uso en ruta" : "Corrección"}</td>
+                        <td style={celda}>{m.tipo === "devolucion" ? "Devolución recibida" : m.tipo === "devolucion_mala" ? "Quebrados (informativo)" : m.tipo === "uso" ? "Uso en ruta" : Number(m.cartones_informativos || 0) !== 0 ? "Corrección de quebrados (informativa)" : "Corrección"}</td>
                         <td style={celda}>#{m.numero}</td>
                         <td style={celda}>{String(m.fecha_ruta).split("-").reverse().join("/")} · {m.repartidor}</td>
-                        <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{m.tipo === "devolucion_mala" ? f2Dec(Math.abs(Number(m.cartones_delta || 0))) : `${Number(m.cartones_delta) > 0 ? "+" : ""}${f2Dec(m.cartones_delta)}`}</td>
+                        <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{m.tipo === "devolucion_mala" ? f2Dec(Math.abs(cartonesInformativosMovimiento(m))) : Number(m.cartones_informativos || 0) !== 0 ? `${Number(m.cartones_informativos) > 0 ? "+" : ""}${f2Dec(m.cartones_informativos)}` : `${Number(m.cartones_delta) > 0 ? "+" : ""}${f2Dec(m.cartones_delta)}`}</td>
                       </tr>)}</tbody>
                     </table>
                   </>}
@@ -6704,8 +6704,12 @@ export default function App({ onCerrarSesion }) {
                       const tiquete = tiquetesDevolucion.find(t => String(t.id) === String(movimiento.tiquete_id));
                       const delta = Number(movimiento.cartones_delta || 0);
                       const esDevolucionMala = movimiento.tipo === "devolucion_mala";
+                      const cantidadInformativa = cartonesInformativosMovimiento(movimiento);
+                      const esCorreccionInformativa = movimiento.tipo === "correccion" && cantidadInformativa !== 0;
+                      const nombreMovimiento = movimiento.tipo === "devolucion" ? "Devolución recibida" : esDevolucionMala ? "Quebrados (informativo)" : movimiento.tipo === "uso" ? "Uso en ruta" : esCorreccionInformativa ? "Corrección de quebrados (informativa)" : "Corrección";
+                      const cantidadMovimiento = esDevolucionMala ? f2Dec(Math.abs(cantidadInformativa)) : esCorreccionInformativa ? `${cantidadInformativa > 0 ? "+" : ""}${f2Dec(cantidadInformativa)}` : `${delta > 0 ? "+" : ""}${f2Dec(delta)}`;
                       return <div key={movimiento.id} style={{ padding: "7px 9px", background: C.fondo, borderRadius: 7, fontSize: 11.5 }}>
-                        <b>{fechaHistorialISO(movimiento.fecha)?.split("-").reverse().join("/")}</b> · {movimiento.tipo === "devolucion" ? "Devolución recibida" : esDevolucionMala ? "Quebrados (informativo)" : movimiento.tipo === "uso" ? "Uso en ruta" : "Corrección"} · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esDevolucionMala ? "#A75A00" : delta >= 0 ? C.verde : C.alerta }}>{esDevolucionMala ? f2Dec(Math.abs(delta)) : `${delta > 0 ? "+" : ""}${f2Dec(delta)}`} cart{esDevolucionMala ? " · no modifica inventario" : ""}</b>
+                        <b>{fechaHistorialISO(movimiento.fecha)?.split("-").reverse().join("/")}</b> · {nombreMovimiento} · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esDevolucionMala || esCorreccionInformativa ? "#A75A00" : delta >= 0 ? C.verde : C.alerta }}>{cantidadMovimiento} cart{esDevolucionMala || esCorreccionInformativa ? " · no modifica inventario" : ""}</b>
                         <div style={{ color: C.textoSuave, marginTop: 2 }}>Ruta {String(movimiento.fecha_ruta).split("-").reverse().join("/")} · {movimiento.repartidor}{tiquete ? ` · saldo disponible del tiquete: ${f2Dec(tiquete.saldo_cartones)} cart` : ""}</div>
                         {!!movimiento.motivo && <div style={{ marginTop: 2 }}>{movimiento.motivo}</div>}
                       </div>;

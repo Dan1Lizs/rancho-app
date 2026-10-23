@@ -119,20 +119,28 @@ export async function leerBodegaActual() {
 }
 
 export async function leerTiquetesDevolucionRuta() {
-  const [tiquetes, movimientos] = await Promise.all([
+  const [tiquetes, movimientosIniciales] = await Promise.all([
     supabase.from("bodega_tiquetes_devolucion")
       .select("id,numero,fecha_recepcion,fecha_ruta_origen,ruta_mov_id,ruta_id,repartidor,cartones_iniciales,cartones_malos,saldo_cartones,creado_por,creado_en,actualizado_en")
       .order("fecha_recepcion", { ascending: false }).order("numero"),
     supabase.from("bodega_tiquetes_devolucion_movs")
-      .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,motivo,por,cuando")
+      .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,cartones_informativos,motivo,por,cuando")
       .order("fecha", { ascending: false }).order("cuando", { ascending: false }),
   ]);
+  let movimientos = movimientosIniciales;
+  // Compatibilidad breve mientras el esquema recibe esta migración.
+  if (movimientos.error && /cartones_informativos/i.test(String(movimientos.error.message || ""))) {
+    movimientos = await supabase.from("bodega_tiquetes_devolucion_movs")
+      .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,motivo,por,cuando")
+      .order("fecha", { ascending: false }).order("cuando", { ascending: false });
+  }
   revisarError(tiquetes.error);
   revisarError(movimientos.error);
   if (tiquetes.error) throw tiquetes.error;
   if (movimientos.error) throw movimientos.error;
   return { tiquetes: tiquetes.data || [], movimientos: movimientos.data || [] };
 }
+
 
 export async function registrarTiqueteDevolucionRuta({ id, numero, cartones, cartonesMalos, fechaRecepcion, fechaRutaOrigen, rutaMovId, rutaId, repartidor }) {
   const { data, error } = await supabase.rpc("registrar_devolucion_tiquete", {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   buscarTiqueteDevuelto,
+  cartonesInformativosMovimiento,
   cartonesUsadosTiquete,
   esCantidadMediaCarton,
   formatoCartones,
@@ -353,10 +354,13 @@ export function TiquetesDevolucionBodega({
             const tiquete = tiquetesPorId.get(String(movimiento.tiquete_id));
             const delta = cartonesDe(movimiento);
             const esMala = movimiento.tipo === "devolucion_mala";
-            const cantidadVisible = esMala ? Math.abs(delta) : delta;
-            const nombre = movimiento.tipo === "devolucion" ? "Devolución buena recibida" : esMala ? "Cartones malos anotados (informativo)" : movimiento.tipo === "uso" ? "Usado en ruta" : "Corrección";
+            const cantidadInformativa = cartonesInformativosMovimiento(movimiento);
+            const esCorreccionInformativa = movimiento.tipo === "correccion" && cantidadInformativa !== 0;
+            const cantidadVisible = esMala ? Math.abs(cantidadInformativa) : delta;
+            const nombre = movimiento.tipo === "devolucion" ? "Devolución buena recibida" : esMala ? "Cartones malos anotados (informativo)" : esCorreccionInformativa ? "Corrección de quebrados (informativa)" : movimiento.tipo === "uso" ? "Usado en ruta" : "Corrección";
+            const textoCantidad = esMala ? formatoCartones(cantidadVisible) : esCorreccionInformativa ? `${cantidadInformativa > 0 ? "+" : ""}${formatoCartones(cantidadInformativa)}` : `${delta > 0 ? "+" : ""}${formatoCartones(delta)}`;
             return <div key={movimiento.id} style={{ padding: "7px 9px", background: colores.fondo, borderRadius: 7, fontSize: 11.5 }}>
-              <b>{nombre}</b> · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esMala ? "#A75A00" : delta >= 0 ? colores.verde : colores.alerta }}>{esMala ? formatoCartones(cantidadVisible) : `${delta > 0 ? "+" : ""}${formatoCartones(delta)}`} cart{esMala ? " · no modifica inventario" : ""}</b>
+              <b>{nombre}</b> · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esMala || esCorreccionInformativa ? "#A75A00" : delta >= 0 ? colores.verde : colores.alerta }}>{textoCantidad} cart{esMala || esCorreccionInformativa ? " · no modifica inventario" : ""}</b>
               {esMala ? <> · recibido {fechaCorta(movimiento.fecha_recepcion)}; vinculado a ruta origen {fechaCorta(movimiento.fecha_ruta)} · {movimiento.repartidor}</> : movimiento.tipo === "devolucion" ? <> · ruta origen {fechaCorta(movimiento.fecha_ruta)} · {movimiento.repartidor}</> : <> · ruta {fechaCorta(movimiento.fecha_ruta)} · {movimiento.repartidor}</>}
               {!!movimiento.motivo && <div style={{ color: colores.textoSuave, marginTop: 2 }}>{movimiento.motivo}</div>}
             </div>;
