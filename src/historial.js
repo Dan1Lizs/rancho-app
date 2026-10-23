@@ -66,10 +66,7 @@ export function movimientoBodegaDeFecha(movs, fechaISO, id = null) {
   return (id == null ? null : delDia.find(m => String(m.id) === String(id))) || delDia[0];
 }
 
-const numeroBodega = (valor) => {
-  const numero = Number(String(valor ?? "").trim().replace(",", "."));
-  return Number.isFinite(numero) ? numero : 0;
-};
+
 const redondearBodega = (valor) => Number(numeroBodega(valor).toFixed(1));
 const idRutaBodega = (movimiento, reparto, indice) => String(reparto?.id || `legacy:${movimiento?.id || "sin-movimiento"}:${indice}`);
 const claveRutaBodega = (movimientoId, rutaId) => `${String(movimientoId ?? "")}::${String(rutaId ?? "")}`;
