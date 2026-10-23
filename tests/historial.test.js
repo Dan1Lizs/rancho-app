@@ -234,3 +234,25 @@ test("el saldo inicial consultado respeta la fecha de apertura", () => {
   assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-21"), 926);
   assert.equal(saldoInicialBodegaEnFecha([], 916, "2026-10-20", "2026-10-19"), null);
 });
+
+test("el guardado conserva devoluciones buenas anteriores al conteo físico para el saldo del día siguiente", () => {
+  const movimientos = [
+    { id: "b-13", fecha: "13/10/2026", producido: 0, repartos: [], saldoFinal: 350.5, versionSaldoBodega: 2, ajusteHistoricoImplicito: 0 },
+    {
+      id: "b-14", fecha: "14/10/2026", producido: 148.5, repartos: [], rutaNeta: 280,
+      devolucionesSinTiquete: [{ fechaRecepcion: "2026-10-14", cartonesBuenos: 29, cartonesMalos: 3 }],
+      saldoFinal: 219, versionSaldoBodega: 2, ajusteHistoricoImplicito: 0,
+    },
+    { id: "b-15", fecha: "15/10/2026", producido: 152, repartos: [], rutaNeta: 0, saldoFinal: 371, versionSaldoBodega: 2, ajusteHistoricoImplicito: 0 },
+  ];
+  const sinImpactoPersistido = reconstruirBodega(movimientos, 916, "2026-10-20");
+  assert.equal(sinImpactoPersistido.find(m => m.id === "b-14").saldoFinal, 219);
+  assert.equal(sinImpactoPersistido.find(m => m.id === "b-15").saldoFinal, 371);
+
+  const conImpactoPersistido = reconstruirBodega(movimientos.map(m =>
+    m.id === "b-14" ? { ...m, movimientoTiquetes: 29 } : m
+  ), 916, "2026-10-20");
+  assert.equal(conImpactoPersistido.find(m => m.id === "b-14").saldoFinal, 248);
+  assert.equal(conImpactoPersistido.find(m => m.id === "b-15").saldoFinal, 400);
+  assert.equal(saldoInicialBodegaEnFecha(conImpactoPersistido, 916, "2026-10-20", "2026-10-15"), 248);
+});

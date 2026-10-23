@@ -56,7 +56,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.10";
+const VERSION_APP = "10.4.11";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1874,6 +1874,7 @@ export default function App({ onCerrarSesion }) {
       comprado: Number(movBodega.comprado || 0), vendGranja: Number(movBodega.vendGranja || 0),
       destruido: Number(movBodega.destruido || 0), regalado: Number(movBodega.regalado || 0),
       repartos: repartos.map((r, indice) => ({ ...r, id: idRepartoBodega(idMovimiento, r, indice) })), rutaNeta: +rutaNeta.toFixed(1),
+      movimientoTiquetes: +impactoTiquetesHoy.toFixed(1),
       devolucionesSinTiquete: devolucionesSinTiquete.map(devolucion => ({ ...devolucion, fechaRecepcion: fechaBodega })),
       obs: obsInv, saldoFinal: +saldoFinal.toFixed(1),
       ajusteConteo: hayAjuste ? Number(ajusteBodega) : null, difAjuste: hayAjuste ? difAjuste : null,
