@@ -119,6 +119,57 @@ export function rutaNetaBodega(repartos = []) {
       - numeroBodega(reparto.devBueno), 0);
 }
 
+const reglaSalidaNetaDevolucion = devolucion =>
+  devolucion?.reglaSalidaNeta === true || devolucion?.regla_salida_neta === true;
+const claveRutaConDevolucion = (movimientoId, rutaId) => `${String(movimientoId ?? "")}::${String(rutaId ?? "")}`;
+
+// Las devoluciones nuevas rebajan lo efectivamente entregado en la ruta;
+// los cartones malos además afectan el inventario al recibirse. La marca evita
+// cambiar el tratamiento de los registros históricos.
+export function devolucionesIntegradasPorRuta(devolucionesSinTiquete = [], movimientosTiquetes = []) {
+  const porRuta = new Map();
+  const agregar = (movimientoId, rutaId, buenos, malos) => {
+    if (!movimientoId || !rutaId) return;
+    const clave = claveRutaConDevolucion(movimientoId, rutaId);
+    const actual = porRuta.get(clave) || { buenos: 0, malos: 0 };
+    porRuta.set(clave, { buenos: actual.buenos + buenos, malos: actual.malos + malos });
+  };
+
+  for (const devolucion of Array.isArray(devolucionesSinTiquete) ? devolucionesSinTiquete : []) {
+    if (!reglaSalidaNetaDevolucion(devolucion)) continue;
+    agregar(
+      devolucion.rutaMovId ?? devolucion.ruta_mov_id,
+      devolucion.rutaId ?? devolucion.ruta_id,
+      numeroBodega(devolucion.cartonesBuenos ?? devolucion.cartones_buenos),
+      numeroBodega(devolucion.cartonesMalos ?? devolucion.cartones_malos),
+    );
+  }
+
+  for (const movimiento of Array.isArray(movimientosTiquetes) ? movimientosTiquetes : []) {
+    if (!reglaSalidaNetaDevolucion(movimiento)) continue;
+    const tipo = String(movimiento.tipo || "");
+    const delta = numeroBodega(movimiento.cartones_delta ?? movimiento.cartonesDelta);
+    const informativo = numeroBodega(movimiento.cartones_informativos ?? movimiento.cartonesInformativos);
+    const rutaMovId = movimiento.ruta_mov_id ?? movimiento.rutaMovId;
+    const rutaId = movimiento.ruta_id ?? movimiento.rutaId;
+    if (tipo === "devolucion") agregar(rutaMovId, rutaId, delta, 0);
+    else if (tipo === "devolucion_mala") agregar(rutaMovId, rutaId, 0, informativo || Math.abs(delta));
+    else if (tipo === "correccion") {
+      agregar(rutaMovId, rutaId, informativo === 0 ? delta : 0, informativo);
+    }
+  }
+  return porRuta;
+}
+
+export function rutaNetaBodegaConDevoluciones(repartos = [], movimientoId, devolucionesSinTiquete = [], movimientosTiquetes = []) {
+  const porRuta = devolucionesIntegradasPorRuta(devolucionesSinTiquete, movimientosTiquetes);
+  return (Array.isArray(repartos) ? repartos : []).reduce((total, reparto, indice) => {
+    const clave = claveRutaConDevolucion(movimientoId, idRutaBodega({ id: movimientoId }, reparto, indice));
+    const devolucion = porRuta.get(clave);
+    return total + rutaNetaBodega([reparto]) - (devolucion ? devolucion.buenos + devolucion.malos : 0);
+  }, 0);
+}
+
 function rutaNetaAnterior(repartos, rutaNetaGuardada) {
   if (!Array.isArray(repartos)) return numeroBodega(rutaNetaGuardada);
   return repartos.reduce((suma, reparto) =>
@@ -318,22 +369,29 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
   for (const devolucion of devolucionesSinTiquete) {
     const fechaRecepcion = fechaHistorialISO(devolucion.fechaRecepcion);
     const buenos = numeroBodega(devolucion.cartonesBuenos ?? devolucion.cartones_buenos);
-    if (fechaRecepcion && buenos !== 0) {
+    const malos = numeroBodega(devolucion.cartonesMalos ?? devolucion.cartones_malos);
+    const impacto = reglaSalidaNetaDevolucion(devolucion) ? -malos : buenos;
+    if (fechaRecepcion && (buenos !== 0 || malos !== 0)) {
       fechasConEventos.add(fechaRecepcion);
-      impactoPorFecha.set(fechaRecepcion, (impactoPorFecha.get(fechaRecepcion) || 0) + buenos);
+      if (impacto !== 0) impactoPorFecha.set(fechaRecepcion, (impactoPorFecha.get(fechaRecepcion) || 0) + impacto);
     }
   }
   for (const movimiento of Array.isArray(movimientosTiquetes) ? movimientosTiquetes : []) {
     const fecha = fechaHistorialISO(movimiento.fecha);
     const delta = Number(movimiento.cartones_delta ?? movimiento.cartonesDelta ?? 0);
-    // Los cartones malos quedan en historial, pero no mueven existencias.
-    // Se marca la fecha para limpiar agregados históricos que ya los incluían.
-    if (String(movimiento.tipo || "") === "devolucion_mala") {
+    const tipo = String(movimiento.tipo || "");
+    const reglaSalidaNeta = reglaSalidaNetaDevolucion(movimiento);
+    if (tipo === "devolucion_mala") {
       if (fecha) fechasConEventos.add(fecha);
+      if (reglaSalidaNeta && fecha && Number.isFinite(delta)) {
+        impactoPorFecha.set(fecha, (impactoPorFecha.get(fecha) || 0) + delta);
+      }
       continue;
     }
     if (!fecha || !Number.isFinite(delta)) continue;
     fechasConEventos.add(fecha);
+    if (reglaSalidaNeta && (tipo === "devolucion"
+      || (tipo === "correccion" && numeroBodega(movimiento.cartones_informativos ?? movimiento.cartonesInformativos) === 0))) continue;
     const operacion = String(movimiento.operacion_id ?? movimiento.operacionId ?? movimiento.id ?? "");
     if (operacionesAsociadas.has(operacion)) continue;
     impactoPorFecha.set(fecha, (impactoPorFecha.get(fecha) || 0) + delta);
@@ -384,7 +442,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
     const fechaMovimientoISO = fechaHistorialISO(movimiento.fecha);
     const tieneDetalleRutas = Array.isArray(movimiento.repartos);
     const rutaCorrecta = tieneDetalleRutas
-      ? rutaNetaBodega(movimiento.repartos)
+      ? rutaNetaBodegaConDevoluciones(movimiento.repartos, movimiento.id, devolucionesSinTiquete, movimientosTiquetes)
       : numeroBodega(movimiento.rutaNeta);
     const rutaInventario = rutaCorrecta;
     // El anclaje histórico se calcula con la lógica original; si incorporáramos

@@ -50,7 +50,12 @@ export function impactoTiquetesEnFecha(movimientos = [], fecha, operacionesExclu
   return (Array.isArray(movimientos) ? movimientos : []).reduce((total, movimiento) => {
     const fechaMovimiento = fechaISODeTiquete(movimiento.fecha);
     if (fechaMovimiento !== claveFecha || excluidas.has(String(movimiento.operacion_id ?? movimiento.operacionId ?? ""))) return total;
-    if (movimiento.tipo === "devolucion_mala") return total;
+    const reglaSalidaNeta = movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true;
+    if (movimiento.tipo === "devolucion_mala") {
+      return reglaSalidaNeta ? total + Number(movimiento.cartones_delta ?? movimiento.cartonesDelta ?? 0) : total;
+    }
+    if (reglaSalidaNeta && (movimiento.tipo === "devolucion"
+      || (movimiento.tipo === "correccion" && Number(movimiento.cartones_informativos ?? movimiento.cartonesInformativos ?? 0) === 0))) return total;
     return total + Number(movimiento.cartones_delta ?? movimiento.cartonesDelta ?? 0);
   }, 0);
 }

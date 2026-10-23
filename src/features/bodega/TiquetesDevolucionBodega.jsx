@@ -172,7 +172,7 @@ export function TiquetesDevolucionBodega({
         cartones: cantidad,
         cartonesMalos: cantidadMala,
         ruta,
-      }), "Devolución registrada: los buenos entran hoy; los malos quedan anotados y no cambian el inventario.");
+      }), "Devolución registrada: los buenos y malos reducen la entrega efectiva de la ruta; los malos también se descuentan de Bodega al recibirse.");
     if (guardado) {
       setNumeroDevolucion("");
       setCartonesDevolucion("");
@@ -293,7 +293,7 @@ export function TiquetesDevolucionBodega({
           <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones buenos reutilizables
             <input required type="text" inputMode="decimal" value={cartonesDevolucion} onChange={evento => setCartonesDevolucion(evento.target.value)} placeholder="0" style={estiloInput} />
           </label>
-          <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones malos (solo informativo)
+          <label style={{ flex: "1 1 130px", fontSize: 12, fontWeight: 600 }}>Cartones malos
             <input type="text" inputMode="decimal" value={cartonesMalosDevolucion} onChange={evento => setCartonesMalosDevolucion(evento.target.value)} placeholder="0" style={estiloInput} />
           </label>
         </div>
@@ -302,10 +302,10 @@ export function TiquetesDevolucionBodega({
           Esta devolución no tiene tiquete físico
         </label>
         {sinTiquete && <div role="alert" style={{ padding: 9, border: "1px solid #E58A16", borderRadius: 8, background: "#FFF1D6", color: "#8A4B08", fontSize: 12, fontWeight: 700 }}>
-          ⚠ Sin tiquete: los cartones buenos aumentarán el saldo de Bodega en esta fecha. Los malos solo se anotarán como quebrados y no afectarán el saldo. Este registro queda en el historial de Bodega.
+          ⚠ Sin tiquete: ambos tipos reducen lo entregado en la ruta; los buenos quedan disponibles y los malos reducen el saldo de Bodega en esta fecha. Este registro queda en el historial.
         </div>}
         <div style={{ padding: 9, borderRadius: 8, background: colores.verdeSuave, color: colores.texto, fontSize: 12 }}>
-          Registra juntos los buenos y los malos. Los buenos reutilizables aumentan el inventario en esta fecha; los malos quedan como dato de control de la ruta y no modifican el inventario.
+          Registra juntos los buenos y los malos. Ambos rebajan la salida efectiva de la ruta; los malos también se descuentan del inventario en la fecha real de recepción.
         </div>
         <button type="submit" disabled={!permitirEscritura || ocupado || guardando || !!errorCarga || (sinTiquete && !onRegistrarSinTiquete)} style={estiloBoton}>{guardando ? "Registrando…" : sinTiquete ? "Agregar devolución a Bodega" : "Registrar devolución con tiquete"}</button>
       </form>
@@ -368,13 +368,14 @@ export function TiquetesDevolucionBodega({
             const tiquete = tiquetesPorId.get(String(movimiento.tiquete_id));
             const delta = cartonesDe(movimiento);
             const esMala = movimiento.tipo === "devolucion_mala";
+            const reglaSalidaNeta = movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true;
             const cantidadInformativa = cartonesInformativosMovimiento(movimiento);
             const esCorreccionInformativa = movimiento.tipo === "correccion" && cantidadInformativa !== 0;
             const cantidadVisible = esMala ? Math.abs(cantidadInformativa) : delta;
-            const nombre = movimiento.tipo === "devolucion" ? "Devolución buena recibida" : esMala ? "Cartones malos anotados (informativo)" : esCorreccionInformativa ? "Corrección de quebrados (informativa)" : movimiento.tipo === "uso" ? "Usado en ruta" : "Corrección";
+            const nombre = movimiento.tipo === "devolucion" ? (reglaSalidaNeta ? "Devolución buena (rebaja ruta)" : "Devolución buena recibida") : esMala ? (reglaSalidaNeta ? "Cartones malos (rebaja ruta e inventario)" : "Cartones malos anotados (histórico)") : esCorreccionInformativa ? "Corrección de quebrados" : movimiento.tipo === "uso" ? "Usado en ruta" : "Corrección";
             const textoCantidad = esMala ? formatoCartones(cantidadVisible) : esCorreccionInformativa ? `${cantidadInformativa > 0 ? "+" : ""}${formatoCartones(cantidadInformativa)}` : `${delta > 0 ? "+" : ""}${formatoCartones(delta)}`;
             return <div key={movimiento.id} style={{ padding: "7px 9px", background: colores.fondo, borderRadius: 7, fontSize: 11.5 }}>
-              <b>{nombre}</b> · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esMala || esCorreccionInformativa ? "#A75A00" : delta >= 0 ? colores.verde : colores.alerta }}>{textoCantidad} cart{esMala || esCorreccionInformativa ? " · no modifica inventario" : ""}</b>
+              <b>{nombre}</b> · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esMala || esCorreccionInformativa ? "#A75A00" : delta >= 0 ? colores.verde : colores.alerta }}>{textoCantidad} cart{esMala && reglaSalidaNeta ? " · rebaja inventario" : (esMala || esCorreccionInformativa) && !reglaSalidaNeta ? " · histórico, no cambia saldo" : ""}</b>
               {esMala ? <> · recibido {fechaCorta(movimiento.fecha_recepcion)}; vinculado a ruta origen {fechaCorta(movimiento.fecha_ruta)} · {movimiento.repartidor}</> : movimiento.tipo === "devolucion" ? <> · ruta origen {fechaCorta(movimiento.fecha_ruta)} · {movimiento.repartidor}</> : <> · ruta {fechaCorta(movimiento.fecha_ruta)} · {movimiento.repartidor}</>}
               {!!movimiento.motivo && <div style={{ color: colores.textoSuave, marginTop: 2 }}>{movimiento.motivo}</div>}
             </div>;
@@ -387,7 +388,7 @@ export function TiquetesDevolucionBodega({
         <b>Devoluciones sin tiquete en esta fecha</b>
         <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
           {devolucionesSinTiquete.map(devolucion => <div key={devolucion.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <span>{devolucion.repartidor} · ruta {fechaCorta(devolucion.fechaRutaOrigen)} · buenos +{formatoCartones(devolucion.cartonesBuenos, "0")} · malos {formatoCartones(devolucion.cartonesMalos, "0")}</span>
+            <span>{devolucion.repartidor} · ruta {fechaCorta(devolucion.fechaRutaOrigen)} · buenos {formatoCartones(devolucion.cartonesBuenos, "0")} · malos {formatoCartones(devolucion.cartonesMalos, "0")} {devolucion.reglaSalidaNeta || devolucion.regla_salida_neta ? "(rebajan salida; los malos descuentan inventario)" : "(histórico)"}</span>
             {permitirEscritura && onQuitarSinTiquete && <button type="button" onClick={() => onQuitarSinTiquete(devolucion.id)} style={{ padding: "4px 8px", border: `1px solid ${colores.borde}`, borderRadius: 6, background: colores.superficie, color: colores.alerta, cursor: "pointer" }}>Quitar</button>}
           </div>)}
         </div>
@@ -407,7 +408,7 @@ export function TiquetesDevolucionBodega({
           {detalleRutas.map(({ ruta, devoluciones, devolucionesMalas, usos }) => <div key={claveRuta(ruta)} style={{ padding: 8, background: colores.fondo, borderRadius: 8, fontSize: 11.5 }}>
             <b>{ruta.repartidor}</b> · ruta {fechaCorta(ruta.fecha)}
             {devoluciones.map(t => <div key={`d-${t.id}`} style={{ marginTop: 4 }}>↩ Devolución #{t.numero}: {formatoCartones(t.cartones_iniciales)} buenos y {formatoCartones(t.cartones_malos || 0, "0")} malos; recibidos el {fechaCorta(t.fecha_recepcion)}{Number(t.cartones_iniciales) > 0 ? ` · saldo disponible ${formatoCartones(t.saldo_cartones)}` : " · sin saldo reutilizable"}</div>)}
-            {devolucionesMalas.filter(m => !devoluciones.some(t => String(t.id) === String(m.tiquete_id))).map(m => <div key={`m-${m.id}`} style={{ marginTop: 4 }}>↩ Cartones malos de #{m.numero}: {formatoCartones(Math.abs(cartonesDe(m)))} anotados como quebrados; recibidos el {fechaCorta(m.fecha_recepcion)} · vinculados a esta ruta, sin afectar inventario</div>)}
+            {devolucionesMalas.filter(m => !devoluciones.some(t => String(t.id) === String(m.tiquete_id))).map(m => <div key={`m-${m.id}`} style={{ marginTop: 4 }}>↩ Cartones malos de #{m.numero}: {formatoCartones(Math.abs(cartonesDe(m)))} anotados como quebrados; recibidos el {fechaCorta(m.fecha_recepcion)} · vinculados a esta ruta{m.regla_salida_neta || m.reglaSalidaNeta ? ", descuentan inventario" : ", histórico sin cambio de inventario"}</div>)}
             {usos.map(m => <div key={m.id} style={{ marginTop: 4 }}>↗ Usó #{m.numero}: {formatoCartones(Math.abs(cartonesDe(m)))} cart el {fechaCorta(m.fecha)}{tiquetesPorId.get(String(m.tiquete_id)) ? ` · saldo actual ${formatoCartones(tiquetesPorId.get(String(m.tiquete_id)).saldo_cartones)}` : ""}</div>)}
           </div>)}
         </div>}

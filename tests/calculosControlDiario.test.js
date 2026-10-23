@@ -65,6 +65,32 @@ test("el reporte conserva los malos como dato, pero no los aplica al saldo", () 
   assert.equal(saldoTrasDevolucionBuena.saldoFinal, 113);
 });
 
+test("el reporte descuenta buenos y malos de la entrega y aplica la merma una sola vez al recibirla", () => {
+  const movimientosBodega = [
+    { id: "b-11", fecha: "11/10/2026", repartos: [{ id: "r-1", nombre: "Bryan", salida: 100 }] },
+    { id: "b-12", fecha: "12/10/2026", movimientoTiquetes: -5, repartos: [], devolucionesSinTiquete: [{
+      id: "dev-12", fechaRecepcion: "2026-10-12", fechaRutaOrigen: "2026-10-11",
+      rutaMovId: "b-11", rutaId: "r-1", repartidor: "Bryan", cartonesBuenos: 2, cartonesMalos: 5,
+      reglaSalidaNeta: true,
+    }] },
+  ];
+  const reporteOrigen = resumenDevolucionesRutaReporte({
+    movimientosBodega,
+    fecha: "2026-10-11",
+    movimientoId: "b-11",
+    repartos: movimientosBodega[0].repartos,
+  });
+  assert.equal(reporteOrigen.detalleRutas[0].buenosIntegrados, 2);
+  assert.equal(reporteOrigen.detalleRutas[0].malosIntegrados, 5);
+  assert.equal(rutaNetaBodega([{ salida: 100 }]) - reporteOrigen.detalleRutas[0].buenosIntegrados - reporteOrigen.detalleRutas[0].malosIntegrados, 93);
+
+  const recibidoHoy = resumenDevolucionesRutaReporte({ movimientosBodega, fecha: "2026-10-12", movimientoId: "b-12", repartos: [] });
+  const ajuste = ajustarMovimientosTiquetesReporte({ movimientoTiquetes: -5, impactoMalosSeparado: recibidoHoy.impactoMalosSeparado });
+  assert.equal(recibidoHoy.malosRecibidosHoy, 5);
+  assert.equal(ajuste.otrosMovimientos, 0);
+  assert.equal(saldoBodegaReporte(107, 0, { movimientoTiquetes: ajuste.movimientoParaSaldo }, 0, recibidoHoy.impactoMalosSeparado).saldoFinal, 102);
+});
+
 
 test("una devolución histórica anterior a la apertura actual no se convierte en una salida ficticia", () => {
   const ajuste = ajustarMovimientosTiquetesReporte({

@@ -8,7 +8,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, saldoCalculadoBodega, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, aplicarEdicionDevolucionSinTiquete } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, saldoCalculadoBodega, rutaNetaBodega, rutaNetaBodegaConDevoluciones, devolucionesSinTiqueteDeMovimiento, aplicarEdicionDevolucionSinTiquete } from "./historial";
 import { reconstruirBodegaSoloLectura } from "./bodegaProyeccion";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, hayCambiosFormularioBodega, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
@@ -57,7 +57,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.14";
+const VERSION_APP = "10.4.16";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1500,19 +1500,29 @@ export default function App({ onCerrarSesion }) {
   const idMovimientoBodegaActual = String(movBodegaIdRef.current || `bodega-${fechaBodega}`);
   const devolucionesDeOtrosDias = devolucionesSinTiqueteDeMovimiento(bodegaMovs.filter(m => String(m.id) !== idMovimientoBodegaActual));
   const devolucionesActivasSinTiquete = [...devolucionesDeOtrosDias, ...devolucionesSinTiquete];
-  const malasSinTiquetePorRutaActual = repartos.reduce((total, reparto, indice) => total
-    + cartonesMalosSinTiqueteEnRuta(devolucionesActivasSinTiquete, idMovimientoBodegaActual, idRepartoBodega(idMovimientoBodegaActual, reparto, indice)), 0);
-  const rutaNeta = +rutaNetaBodega(repartos).toFixed(1);
-  const buenasSinTiqueteHoy = devolucionesSinTiquete.reduce((total, devolucion) => total + numeroCartones(devolucion.cartonesBuenos || 0), 0);
+  const rutaNeta = +rutaNetaBodegaConDevoluciones(
+    repartos, idMovimientoBodegaActual, devolucionesActivasSinTiquete, movimientosTiquetesDevolucion,
+  ).toFixed(1);
+  const impactoDevolucionesSinTiqueteHoy = devolucionesSinTiquete.reduce((total, devolucion) => {
+    const buenos = numeroCartones(devolucion.cartonesBuenos || 0);
+    const malos = numeroCartones(devolucion.cartonesMalos || 0);
+    return total + (devolucion.reglaSalidaNeta === true || devolucion.regla_salida_neta === true ? -malos : buenos);
+  }, 0);
   const operacionesUsoEnRuta = repartos.flatMap(reparto => reparto.tiquetesDevueltos || []).map(uso => uso.operacionId || uso.operacion_id).filter(Boolean);
   const movimientosTiquetesFechaBodega = movimientosTiquetesDevolucion.filter(movimiento => fechaHistorialISO(movimiento.fecha) === fechaBodega);
   const devolucionMalaTiqueteHoy = movimientosTiquetesFechaBodega.filter(movimiento => movimiento.tipo === "devolucion_mala")
-    .reduce((total, movimiento) => total + Math.abs(cartonesInformativosMovimiento(movimiento)), 0) + malasSinTiquetePorRutaActual;
+    .reduce((total, movimiento) => total + Math.abs(cartonesInformativosMovimiento(movimiento)), 0)
+    + devolucionesSinTiquete.reduce((total, devolucion) => total + numeroCartones(devolucion.cartonesMalos || 0), 0);
+  const devolucionMalaConImpactoHoy = movimientosTiquetesFechaBodega
+    .filter(movimiento => movimiento.tipo === "devolucion_mala" && (movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true))
+    .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0)
+    + devolucionesSinTiquete.filter(devolucion => devolucion.reglaSalidaNeta === true || devolucion.regla_salida_neta === true)
+      .reduce((total, devolucion) => total + numeroCartones(devolucion.cartonesMalos || 0), 0);
   const operacionesUsoAsociadas = new Set(operacionesUsoEnRuta.map(String));
   const usosTiquetesSinRutaGuardadaHoy = movimientosTiquetesFechaBodega
     .filter(movimiento => movimiento.tipo === "uso" && !operacionesUsoAsociadas.has(String(movimiento.operacion_id || movimiento.id)))
     .reduce((total, movimiento) => total + Math.abs(Number(movimiento.cartones_delta || 0)), 0);
-  const impactoTiquetesHoy = impactoTiquetesEnFecha(movimientosTiquetesDevolucion, fechaBodega, operacionesUsoEnRuta) + buenasSinTiqueteHoy;
+  const impactoTiquetesHoy = impactoTiquetesEnFecha(movimientosTiquetesDevolucion, fechaBodega, operacionesUsoEnRuta) + impactoDevolucionesSinTiqueteHoy;
   const impactoRuta = presentacionRutaNeta(rutaNeta);
   const devolucionNetaRuta = impactoRuta.tipo === "devolucion" ? impactoRuta.cantidad : 0;
   const salidaNetaRuta = impactoRuta.tipo === "salida" ? impactoRuta.cantidad : 0;
@@ -1707,6 +1717,7 @@ export default function App({ onCerrarSesion }) {
       repartidor: ruta.repartidor,
       cartonesBuenos,
       cartonesMalos,
+      reglaSalidaNeta: true,
     }]);
   };
 
@@ -4397,6 +4408,7 @@ export default function App({ onCerrarSesion }) {
           lotes={lotes}
           registros={registros}
           bodegaMovs={bodegaMovs}
+          movimientosTiquetes={movimientosTiquetesDevolucion}
           bodegaCfg={bodegaCfg}
           plantaMovs={plantaMovs}
           plantaCfg={plantaCfg}
@@ -4670,7 +4682,7 @@ export default function App({ onCerrarSesion }) {
                     <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
                       <thead><tr><th style={th}>Movimiento</th><th style={th}>Tiquete</th><th style={th}>Ruta vinculada</th><th style={th}>Cartones</th></tr></thead>
                       <tbody>{movimientosTiquetesDevolucion.filter(m => fechaHistorialISO(m.fecha) === fechaHistorialISO(mov.fecha)).map(m => <tr key={m.id}>
-                        <td style={celda}>{m.tipo === "devolucion" ? "Devolución recibida" : m.tipo === "devolucion_mala" ? "Quebrados (informativo)" : m.tipo === "uso" ? "Uso en ruta" : Number(m.cartones_informativos || 0) !== 0 ? "Corrección de quebrados (informativa)" : "Corrección"}</td>
+                        <td style={celda}>{m.tipo === "devolucion" ? ((m.regla_salida_neta || m.reglaSalidaNeta) ? "Devolución (rebaja ruta)" : "Devolución recibida") : m.tipo === "devolucion_mala" ? ((m.regla_salida_neta || m.reglaSalidaNeta) ? "Quebrados (merma al recibir)" : "Quebrados (histórico)") : m.tipo === "uso" ? "Uso en ruta" : Number(m.cartones_informativos || 0) !== 0 ? "Corrección de quebrados" : "Corrección"}</td>
                         <td style={celda}>#{m.numero}</td>
                         <td style={celda}>{String(m.fecha_ruta).split("-").reverse().join("/")} · {m.repartidor}</td>
                         <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>{m.tipo === "devolucion_mala" ? f2Dec(Math.abs(cartonesInformativosMovimiento(m))) : Number(m.cartones_informativos || 0) !== 0 ? `${Number(m.cartones_informativos) > 0 ? "+" : ""}${f2Dec(m.cartones_informativos)}` : `${Number(m.cartones_delta) > 0 ? "+" : ""}${f2Dec(m.cartones_delta)}`}</td>
@@ -6468,7 +6480,7 @@ export default function App({ onCerrarSesion }) {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <KPI etiqueta="Saldo inicial" valor={f2Dec(saldoBase)} unidad="cart" sub={`Al abrir el ${fechaB.slice(0, 5)}`} />
               <KPI etiqueta="Entradas (+)" valor={formatoCartones(producidoHoyCart + Number(movBodega.comprado || 0) + devolucionNetaRuta + Math.max(0, impactoTiquetesHoy))} unidad="cart" tono="ok" sub={`Producido ${formatoCartones(producidoHoyCart, "0")}${Number(movBodega.comprado || 0) > 0 ? ` + comprado ${formatoCartones(movBodega.comprado, "0")}` : ""}${devolucionNetaRuta > 0 ? ` · devolución manual +${formatoCartones(devolucionNetaRuta, "0")}` : ""}${impactoTiquetesHoy > 0 ? ` · devoluciones buenas +${formatoCartones(impactoTiquetesHoy, "0")}` : ""}`} />
-              <KPI etiqueta="Salidas (−)" valor={formatoCartones(salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy))} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy) > 0 ? "alerta" : undefined} sub={`Ruta −${formatoCartones(salidaNetaRuta, "0")}${devolucionMalaTiqueteHoy > 0 ? ` · quebrados anotados ${formatoCartones(devolucionMalaTiqueteHoy, "0")} (sin efecto en saldo)` : ""}${usosTiquetesSinRutaGuardadaHoy > 0 ? ` · tiquetes reutilizados sin salida guardada −${formatoCartones(usosTiquetesSinRutaGuardadaHoy, "0")}` : ""}${otrasSalidasBodega > 0 ? ` + otras ${formatoCartones(otrasSalidasBodega, "0")}` : ""}`} />
+              <KPI etiqueta="Salidas (−)" valor={formatoCartones(salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy))} unidad="cart" tono={salidaNetaRuta + otrasSalidasBodega + Math.max(0, -impactoTiquetesHoy) > 0 ? "alerta" : undefined} sub={`Ruta −${formatoCartones(salidaNetaRuta, "0")}${devolucionMalaTiqueteHoy > 0 ? ` · quebrados ${formatoCartones(devolucionMalaTiqueteHoy, "0")}${devolucionMalaConImpactoHoy > 0 ? ` (merma inventario −${formatoCartones(devolucionMalaConImpactoHoy, "0")})` : " (histórico informativo)"}` : ""}${usosTiquetesSinRutaGuardadaHoy > 0 ? ` · tiquetes reutilizados sin salida guardada −${formatoCartones(usosTiquetesSinRutaGuardadaHoy, "0")}` : ""}${otrasSalidasBodega > 0 ? ` + otras ${formatoCartones(otrasSalidasBodega, "0")}` : ""}`} />
               <KPI etiqueta="Saldo proyectado" valor={formatoCartones(saldoFinal)} unidad="cart" sub={hayAjuste ? "Fijado por conteo físico" : ajusteHistoricoBodega ? `= inicial + entradas − salidas · reconciliación histórica ${ajusteHistoricoBodega > 0 ? "+" : ""}${formatoCartones(ajusteHistoricoBodega, "0")} cart` : "= inicial + entradas − salidas"} />
             </div>
 
@@ -6808,10 +6820,11 @@ export default function App({ onCerrarSesion }) {
                       const esDevolucionMala = movimiento.tipo === "devolucion_mala";
                       const cantidadInformativa = cartonesInformativosMovimiento(movimiento);
                       const esCorreccionInformativa = movimiento.tipo === "correccion" && cantidadInformativa !== 0;
-                      const nombreMovimiento = movimiento.tipo === "devolucion" ? "Devolución recibida" : esDevolucionMala ? "Quebrados (informativo)" : movimiento.tipo === "uso" ? "Uso en ruta" : esCorreccionInformativa ? "Corrección de quebrados (informativa)" : "Corrección";
+                      const reglaSalidaNeta = movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true;
+                      const nombreMovimiento = movimiento.tipo === "devolucion" ? (reglaSalidaNeta ? "Devolución (rebaja ruta)" : "Devolución recibida") : esDevolucionMala ? (reglaSalidaNeta ? "Quebrados (merma al recibir)" : "Quebrados (histórico)") : movimiento.tipo === "uso" ? "Uso en ruta" : esCorreccionInformativa ? "Corrección de quebrados" : "Corrección";
                       const cantidadMovimiento = esDevolucionMala ? f2Dec(Math.abs(cantidadInformativa)) : esCorreccionInformativa ? `${cantidadInformativa > 0 ? "+" : ""}${f2Dec(cantidadInformativa)}` : `${delta > 0 ? "+" : ""}${f2Dec(delta)}`;
                       return <div key={movimiento.id} style={{ padding: "7px 9px", background: C.fondo, borderRadius: 7, fontSize: 11.5 }}>
-                        <b>{fechaHistorialISO(movimiento.fecha)?.split("-").reverse().join("/")}</b> · {nombreMovimiento} · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esDevolucionMala || esCorreccionInformativa ? "#A75A00" : delta >= 0 ? C.verde : C.alerta }}>{cantidadMovimiento} cart{esDevolucionMala || esCorreccionInformativa ? " · no modifica inventario" : ""}</b>
+                        <b>{fechaHistorialISO(movimiento.fecha)?.split("-").reverse().join("/")}</b> · {nombreMovimiento} · #{movimiento.numero || tiquete?.numero} · <b style={{ color: esDevolucionMala || esCorreccionInformativa ? "#A75A00" : delta >= 0 ? C.verde : C.alerta }}>{cantidadMovimiento} cart{esDevolucionMala && reglaSalidaNeta ? " · rebaja inventario" : (esDevolucionMala || esCorreccionInformativa) && !reglaSalidaNeta ? " · histórico, no cambia saldo" : ""}</b>
                         <div style={{ color: C.textoSuave, marginTop: 2 }}>Ruta {String(movimiento.fecha_ruta).split("-").reverse().join("/")} · {movimiento.repartidor}{tiquete ? ` · saldo disponible del tiquete: ${f2Dec(tiquete.saldo_cartones)} cart` : ""}</div>
                         {!!movimiento.motivo && <div style={{ marginTop: 2 }}>{movimiento.motivo}</div>}
                       </div>;

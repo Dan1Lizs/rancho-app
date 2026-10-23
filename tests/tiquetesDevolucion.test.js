@@ -54,6 +54,15 @@ test("los quebrados y sus correcciones son informativos y no alteran el delta de
   assert.equal(impactoTiquetesEnFecha([{ tipo: "correccion", fecha: "2026-10-02", cartones_delta: 0, cartones_informativos: -1.5 }], "2026-10-02"), 0);
 });
 
+test("la regla nueva de devoluciones no vuelve a sumar los buenos y sí descuenta los malos al recibir", () => {
+  const movimientos = [
+    { tipo: "devolucion", fecha: "2026-10-12", cartones_delta: 2, regla_salida_neta: true },
+    { tipo: "devolucion_mala", fecha: "2026-10-12", cartones_delta: -5, cartones_informativos: 5, regla_salida_neta: true },
+    { tipo: "correccion", fecha: "2026-10-12", cartones_delta: -1, cartones_informativos: 0, regla_salida_neta: true },
+  ];
+  assert.equal(impactoTiquetesEnFecha(movimientos, "2026-10-12"), -5);
+});
+
 test("normaliza fechas históricas y crea identificadores de operación válidos para Postgres", () => {
   assert.equal(fechaISODeTiquete("30/09/2026"), "2026-09-30");
   assert.equal(fechaISODeTiquete("2026-10-01"), "2026-10-01");

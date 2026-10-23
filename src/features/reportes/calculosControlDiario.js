@@ -1,4 +1,5 @@
 import { numeroCartones } from "../bodega/tiquetesDevolucion.js";
+import { devolucionesIntegradasPorRuta } from "../../historial.js";
 
 const fechaReporteISO = (fecha) => {
   const valor = String(fecha || "").slice(0, 10);
@@ -22,6 +23,7 @@ export function ajustarMovimientosTiquetesReporte({
   movimientoTiquetes = 0,
   buenosLegadosHoy = 0,
   buenosExplicitosHoy = 0,
+  impactoMalosSeparado = 0,
   movimientoTiquetesYaIncluyeBuenosExplicitos = false,
 } = {}) {
   const buenos = cartonesReporte(buenosExplicitosHoy);
@@ -33,14 +35,14 @@ export function ajustarMovimientosTiquetesReporte({
 
   return {
     movimientoParaSaldo: movimiento + cartonesReporte(buenosLegadosHoy)
-      + buenos - buenosIncluidosEnMovimiento,
-    otrosMovimientos: movimiento - buenosIncluidosEnMovimiento,
+      + buenos - buenosIncluidosEnMovimiento - cartonesReporte(impactoMalosSeparado),
+    otrosMovimientos: movimiento - buenosIncluidosEnMovimiento - cartonesReporte(impactoMalosSeparado),
   };
 }
 
 const claveRutaReporte = (movimientoId, rutaId) => `${String(movimientoId ?? "")}::${String(rutaId ?? "")}`;
 
-export function resumenDevolucionesRutaReporte({ movimientosBodega = [], fecha, movimientoId = "", repartos = [] } = {}) {
+export function resumenDevolucionesRutaReporte({ movimientosBodega = [], movimientosTiquetes = [], fecha, movimientoId = "", repartos = [] } = {}) {
   const fechaSeleccionada = fechaReporteISO(fecha);
   const movimientos = Array.isArray(movimientosBodega) ? movimientosBodega : [];
   const nombresPorRuta = new Map();
@@ -53,9 +55,24 @@ export function resumenDevolucionesRutaReporte({ movimientosBodega = [], fecha, 
   }
 
   const buenosPorRepartidor = {};
+  const buenosIntegradosPorRepartidor = {};
   const nombresPorRepartidor = {};
   const malosPorRuta = {};
+  const devolucionesIntegradas = devolucionesIntegradasPorRuta(
+    movimientos.flatMap(movimiento => (Array.isArray(movimiento?.devolucionesSinTiquete) ? movimiento.devolucionesSinTiquete : [])),
+    movimientosTiquetes,
+  );
   let buenosExplicitosHoy = 0;
+  let malosRecibidosHoy = 0;
+  let correccionMalaImpactoHoy = 0;
+  const agregarBuenoVisible = (nombre, buenos, integrado = false) => {
+    if (!buenos) return;
+    const nombreVisible = String(nombre || "Ruta de origen").trim();
+    const claveNombre = claveRepartidorReporte(nombreVisible);
+    buenosPorRepartidor[claveNombre] = (buenosPorRepartidor[claveNombre] || 0) + buenos;
+    if (integrado) buenosIntegradosPorRepartidor[claveNombre] = (buenosIntegradosPorRepartidor[claveNombre] || 0) + buenos;
+    nombresPorRepartidor[claveNombre] = nombresPorRepartidor[claveNombre] || nombreVisible;
+  };
   for (const movimiento of movimientos) {
     for (const devolucion of Array.isArray(movimiento?.devolucionesSinTiquete) ? movimiento.devolucionesSinTiquete : []) {
       const rutaMovId = String(devolucion.rutaMovId ?? devolucion.ruta_mov_id ?? "");
@@ -65,17 +82,37 @@ export function resumenDevolucionesRutaReporte({ movimientosBodega = [], fecha, 
       const fechaRecepcion = fechaReporteISO(devolucion.fechaRecepcion || movimiento.fecha);
       const buenos = cartonesReporte(devolucion.cartonesBuenos ?? devolucion.cartones_buenos);
       const malos = cartonesReporte(devolucion.cartonesMalos ?? devolucion.cartones_malos);
+      const nuevaRegla = devolucion.reglaSalidaNeta === true || devolucion.regla_salida_neta === true;
 
-      if (fechaRecepcion === fechaSeleccionada && buenos) {
-        const nombreVisible = String(nombre || "Ruta de origen").trim();
-        const claveNombre = claveRepartidorReporte(nombreVisible);
-        buenosPorRepartidor[claveNombre] = (buenosPorRepartidor[claveNombre] || 0) + buenos;
-        nombresPorRepartidor[claveNombre] = nombresPorRepartidor[claveNombre] || nombreVisible;
-        buenosExplicitosHoy += buenos;
+      if (fechaRecepcion === fechaSeleccionada) {
+        agregarBuenoVisible(nombre, buenos, nuevaRegla);
+        if (nuevaRegla) malosRecibidosHoy += malos;
+        else buenosExplicitosHoy += buenos;
       }
       if (rutaMovId && rutaId && malos) {
         malosPorRuta[claveRuta] = (malosPorRuta[claveRuta] || 0) + malos;
       }
+    }
+  }
+  for (const movimiento of Array.isArray(movimientosTiquetes) ? movimientosTiquetes : []) {
+    const nuevaRegla = movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true;
+    if (!nuevaRegla) continue;
+    const tipo = String(movimiento.tipo || "");
+    const fechaMovimiento = fechaReporteISO(movimiento.fecha);
+    const rutaMovId = String(movimiento.ruta_mov_id ?? movimiento.rutaMovId ?? "");
+    const rutaId = String(movimiento.ruta_id ?? movimiento.rutaId ?? "");
+    const claveRuta = claveRutaReporte(rutaMovId, rutaId);
+    const nombre = nombresPorRuta.get(claveRuta) || movimiento.repartidor || "";
+    const delta = cartonesReporte(movimiento.cartones_delta ?? movimiento.cartonesDelta);
+    const informativo = cartonesReporte(movimiento.cartones_informativos ?? movimiento.cartonesInformativos);
+    if (tipo === "devolucion" && fechaMovimiento === fechaSeleccionada) agregarBuenoVisible(nombre, delta, true);
+    if (tipo === "devolucion_mala" && fechaMovimiento === fechaSeleccionada) malosRecibidosHoy += Math.abs(delta);
+    if (tipo === "correccion" && informativo !== 0 && fechaMovimiento === fechaSeleccionada) {
+      correccionMalaImpactoHoy += delta;
+    }
+    if ((tipo === "devolucion_mala" || (tipo === "correccion" && informativo !== 0)) && rutaMovId && rutaId) {
+      const malos = tipo === "devolucion_mala" ? (informativo || Math.abs(delta)) : informativo;
+      malosPorRuta[claveRuta] = (malosPorRuta[claveRuta] || 0) + malos;
     }
   }
 
@@ -83,13 +120,20 @@ export function resumenDevolucionesRutaReporte({ movimientosBodega = [], fecha, 
     const rutaId = String(reparto?.id || `legacy:${movimientoId || "sin-movimiento"}:${indice}`);
     const claveNombre = claveRepartidorReporte(reparto?.nombre);
     const claveRutaActual = claveRutaReporte(movimientoId, rutaId);
+    const integrada = devolucionesIntegradas.get(claveRutaActual) || { buenos: 0, malos: 0 };
     return {
-      buenosExplicitos: buenosPorRepartidor[claveNombre] || 0,
+      buenosExplicitos: (buenosPorRepartidor[claveNombre] || 0) - (buenosIntegradosPorRepartidor[claveNombre] || 0),
       malosVinculados: malosPorRuta[claveRutaActual] || 0,
+      buenosIntegrados: integrada.buenos,
+      malosIntegrados: integrada.malos,
     };
   });
 
-  return { buenosPorRepartidor, nombresPorRepartidor, buenosExplicitosHoy, malosPorRuta, detalleRutas };
+  return {
+    buenosPorRepartidor, buenosIntegradosPorRepartidor, nombresPorRepartidor, buenosExplicitosHoy, malosPorRuta, detalleRutas,
+    malosRecibidosHoy, correccionMalaImpactoHoy,
+    impactoMalosSeparado: -malosRecibidosHoy + correccionMalaImpactoHoy,
+  };
 }
 
 export function sumarCartonesProduccion(valores = []) {
@@ -107,7 +151,7 @@ export function entradaProducidaReporte(registrosDia, movimientoBodega, producci
     : (movimientoBodega?.producido ?? "");
 }
 
-export function saldoBodegaReporte(saldoInicial, producido, movimientoBodega, rutaNeta) {
+export function saldoBodegaReporte(saldoInicial, producido, movimientoBodega, rutaNeta, impactoMalosSeparado = 0) {
   const guardado = movimientoBodega?.saldoFinal ?? "";
   const inicio = numeroCartones(saldoInicial);
   if (saldoInicial === "" || saldoInicial == null || !Number.isFinite(inicio)) {
@@ -121,7 +165,7 @@ export function saldoBodegaReporte(saldoInicial, producido, movimientoBodega, ru
   const saldoProyectado = redondear(inicio + cantidad(producido) + cantidad(movimientoBodega?.comprado)
     - cantidad(rutaNeta) - cantidad(movimientoBodega?.vendGranja) - cantidad(movimientoBodega?.destruido)
     - cantidad(movimientoBodega?.regalado) + cantidad(movimientoBodega?.movimientoTiquetes)
-    + cantidad(movimientoBodega?.ajusteHistoricoImplicito));
+    + cantidad(movimientoBodega?.ajusteHistoricoImplicito) + cantidad(impactoMalosSeparado));
   const conteo = movimientoBodega?.ajusteConteo;
   const tieneConteo = conteo != null && conteo !== "" && Number.isFinite(numeroCartones(conteo));
   const saldoContado = tieneConteo ? numeroCartones(conteo) : null;

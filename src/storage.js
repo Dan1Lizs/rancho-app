@@ -124,11 +124,16 @@ export async function leerTiquetesDevolucionRuta() {
       .select("id,numero,fecha_recepcion,fecha_ruta_origen,ruta_mov_id,ruta_id,repartidor,cartones_iniciales,cartones_malos,saldo_cartones,creado_por,creado_en,actualizado_en")
       .order("fecha_recepcion", { ascending: false }).order("numero"),
     supabase.from("bodega_tiquetes_devolucion_movs")
-      .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,cartones_informativos,motivo,por,cuando")
+      .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,cartones_informativos,regla_salida_neta,motivo,por,cuando")
       .order("fecha", { ascending: false }).order("cuando", { ascending: false }),
   ]);
   let movimientos = movimientosIniciales;
-  // Compatibilidad breve mientras el esquema recibe esta migración.
+  // Permite consultar el historial durante un despliegue escalonado del esquema.
+  if (movimientos.error && /regla_salida_neta/i.test(String(movimientos.error.message || ""))) {
+    movimientos = await supabase.from("bodega_tiquetes_devolucion_movs")
+      .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,cartones_informativos,motivo,por,cuando")
+      .order("fecha", { ascending: false }).order("cuando", { ascending: false });
+  }
   if (movimientos.error && /cartones_informativos/i.test(String(movimientos.error.message || ""))) {
     movimientos = await supabase.from("bodega_tiquetes_devolucion_movs")
       .select("id,operacion_id,tiquete_id,tipo,numero,fecha,fecha_recepcion,fecha_ruta,ruta_mov_id,ruta_id,repartidor,cartones_delta,motivo,por,cuando")
