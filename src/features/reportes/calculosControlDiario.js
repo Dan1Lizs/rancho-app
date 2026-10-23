@@ -14,3 +14,28 @@ export function entradaProducidaReporte(registrosDia, movimientoBodega, producci
     ? sumarCartonesProduccion(produccionPorGalpon)
     : (movimientoBodega?.producido ?? "");
 }
+
+export function saldoBodegaReporte(saldoInicial, producido, movimientoBodega, rutaNeta) {
+  const guardado = movimientoBodega?.saldoFinal ?? "";
+  const inicio = numeroCartones(saldoInicial);
+  if (saldoInicial === "" || saldoInicial == null || !Number.isFinite(inicio)) {
+    return { saldoProyectado: null, saldoFinal: guardado, ajusteConteo: null };
+  }
+  const cantidad = valor => {
+    const numero = numeroCartones(valor ?? 0);
+    return Number.isFinite(numero) ? numero : 0;
+  };
+  const redondear = valor => Math.round((valor + Number.EPSILON) * 100) / 100;
+  const saldoProyectado = redondear(inicio + cantidad(producido) + cantidad(movimientoBodega?.comprado)
+    - cantidad(rutaNeta) - cantidad(movimientoBodega?.vendGranja) - cantidad(movimientoBodega?.destruido)
+    - cantidad(movimientoBodega?.regalado) + cantidad(movimientoBodega?.movimientoTiquetes)
+    + cantidad(movimientoBodega?.ajusteHistoricoImplicito));
+  const conteo = movimientoBodega?.ajusteConteo;
+  const tieneConteo = conteo != null && conteo !== "" && Number.isFinite(numeroCartones(conteo));
+  const saldoContado = tieneConteo ? numeroCartones(conteo) : null;
+  return {
+    saldoProyectado,
+    saldoFinal: saldoContado ?? saldoProyectado,
+    ajusteConteo: saldoContado == null ? null : redondear(saldoContado - saldoProyectado),
+  };
+}

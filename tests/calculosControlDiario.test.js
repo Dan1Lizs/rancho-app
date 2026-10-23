@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { entradaProducidaReporte, sumarCartonesProduccion } from "../src/features/reportes/calculosControlDiario.js";
+import { entradaProducidaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "../src/features/reportes/calculosControlDiario.js";
 
 test("la suma de producción conserva medios cartones y tolera datos numéricos en texto", () => {
   assert.equal(sumarCartonesProduccion([49, "40", "59,5", 0]), 148.5);
@@ -15,4 +15,16 @@ test("el reporte prefiere la producción de los registros del día a un total de
 test("sin registros diarios el reporte conserva el valor guardado en Bodega", () => {
   assert.equal(entradaProducidaReporte([], { producido: 148.5 }, []), 148.5);
   assert.equal(entradaProducidaReporte([], null, []), "");
+});
+
+test("el saldo del reporte usa producción exacta y conserva medios cartones", () => {
+  const saldo = saldoBodegaReporte(518, 148.5, { comprado: 0 }, -8);
+  assert.equal(saldo.saldoFinal, 674.5);
+});
+
+test("un conteo físico prevalece y la diferencia queda visible", () => {
+  const saldo = saldoBodegaReporte(518, 148.5, { ajusteConteo: 675 }, -8);
+  assert.equal(saldo.saldoProyectado, 674.5);
+  assert.equal(saldo.saldoFinal, 675);
+  assert.equal(saldo.ajusteConteo, 0.5);
 });

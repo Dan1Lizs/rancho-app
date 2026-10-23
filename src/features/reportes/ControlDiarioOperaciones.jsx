@@ -3,7 +3,7 @@ import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
 import { rutaNetaBodega } from "../../historial.js";
 import { presentacionRutaNeta } from "../../bodegaResumen.js";
 import { cartonesUsoEnRuta } from "../bodega/tiquetesDevolucion.js";
-import { entradaProducidaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
+import { entradaProducidaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
 import "./control-diario-operaciones.css";
 
 const numero = (valor, decimales = 2) => {
@@ -121,6 +121,7 @@ export function ControlDiarioOperaciones({
     ? rutaNetaBodega(movimientoBodega.repartos)
     : (movimientoBodega?.rutaNeta ?? "");
   const impactoRuta = presentacionRutaNeta(rutaNeta);
+  const saldoBodega = saldoBodegaReporte(saldoInicialBodega, entradasBodega, movimientoBodega, rutaNeta);
   const hayDatosRutas = Boolean(movimientoBodega?.repartos?.length);
 
   const fumigacionesDia = fumigaciones.filter((f) => isoDe(f.fecha) === fechaISO);
@@ -207,7 +208,10 @@ export function ControlDiarioOperaciones({
     ["(-) Salida de huevo vendido en granja", numero(movimientoBodega?.vendGranja)],
     ["(-) Huevo destruido o quebrado", numero(movimientoBodega?.destruido)],
     ["(-) Huevo regalado / salida gratis", numero(movimientoBodega?.regalado)],
-    ["SALDO FINAL EN BODEGA (=)", numero(movimientoBodega?.saldoFinal)],
+    ...(Number(movimientoBodega?.movimientoTiquetes || 0) ? [["(+/−) Movimiento de tiquetes", `${Number(movimientoBodega.movimientoTiquetes) > 0 ? "+" : "−"}${numero(Math.abs(Number(movimientoBodega.movimientoTiquetes)))}`]] : []),
+    ...(Number(movimientoBodega?.ajusteHistoricoImplicito || 0) ? [["(+/−) Reconciliación histórica conservada", `${Number(movimientoBodega.ajusteHistoricoImplicito) > 0 ? "+" : "−"}${numero(Math.abs(Number(movimientoBodega.ajusteHistoricoImplicito)))}`]] : []),
+    ...(saldoBodega.ajusteConteo ? [["(+/−) Diferencia por conteo físico", `${saldoBodega.ajusteConteo > 0 ? "+" : "−"}${numero(Math.abs(saldoBodega.ajusteConteo))}`]] : []),
+    ["SALDO FINAL EN BODEGA (=)", numero(saldoBodega.saldoFinal)],
   ];
 
   return (
