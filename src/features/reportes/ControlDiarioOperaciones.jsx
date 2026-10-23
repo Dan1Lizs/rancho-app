@@ -3,6 +3,7 @@ import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
 import { rutaNetaBodega } from "../../historial.js";
 import { presentacionRutaNeta } from "../../bodegaResumen.js";
 import { cartonesUsoEnRuta } from "../bodega/tiquetesDevolucion.js";
+import { entradaProducidaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
 import "./control-diario-operaciones.css";
 
 const numero = (valor, decimales = 2) => {
@@ -75,7 +76,7 @@ export function ControlDiarioOperaciones({
       tiquetes = regs.filter((r) => Number(r.cartones || 0) || Number(r.pesoKg || 0))
         .map((r) => ({ numero: "", cartones: r.cartones ?? "", peso: r.pesoKg ?? "" }));
     }
-    const cartones = regs.reduce((s, r) => s + numeroSeguro(r.cartones), 0);
+    const cartones = sumarCartonesProduccion(regs.map((r) => r.cartones));
     const peso = regs.reduce((s, r) => s + numeroSeguro(r.pesoKg), 0);
     const ticketRows = tiquetes.slice(0, tiquetes.length > 7 ? 6 : 7).map((t) => [t.numero, numero(t.cartones), numero(t.peso)]);
     if (tiquetes.length > 7) {
@@ -112,8 +113,7 @@ export function ControlDiarioOperaciones({
   const aperturaBodega = isoDe(bodegaCfg.inicialFecha);
   const saldoInicialBodega = previosBodega[0]?.saldoFinal
     ?? (aperturaBodega && fechaISO < aperturaBodega ? "" : (bodegaCfg.inicialCart ?? ""));
-  const cartonesProducidos = produccion.reduce((s, g) => s + g.cartones, 0);
-  const entradasBodega = movimientoBodega?.producido ?? (registrosDia.length ? cartonesProducidos : "");
+  const entradasBodega = entradaProducidaReporte(registrosDia, movimientoBodega, produccion);
   const repartos = movimientoBodega?.repartos?.length
     ? movimientoBodega.repartos
     : (bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"]).map((nombre) => ({ nombre }));
