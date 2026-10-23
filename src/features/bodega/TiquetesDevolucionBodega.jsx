@@ -68,10 +68,12 @@ export function TiquetesDevolucionBodega({
   const [mensaje, setMensaje] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  const fechaSeleccionadaISO = fechaISODeTiquete(fecha);
+  const esFechaSeleccionada = valor => Boolean(fechaSeleccionadaISO && fechaISODeTiquete(valor) === fechaSeleccionadaISO);
   const origenesPorClave = useMemo(() => new Map(rutasOrigen.map(ruta => [claveRuta(ruta), ruta])), [rutasOrigen]);
-  const recibidosHoy = tiquetes.filter(t => String(t.fecha_recepcion).slice(0, 10) === fecha);
-  const movimientosAplicadosHoy = movimientos.filter(m => String(m.fecha).slice(0, 10) === fecha);
-  const movimientosHoy = movimientos.filter(m => String(m.fecha).slice(0, 10) === fecha || String(m.fecha_recepcion || "").slice(0, 10) === fecha);
+  const recibidosHoy = tiquetes.filter(t => esFechaSeleccionada(t.fecha_recepcion));
+  const movimientosAplicadosHoy = movimientos.filter(m => esFechaSeleccionada(m.fecha));
+  const movimientosHoy = movimientos.filter(m => esFechaSeleccionada(m.fecha) || esFechaSeleccionada(m.fecha_recepcion));
   const netoHoy = movimientosAplicadosHoy.reduce((total, movimiento) => total + cartonesDe(movimiento), 0);
   const tiquetesPorId = useMemo(() => new Map(tiquetes.map(t => [String(t.id), t])), [tiquetes]);
   const detalleRutas = rutasDetalle.map(ruta => ({
@@ -81,6 +83,7 @@ export function TiquetesDevolucionBodega({
     usos: movimientos.filter(m => m.tipo === "uso" && String(m.ruta_mov_id) === String(ruta.movimientoId) && String(m.ruta_id) === String(ruta.rutaId)),
   })).filter(item => item.devoluciones.length || item.devolucionesMalas.length || item.usos.length);
   const historialSinTiquete = useMemo(() => historialDevolucionesSinTiquete(movimientosBodega), [movimientosBodega]);
+  const historialSinTiqueteHoy = historialSinTiquete.filter(devolucion => esFechaSeleccionada(devolucion.fecha));
   const rutasHistorial = useMemo(() => {
     const porClave = new Map(rutasBodegaParaTiquetes(movimientosBodega)
       .map(ruta => [`${ruta.movimientoId}::${ruta.rutaId}`, ruta]));
@@ -249,7 +252,7 @@ export function TiquetesDevolucionBodega({
           <div style={{ marginTop: 4, fontSize: 12, color: colores.textoSuave }}>Las devoluciones con tiquete conservan su saldo reutilizable; las devoluciones sin tiquete pueden corregirse desde el historial con motivo y recalculan Bodega y la ruta asignada.</div>
         </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: netoHoy >= 0 ? colores.verde : colores.alerta }}>
-          Movimiento neto hoy: {netoHoy > 0 ? "+" : ""}{formatoCartones(netoHoy, "0")} cart
+          Movimiento neto del {fechaCorta(fecha)}: {netoHoy > 0 ? "+" : ""}{formatoCartones(netoHoy, "0")} cart
         </div>
       </div>
 
@@ -309,8 +312,9 @@ export function TiquetesDevolucionBodega({
 
       {mensaje && <div role="status" aria-live="polite" style={{ padding: 9, marginTop: 9, borderRadius: 8, background: /registrad|corregido/i.test(mensaje) ? colores.verdeSuave : colores.alertaSuave, color: /registrad|corregido/i.test(mensaje) ? colores.verde : colores.alerta, fontSize: 12.5 }}>{mensaje}</div>}
 
-      <details style={{ marginTop: 12 }}>
-        <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Tiquetes y movimientos de {fechaCorta(fecha)} ({recibidosHoy.length} devoluciones, {movimientosHoy.length} movimientos)</summary>
+      <section aria-labelledby="titulo-devoluciones-fecha" style={{ marginTop: 12, padding: 10, border: `1px solid ${colores.borde}`, borderRadius: 9, background: colores.superficie }}>
+        <h5 id="titulo-devoluciones-fecha" style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Devoluciones recibidas el {fechaCorta(fecha)}</h5>
+        <div style={{ marginTop: 3, color: colores.textoSuave, fontSize: 11.5 }}>{recibidosHoy.length + historialSinTiqueteHoy.length} devoluciones registradas · {movimientosHoy.length} movimientos de tiquetes</div>
         {recibidosHoy.length > 0 && <div style={{ overflowX: "auto", marginTop: 8 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
             <thead><tr><th style={{ textAlign: "left", padding: 6 }}>Tiquete</th><th style={{ textAlign: "right", padding: 6 }}>Buenos</th><th style={{ textAlign: "right", padding: 6 }}>Malos</th><th style={{ textAlign: "right", padding: 6 }}>Saldo</th><th style={{ padding: 6 }}>Ruta de origen</th><th style={{ padding: 6 }}></th></tr></thead>
@@ -349,6 +353,16 @@ export function TiquetesDevolucionBodega({
             })}</tbody>
           </table>
         </div>}
+        {historialSinTiqueteHoy.length > 0 && <div style={{ marginTop: 9, padding: 8, background: colores.fondo, borderRadius: 7 }}>
+          <b style={{ fontSize: 12 }}>Devoluciones sin tiquete físico recibidas este día</b>
+          <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
+            {historialSinTiqueteHoy.map(devolucion => <div key={devolucion.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", fontSize: 11.5 }}>
+              <span>{devolucion.repartidor} · ruta {fechaCorta(devolucion.fechaRuta)} · {devolucion.origenHistorico ? "registro histórico" : "sin tiquete"}</span>
+              <b><span style={{ color: colores.verde }}>Buenos +{formatoCartones(devolucion.buenos, "0")}</span> · <span style={{ color: colores.alerta }}>malos {formatoCartones(devolucion.malos, "0")}</span></b>
+            </div>)}
+          </div>
+          <div style={{ marginTop: 5, color: colores.textoSuave, fontSize: 11 }}>Para corregir una devolución sin tiquete, usa el historial general de abajo.</div>
+        </div>}
         {movimientosHoy.length > 0 && <div style={{ display: "grid", gap: 5, marginTop: 9 }}>
           {movimientosHoy.map(movimiento => {
             const tiquete = tiquetesPorId.get(String(movimiento.tiquete_id));
@@ -366,8 +380,8 @@ export function TiquetesDevolucionBodega({
             </div>;
           })}
         </div>}
-        {!recibidosHoy.length && !movimientosHoy.length && <div style={{ color: colores.textoSuave, marginTop: 8, fontSize: 12 }}>Aún no hay devoluciones ni usos de tiquetes en esta fecha.</div>}
-      </details>
+        {!recibidosHoy.length && !historialSinTiqueteHoy.length && !movimientosHoy.length && <div style={{ color: colores.textoSuave, marginTop: 8, fontSize: 12 }}>No hay devoluciones ni movimientos de tiquetes registrados para esta fecha.</div>}
+      </section>
 
       {devolucionesSinTiquete.length > 0 && <div style={{ marginTop: 9, padding: 9, borderRadius: 8, background: colores.fondo, fontSize: 12 }}>
         <b>Devoluciones sin tiquete en esta fecha</b>
@@ -400,7 +414,7 @@ export function TiquetesDevolucionBodega({
       </details>
 
       <details style={{ marginTop: 8 }}>
-        <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Historial de devoluciones sin tiquete ({historialSinTiquete.length})</summary>
+        <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Historial general de devoluciones sin tiquete ({historialSinTiquete.length})</summary>
         {!historialSinTiquete.length ? <div style={{ color: colores.textoSuave, marginTop: 7, fontSize: 12 }}>No hay devoluciones sin tiquete guardadas.</div> : <div style={{ overflowX: "auto", marginTop: 7 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, minWidth: 440 }}>
             <thead><tr>
