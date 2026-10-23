@@ -8,7 +8,7 @@ import { proximaTarea, diasHastaTarea, leerTareasProgramadas, guardarTareaProgra
 import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } from "./reporteActividades";
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
-import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, aplicarEdicionDevolucionSinTiquete } from "./historial";
+import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, saldoCalculadoBodega, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, aplicarEdicionDevolucionSinTiquete } from "./historial";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, hayCambiosFormularioBodega, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
@@ -56,7 +56,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.11";
+const VERSION_APP = "10.4.12";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -537,6 +537,7 @@ export default function App({ onCerrarSesion }) {
   const [medicaciones, setMedicaciones] = useState([]);
   const [fumigaciones, setFumigaciones] = useState([]);
   const [bodegaMovs, setBodegaMovs] = useState([]);
+  const cambioFechaBodegaRef = useRef(0);
   const [tiquetesDevolucion, setTiquetesDevolucion] = useState([]);
   const [movimientosTiquetesDevolucion, setMovimientosTiquetesDevolucion] = useState([]);
   const [errorTiquetesDevolucion, setErrorTiquetesDevolucion] = useState("");
@@ -1526,10 +1527,21 @@ export default function App({ onCerrarSesion }) {
     ...rutasFormularioTiquetes.filter(ruta => ruta.repartidor && ruta.salida > 0),
   ], fechaBodega, 4);
   const guardarCfgBodega = async (cfg) => { if (cargandoFondo) { avisar("⏳ Sincronizando — espera unos segundos"); return; } setBodegaCfg(cfg); await escribir(K.bodegaCfg, cfg); };
-  const cambiarFechaBodega = (iso, id = null) => {
+  const cambiarFechaBodega = async (iso, id = null) => {
+    const solicitud = ++cambioFechaBodegaRef.current;
+    const movimientosRemotos = await leerBodegaActual();
+    if (solicitud !== cambioFechaBodegaRef.current) return;
+    if (!movimientosRemotos) {
+      avisar("⚠ No se pudo actualizar el historial de Bodega. La fecha no cambió para evitar mostrar una apertura desactualizada.");
+      return;
+    }
+    const movimientosActualizados = reconstruirBodega(
+      movimientosRemotos, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+    );
+    setBodegaMovs(movimientosActualizados);
     setFechaBodega(iso);
     fechaBodegaRef.current = iso;
-    const movimientoEncontrado = id != null ? bodegaMovs.find(m => String(m.id) === String(id)) : bodegaMovs.find(m => fechaHistorialISO(m.fecha) === iso);
+    const movimientoEncontrado = id != null ? movimientosActualizados.find(m => String(m.id) === String(id)) : movimientosActualizados.find(m => fechaHistorialISO(m.fecha) === iso);
     const mov = movimientoEncontrado?.movimientoSoloTiquetes ? null : movimientoEncontrado;
     const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
     const pasosBase = { salidas: false, devoluciones: false, conteo: false };
@@ -1622,9 +1634,11 @@ export default function App({ onCerrarSesion }) {
     setSubBodega(valor);
   };
   const ajusteHistoricoBodega = Number(bodegaMovs.find(m => String(m.id) === String(movBodegaId))?.ajusteHistoricoImplicito || 0);
-  const saldoCalculado = saldoBase + Number(movBodega.comprado || 0) + producidoHoyCart
-    - rutaNeta - Number(movBodega.vendGranja || 0) - Number(movBodega.destruido || 0) - Number(movBodega.regalado || 0)
-    + ajusteHistoricoBodega + impactoTiquetesHoy;
+  const saldoCalculado = saldoCalculadoBodega({
+    saldoBase, comprado: movBodega.comprado, producido: producidoHoyCart, rutaNeta,
+    vendGranja: movBodega.vendGranja, destruido: movBodega.destruido, regalado: movBodega.regalado,
+    ajusteHistorico: ajusteHistoricoBodega, movimientoTiquetes: impactoTiquetesHoy,
+  });
   const hayAjuste = ajusteBodega !== "" && !isNaN(Number(ajusteBodega));
   const saldoFinal = hayAjuste ? Number(ajusteBodega) : saldoCalculado;
   const difAjuste = hayAjuste ? +(Number(ajusteBodega) - saldoCalculado).toFixed(1) : 0;
@@ -1863,10 +1877,19 @@ export default function App({ onCerrarSesion }) {
           + formatoCartones(disponible, "0") + " cartones para esta fecha."); return;
       }
     }
-    const ajusteHistoricoElegido = Number(
-      bodegaMovs.find(m => String(m.id) === String(idMovimiento))?.ajusteHistoricoImplicito
-      ?? elegido?.ajusteHistoricoImplicito ?? 0
-    );
+    // No confiar en el saldo de apertura que conserva la pantalla: puede quedar
+    // atrasado si otra corrección actualizó una fecha anterior después de cargarla.
+    const saldoBaseVigente = Number(saldoInicialBodegaEnFecha(
+      actuales, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, fechaB,
+    ) || 0);
+    const ajusteHistoricoElegido = Number(elegido?.ajusteHistoricoImplicito || 0);
+    const saldoCalculadoVigente = saldoCalculadoBodega({
+      saldoBase: saldoBaseVigente, comprado: movBodega.comprado, producido: producidoHoyCart, rutaNeta,
+      vendGranja: movBodega.vendGranja, destruido: movBodega.destruido, regalado: movBodega.regalado,
+      ajusteHistorico: ajusteHistoricoElegido, movimientoTiquetes: impactoTiquetesHoy,
+    });
+    const saldoFinalVigente = hayAjuste ? Number(ajusteBodega) : saldoCalculadoVigente;
+    const difAjusteVigente = hayAjuste ? +(Number(ajusteBodega) - saldoCalculadoVigente).toFixed(1) : 0;
     const nuevoMov = {
       id: idMovimiento,
       versionSaldoBodega: 2, ajusteHistoricoImplicito: ajusteHistoricoElegido,
@@ -1876,8 +1899,8 @@ export default function App({ onCerrarSesion }) {
       repartos: repartos.map((r, indice) => ({ ...r, id: idRepartoBodega(idMovimiento, r, indice) })), rutaNeta: +rutaNeta.toFixed(1),
       movimientoTiquetes: +impactoTiquetesHoy.toFixed(1),
       devolucionesSinTiquete: devolucionesSinTiquete.map(devolucion => ({ ...devolucion, fechaRecepcion: fechaBodega })),
-      obs: obsInv, saldoFinal: +saldoFinal.toFixed(1),
-      ajusteConteo: hayAjuste ? Number(ajusteBodega) : null, difAjuste: hayAjuste ? difAjuste : null,
+      obs: obsInv, saldoFinal: +saldoFinalVigente.toFixed(1),
+      ajusteConteo: hayAjuste ? Number(ajusteBodega) : null, difAjuste: hayAjuste ? difAjusteVigente : null,
     };
     if (elegido) {
       nuevoMov.historialEdiciones = [...(elegido.historialEdiciones || []), {

@@ -134,6 +134,17 @@ function cambioDiarioBodega(movimiento, rutaNeta) {
     + numeroBodega(movimiento.movimientoTiquetes);
 }
 
+export function saldoCalculadoBodega({
+  saldoBase = 0, producido = 0, comprado = 0, rutaNeta = 0, vendGranja = 0,
+  destruido = 0, regalado = 0, ajusteHistorico = 0, movimientoTiquetes = 0,
+}) {
+  return redondearBodega(
+    numeroBodega(saldoBase) + numeroBodega(producido) + numeroBodega(comprado) - numeroBodega(rutaNeta)
+      - numeroBodega(vendGranja) - numeroBodega(destruido) - numeroBodega(regalado)
+      + numeroBodega(ajusteHistorico) + numeroBodega(movimientoTiquetes),
+  );
+}
+
 export function devolucionesSinTiqueteDeMovimiento(movimientos = []) {
   return (Array.isArray(movimientos) ? movimientos : []).flatMap(movimiento =>
     (Array.isArray(movimiento?.devolucionesSinTiquete) ? movimiento.devolucionesSinTiquete : [])

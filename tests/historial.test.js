@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, historialDevolucionesSinTiquete, aplicarEdicionDevolucionSinTiquete } from "../src/historial.js";
+import { filtrarHistorial, fechaHistorialISO, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, saldoCalculadoBodega, rutaNetaBodega, devolucionesSinTiqueteDeMovimiento, cartonesMalosSinTiqueteEnRuta, historialDevolucionesSinTiquete, aplicarEdicionDevolucionSinTiquete } from "../src/historial.js";
 
 test("el período filtra D/M/A e ISO sin confundir años y permite ver todo", () => {
   const items = [{ fecha: "25/09/2025" }, { fecha: "01/09/2026" }, { fecha: "2026-09-26" }, { fecha: "27/09/2026" }];
@@ -255,4 +255,18 @@ test("el guardado conserva devoluciones buenas anteriores al conteo físico para
   assert.equal(conImpactoPersistido.find(m => m.id === "b-14").saldoFinal, 248);
   assert.equal(conImpactoPersistido.find(m => m.id === "b-15").saldoFinal, 400);
   assert.equal(saldoInicialBodegaEnFecha(conImpactoPersistido, 916, "2026-10-20", "2026-10-15"), 248);
+});
+
+
+test("el guardado usa la apertura remota vigente y no persiste la apertura vieja de la pantalla", () => {
+  const movimientos = [
+    { id: "b-14", fecha: "14/10/2026", saldoFinal: 248, versionSaldoBodega: 2 },
+    { id: "b-15", fecha: "15/10/2026", producido: 152, saldoFinal: 371, versionSaldoBodega: 2 },
+  ];
+  const aperturaActual = saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-15");
+  const cierreGuardado = saldoCalculadoBodega({ saldoBase: aperturaActual, producido: 152 });
+
+  assert.equal(aperturaActual, 248);
+  assert.equal(cierreGuardado, 400);
+  assert.notEqual(saldoCalculadoBodega({ saldoBase: 219, producido: 152 }), cierreGuardado);
 });
