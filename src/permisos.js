@@ -19,3 +19,13 @@ export const resolverVistaSegura = (rol, vista, todasLasVistas = []) => {
   return puedeAccederVista(rol, vista, todasLasVistas) ? vista : "inicio";
 };
 
+
+export const rolActivoParaEmail = (roles, email) => {
+  const correo = String(email || "").trim().toLowerCase();
+  if (!correo || !Array.isArray(roles)) return "sin_acceso";
+  const propio = roles.find(x => String(x?.email || "").trim().toLowerCase() === correo);
+  const rol = String(propio?.role || "").trim().toLowerCase();
+  return propio?.active && ["admin", "encargado", "bodega", "planta", "bienestar", "consulta"].includes(rol)
+    ? rol
+    : "sin_acceso";
+};

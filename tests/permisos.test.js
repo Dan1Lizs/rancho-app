@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { puedeAccederVista, resolverVistaSegura, vistasPermitidas } from "../src/permisos.js";
+import { puedeAccederVista, resolverVistaSegura, rolActivoParaEmail, vistasPermitidas } from "../src/permisos.js";
 
 const todas = ["inicio", "captura", "reporte", "historial", "cxp"];
 
@@ -36,3 +36,14 @@ test("un enlace profundo se conserva mientras carga el rol", () => {
   assert.equal(resolverVistaSegura("consulta", "historial", todas), "inicio");
 });
 
+
+test("resuelve el rol activo por correo sin distinguir mayúsculas ni espacios", () => {
+  const roles = [{ email: " Admin@rancho.test ", role: "ADMIN", active: true }];
+  assert.equal(rolActivoParaEmail(roles, "admin@rancho.test"), "admin");
+});
+
+test("no concede navegación a usuarios inactivos, sin registro o con rol desconocido", () => {
+  assert.equal(rolActivoParaEmail([{ email: "user@rancho.test", role: "bodega", active: false }], "user@rancho.test"), "sin_acceso");
+  assert.equal(rolActivoParaEmail([], "user@rancho.test"), "sin_acceso");
+  assert.equal(rolActivoParaEmail([{ email: "user@rancho.test", role: "superadmin", active: true }], "user@rancho.test"), "sin_acceso");
+});

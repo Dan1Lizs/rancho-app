@@ -25,7 +25,7 @@ import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
 import { ControlDiarioOperaciones } from "./features/reportes/ControlDiarioOperaciones";
 import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
 import { baseDeRegistro, registroCambioDesdeBase } from "./concurrencia";
-import { resolverVistaSegura, vistasPermitidas } from "./permisos";
+import { resolverVistaSegura, rolActivoParaEmail, vistasPermitidas } from "./permisos";
 import { DEFAULT_PREFERENCES, completarOrdenNavegacion, normalizarPreferencias, ordenarPorPreferencia } from "./preferences";
 import { eliminarBorrador, guardarBorrador, guardarPreferencias, leerBorrador, leerPreferencias } from "./preferencesStorage";
 import { alertaEstaSuprimida, claveAlerta, ultimoEventoAlerta, ordenarEventosAlertas, filtrarAlertasCuentaPorPagarPorRol } from "./alertasRevision";
@@ -55,7 +55,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.7";
+const VERSION_APP = "10.4.8";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -640,6 +640,8 @@ export default function App({ onCerrarSesion }) {
   const [editarAjusteMP, setEditarAjusteMP] = useState(null);
   const [esAdmin, setEsAdmin] = useState(false);
   const [miRol, setMiRol] = useState("cargando");
+  const [errorRolCarga, setErrorRolCarga] = useState(false);
+  const [intentoVerificarRol, setIntentoVerificarRol] = useState(0);
   const [usuariosRoles, setUsuariosRoles] = useState([]);
   const [correoInvitacion, setCorreoInvitacion] = useState("");
   const [rolInvitacion, setRolInvitacion] = useState("encargado");
@@ -1056,21 +1058,6 @@ export default function App({ onCerrarSesion }) {
       setMpInvHist(ordenarPorFecha(mih0 || []));
       setAdvAjustes(adv0 || []);
       leerTareasProgramadas().then(setTareasProgramadas).catch(e => console.error("Tareas programadas:", e));
-      {
-        const emailSesion = (typeof window !== "undefined" && window.__usuarioEmail || "").toLowerCase();
-        if ((adm0 || []).length > 0 && emailSesion) setEsAdmin(adm0.map(x => x.toLowerCase()).includes(emailSesion));
-        const { data: roles, error: errorRoles } = await supabase.from("user_roles").select("user_id,email,role,active").order("email");
-        if (!errorRoles && roles) {
-          const propio = roles.find(x => x.email === emailSesion);
-          setMiRol(propio?.active ? propio.role : "sin_acceso");
-          setEsAdmin(propio?.role === "admin" && propio.active);
-          setUsuariosRoles(roles);
-        } else {
-          setMiRol("sin_acceso");
-          setEsAdmin(false);
-          console.error("No se pudo verificar el rol del usuario:", errorRoles);
-        }
-      }
       if (!silencioso) {
         const movimientosRealesBodega = movimientosBodegaCalculados.filter(m => !m.movimientoSoloTiquetes);
         const elegido = movimientosRealesBodega.find(m => fechaHistorialISO(m.fecha) === fechaBodegaRef.current && String(m.id) === String(movBodegaIdRef.current))
@@ -1124,6 +1111,42 @@ export default function App({ onCerrarSesion }) {
     }
   };
   useEffect(() => { cargarTodo(true); }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+    const verificarRol = async () => {
+      setMiRol("cargando");
+      setErrorRolCarga(false);
+      const emailSesion = String(window.__usuarioEmail || "").trim().toLowerCase();
+      if (!emailSesion) {
+        if (!cancelado) {
+          setMiRol("sin_acceso");
+          setEsAdmin(false);
+          setUsuariosRoles([]);
+          setErrorRolCarga(true);
+        }
+        return;
+      }
+      try {
+        const { data: roles, error } = await supabase.from("user_roles").select("user_id,email,role,active").order("email");
+        if (error) throw error;
+        if (cancelado) return;
+        const rol = rolActivoParaEmail(roles || [], emailSesion);
+        setMiRol(rol);
+        setEsAdmin(rol === "admin");
+        setUsuariosRoles(roles || []);
+      } catch (error) {
+        if (cancelado) return;
+        setMiRol("sin_acceso");
+        setEsAdmin(false);
+        setUsuariosRoles([]);
+        setErrorRolCarga(true);
+        console.error("No se pudo verificar el rol del usuario:", error);
+      }
+    };
+    void verificarRol();
+    return () => { cancelado = true; };
+  }, [intentoVerificarRol]);
 
   useEffect(() => {
     const tablasEnVivo = [
@@ -5458,7 +5481,14 @@ export default function App({ onCerrarSesion }) {
           irA={irA}
           avisar={avisar}
         />
-        {miRol === "sin_acceso" && <div role="alert" className="v10-security-alert">Tu cuenta no tiene un rol activo. Solicita acceso a un administrador.</div>}
+        {errorRolCarga ? (
+          <div role="alert" className="v10-security-alert">
+            No se pudo comprobar tu permiso. Por seguridad, la navegación está bloqueada. Revisa tu conexión y vuelve a intentarlo.{" "}
+            <button type="button" onClick={() => setIntentoVerificarRol(v => v + 1)} style={{ minHeight: 36, padding: "6px 10px", border: "1px solid currentColor", borderRadius: 8, background: "transparent", color: "inherit", fontWeight: 700, cursor: "pointer" }}>Reintentar</button>
+          </div>
+        ) : miRol === "sin_acceso" ? (
+          <div role="alert" className="v10-security-alert">Tu cuenta no tiene un rol activo. Solicita acceso a un administrador.</div>
+        ) : null}
         {miRol === "consulta" && <div className="v10-security-alert">Acceso de consulta: los cambios están bloqueados por la base de datos.</div>}
         {vista === "inicio" && <>
           <Seccion titulo="Imprimir control diario de operaciones" sub="Genera las tres páginas del formato de operación con los datos guardados para la fecha que elijas.">
