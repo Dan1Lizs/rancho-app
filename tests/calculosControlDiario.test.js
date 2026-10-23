@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "../src/features/reportes/calculosControlDiario.js";
+import { ajustarMovimientosTiquetesReporte, entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "../src/features/reportes/calculosControlDiario.js";
 
 test("la suma de producción conserva medios cartones y tolera datos numéricos en texto", () => {
   assert.equal(sumarCartonesProduccion([49, "40", "59,5", 0]), 148.5);
@@ -62,3 +62,23 @@ test("el reporte separa los buenos recibidos hoy de los malos cargados a la ruta
   assert.equal(saldoTrasDevolucionBuena.saldoFinal, 108);
 });
 
+
+test("una devolución histórica anterior a la apertura actual no se convierte en una salida ficticia", () => {
+  const ajuste = ajustarMovimientosTiquetesReporte({
+    movimientoTiquetes: 0, buenosExplicitosHoy: 13,
+    fecha: "2026-10-12", fechaApertura: "2026-10-20",
+  });
+  assert.equal(ajuste.otrosMovimientos, 0);
+  assert.equal(ajuste.movimientoParaSaldo, 13);
+  const saldo = saldoBodegaReporte(513, 148.5, { movimientoTiquetes: ajuste.movimientoParaSaldo, regalado: 1 }, 0);
+  assert.equal(saldo.saldoFinal, 673.5);
+});
+
+test("conserva otros movimientos reales al separar una devolución histórica", () => {
+  const ajuste = ajustarMovimientosTiquetesReporte({
+    movimientoTiquetes: -2, buenosExplicitosHoy: 13,
+    fecha: "2026-10-12", fechaApertura: "2026-10-20",
+  });
+  assert.equal(ajuste.otrosMovimientos, -2);
+  assert.equal(ajuste.movimientoParaSaldo, 11);
+});

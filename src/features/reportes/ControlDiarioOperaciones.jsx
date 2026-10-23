@@ -3,7 +3,7 @@ import { calcularSaldoPlantaCategoria } from "../../inventarioFormulas.js";
 import { rutaNetaBodega } from "../../historial.js";
 import { presentacionRutaNeta } from "../../bodegaResumen.js";
 import { cartonesUsoEnRuta } from "../bodega/tiquetesDevolucion.js";
-import { claveRepartidorReporte, entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
+import { ajustarMovimientosTiquetesReporte, claveRepartidorReporte, entradaProducidaReporte, resumenDevolucionesRutaReporte, saldoBodegaReporte, sumarCartonesProduccion } from "./calculosControlDiario.js";
 import "./control-diario-operaciones.css";
 
 const numero = (valor, decimales = 2) => {
@@ -149,12 +149,19 @@ export function ControlDiarioOperaciones({
   const salidaRutaHoy = movimientoBodega?.repartos
     ? rutaNetaLegada + buenosLegadosHoy + malosVinculadosHoy
     : rutaNetaLegada;
-  const movimientoParaSaldo = movimientoBodega
-    ? { ...movimientoBodega, movimientoTiquetes: numeroSeguro(movimientoBodega.movimientoTiquetes) + buenosLegadosHoy }
-    : movimientoBodega;
+  const ajustesTiquetesReporte = ajustarMovimientosTiquetesReporte({
+    movimientoTiquetes: movimientoBodega?.movimientoTiquetes,
+    buenosLegadosHoy,
+    buenosExplicitosHoy: resumenDevoluciones.buenosExplicitosHoy,
+    fecha: fechaISO,
+    fechaApertura: aperturaBodega,
+  });
+  const movimientoParaSaldo = movimientoBodega || ajustesTiquetesReporte.movimientoParaSaldo
+    ? { ...(movimientoBodega || {}), movimientoTiquetes: ajustesTiquetesReporte.movimientoParaSaldo }
+    : null;
   const saldoBodega = saldoBodegaReporte(saldoInicialBodega, entradasBodega, movimientoParaSaldo, salidaRutaHoy);
   const hayDatosRutas = Boolean(movimientoBodega?.repartos?.length || buenosRecibidosHoy || malosVinculadosHoy);
-  const otrosMovimientosTiquetes = numeroSeguro(movimientoBodega?.movimientoTiquetes) - resumenDevoluciones.buenosExplicitosHoy;
+  const otrosMovimientosTiquetes = ajustesTiquetesReporte.otrosMovimientos;
 
   const fumigacionesDia = fumigaciones.filter((f) => isoDe(f.fecha) === fechaISO);
   const medicacionesDia = medicaciones.filter((m) => isoDe(m.fecha) === fechaISO);

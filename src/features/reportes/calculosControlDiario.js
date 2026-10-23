@@ -18,6 +18,26 @@ const cartonesReporte = (valor) => {
   return Number.isFinite(cantidad) ? cantidad : 0;
 };
 
+export function ajustarMovimientosTiquetesReporte({
+  movimientoTiquetes = 0,
+  buenosLegadosHoy = 0,
+  buenosExplicitosHoy = 0,
+  fecha,
+  fechaApertura,
+} = {}) {
+  const fechaSeleccionada = fechaReporteISO(fecha);
+  const apertura = fechaReporteISO(fechaApertura);
+  const buenos = cartonesReporte(buenosExplicitosHoy);
+  const buenosIncluidosEnReconstruccion = apertura && fechaSeleccionada < apertura ? 0 : buenos;
+  const movimiento = cartonesReporte(movimientoTiquetes);
+
+  return {
+    movimientoParaSaldo: movimiento + cartonesReporte(buenosLegadosHoy)
+      + buenos - buenosIncluidosEnReconstruccion,
+    otrosMovimientos: movimiento - buenosIncluidosEnReconstruccion,
+  };
+}
+
 const claveRutaReporte = (movimientoId, rutaId) => `${String(movimientoId ?? "")}::${String(rutaId ?? "")}`;
 
 export function resumenDevolucionesRutaReporte({ movimientosBodega = [], fecha, movimientoId = "", repartos = [] } = {}) {
