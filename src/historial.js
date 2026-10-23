@@ -20,16 +20,14 @@ export function saldoInicialBodegaEnFecha(movs, inicialCart, apertura, fecha) {
   const aperturaISO = fechaHistorialISO(apertura);
   if (!fechaISO) return null;
 
-  const periodoAbierto = Boolean(aperturaISO && fechaISO >= aperturaISO);
   const previos = (Array.isArray(movs) ? movs : [])
     .filter(movimiento => {
       const fechaMovimiento = fechaHistorialISO(movimiento.fecha);
-      return fechaMovimiento && fechaMovimiento < fechaISO
-        && (!periodoAbierto || fechaMovimiento >= aperturaISO);
+      return fechaMovimiento && fechaMovimiento < fechaISO;
     })
     .sort((a, b) => fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)));
   if (previos.length) return numeroBodega(previos.at(-1).saldoFinal);
-  if (periodoAbierto || !aperturaISO) return numeroBodega(inicialCart);
+  if (!aperturaISO || fechaISO >= aperturaISO) return numeroBodega(inicialCart);
   return null;
 }
 
@@ -320,7 +318,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
   for (const devolucion of devolucionesSinTiquete) {
     const fechaRecepcion = fechaHistorialISO(devolucion.fechaRecepcion);
     const buenos = numeroBodega(devolucion.cartonesBuenos ?? devolucion.cartones_buenos);
-    if (fechaRecepcion && buenos !== 0 && (!aperturaISO || fechaRecepcion >= aperturaISO)) {
+    if (fechaRecepcion && buenos !== 0) {
       fechasConEventos.add(fechaRecepcion);
       impactoPorFecha.set(fechaRecepcion, (impactoPorFecha.get(fechaRecepcion) || 0) + buenos);
     }
@@ -334,7 +332,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
       if (fecha) fechasConEventos.add(fecha);
       continue;
     }
-    if (!fecha || !Number.isFinite(delta) || (aperturaISO && fecha < aperturaISO)) continue;
+    if (!fecha || !Number.isFinite(delta)) continue;
     fechasConEventos.add(fecha);
     const operacion = String(movimiento.operacion_id ?? movimiento.operacionId ?? movimiento.id ?? "");
     if (operacionesAsociadas.has(operacion)) continue;
@@ -382,16 +380,8 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
     : (ordenados[0].saldoFinal != null ? numeroBodega(ordenados[0].saldoFinal) : saldoInicial);
   let saldo = anclarPrimerCierre ? primerSaldoGuardado : saldoInicial;
   let saldoAnteriorGuardado = anclarPrimerCierre ? primerSaldoGuardado : saldoInicial;
-  let aperturaAplicada = false;
-
   const reconstruidos = ordenados.map((movimiento, indice) => {
     const fechaMovimientoISO = fechaHistorialISO(movimiento.fecha);
-    const primerMovimientoDesdeApertura = Boolean(hayHistorialAntesDeApertura && fechaMovimientoISO >= aperturaISO && !aperturaAplicada);
-    if (primerMovimientoDesdeApertura) {
-      saldo = saldoInicial;
-      saldoAnteriorGuardado = saldoInicial;
-      aperturaAplicada = true;
-    }
     const tieneDetalleRutas = Array.isArray(movimiento.repartos);
     const rutaCorrecta = tieneDetalleRutas
       ? rutaNetaBodega(movimiento.repartos)
@@ -406,7 +396,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
     const saldoGuardado = conteoFisico ?? (movimiento.saldoFinal != null ? numeroBodega(movimiento.saldoFinal) : null);
     const versionNueva = Number(movimiento.versionSaldoBodega) >= 2;
     const dentroDelPeriodoDeApertura = Boolean(hayHistorialAntesDeApertura && fechaMovimientoISO >= aperturaISO);
-    const primeraAnclada = indice === 0 && anclarPrimerCierre && !primerMovimientoDesdeApertura;
+    const primeraAnclada = indice === 0 && anclarPrimerCierre;
 
     if (primeraAnclada) {
       const saldoFinal = saldoGuardado ?? saldoInicial;
@@ -433,9 +423,7 @@ export function reconstruirBodega(movs, inicialCart, apertura, movimientosTiquet
     const saldoFinal = conteoFisico ?? redondearBodega(saldoCalculado);
 
     saldo = saldoFinal;
-    saldoAnteriorGuardado = primerMovimientoDesdeApertura
-      ? saldoFinal
-      : saldoGuardado ?? redondearBodega(saldoProyectadoAnterior);
+    saldoAnteriorGuardado = saldoGuardado ?? redondearBodega(saldoProyectadoAnterior);
 
     return {
       ...movimiento,

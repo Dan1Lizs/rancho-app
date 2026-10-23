@@ -104,7 +104,7 @@ test("las nuevas devoluciones sin tiquete suman los buenos al recibir y solo reg
   assert.equal(porFecha["2026-10-11"].rutaNeta, 100);
   assert.equal(porFecha["2026-10-11"].saldoFinal, 100);
   assert.equal(porFecha["2026-10-12"].movimientoTiquetes, 13);
-  assert.equal(porFecha["2026-10-12"].saldoFinal, 108);
+  assert.equal(porFecha["2026-10-12"].saldoFinal, 113);
   assert.deepEqual([origen, recepcion], antes, "la reconstrucción solo calcula; no modifica registros originales");
   assert.equal(cartonesMalosSinTiqueteEnRuta(devolucionesSinTiqueteDeMovimiento([recepcion]), "b-11", "r-1"), 5);
 });
@@ -207,7 +207,7 @@ test("recalcula el historial, conserva saltos antiguos sin conteo y es idempoten
   })));
 });
 
-test("la apertura de Bodega reinicia el saldo desde su fecha y conserva los cierres anteriores", () => {
+test("la apertura configurada no rompe la cadena entre cierres guardados", () => {
   const movimientos = [
     { id: "18", fecha: "18/10/2026", producido: 0, rutaNeta: 0, saldoFinal: 1000 },
     { id: "19", fecha: "19/10/2026", producido: 0, repartos: [{ salida: 42 }], saldoFinal: -42 },
@@ -218,19 +218,19 @@ test("la apertura de Bodega reinicia el saldo desde su fecha y conserva los cier
   const porFecha = Object.fromEntries(reconstruirBodega(movimientos, 916, "2026-10-20").map(m => [fechaHistorialISO(m.fecha), m]));
   assert.equal(porFecha["2026-10-18"].saldoFinal, 1000);
   assert.equal(porFecha["2026-10-19"].saldoFinal, -42);
-  assert.equal(porFecha["2026-10-20"].saldoFinal, 926);
-  assert.equal(porFecha["2026-10-21"].saldoFinal, 931);
+  assert.equal(porFecha["2026-10-20"].saldoFinal, -32);
+  assert.equal(porFecha["2026-10-21"].saldoFinal, -27);
   assert.deepEqual(movimientos, antes, "los movimientos originales quedan intactos");
 });
 
-test("el saldo inicial consultado respeta la fecha de apertura", () => {
+test("el saldo inicial de cada fecha es el cierre guardado del día anterior", () => {
   const movimientos = [
     { fecha: "18/10/2026", saldoFinal: 1000 },
     { fecha: "19/10/2026", saldoFinal: -42 },
     { fecha: "20/10/2026", saldoFinal: 926 },
   ];
   assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-19"), 1000);
-  assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-20"), 916);
+  assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-20"), -42);
   assert.equal(saldoInicialBodegaEnFecha(movimientos, 916, "2026-10-20", "2026-10-21"), 926);
   assert.equal(saldoInicialBodegaEnFecha([], 916, "2026-10-20", "2026-10-19"), null);
 });
@@ -239,15 +239,15 @@ test("el guardado conserva devoluciones buenas anteriores al conteo físico para
   const movimientos = [
     { id: "b-13", fecha: "13/10/2026", producido: 0, repartos: [], saldoFinal: 350.5, versionSaldoBodega: 2, ajusteHistoricoImplicito: 0 },
     {
-      id: "b-14", fecha: "14/10/2026", producido: 148.5, repartos: [], rutaNeta: 280,
+      id: "b-14", fecha: "14/10/2026", producido: 148.5, repartos: [{ nombre: "Ruta", salida: 280 }], rutaNeta: 280,
       devolucionesSinTiquete: [{ fechaRecepcion: "2026-10-14", cartonesBuenos: 29, cartonesMalos: 3 }],
       saldoFinal: 219, versionSaldoBodega: 2, ajusteHistoricoImplicito: 0,
     },
     { id: "b-15", fecha: "15/10/2026", producido: 152, repartos: [], rutaNeta: 0, saldoFinal: 371, versionSaldoBodega: 2, ajusteHistoricoImplicito: 0 },
   ];
   const sinImpactoPersistido = reconstruirBodega(movimientos, 916, "2026-10-20");
-  assert.equal(sinImpactoPersistido.find(m => m.id === "b-14").saldoFinal, 219);
-  assert.equal(sinImpactoPersistido.find(m => m.id === "b-15").saldoFinal, 371);
+  assert.equal(sinImpactoPersistido.find(m => m.id === "b-14").saldoFinal, 248);
+  assert.equal(sinImpactoPersistido.find(m => m.id === "b-15").saldoFinal, 400);
 
   const conImpactoPersistido = reconstruirBodega(movimientos.map(m =>
     m.id === "b-14" ? { ...m, movimientoTiquetes: 29 } : m
