@@ -1,5 +1,5 @@
 import { numeroCartones } from "../bodega/tiquetesDevolucion.js";
-import { devolucionesIntegradasPorRuta } from "../../historial.js";
+import { devolucionesIntegradasPorRuta, rutaNetaBodega } from "../../historial.js";
 
 const fechaReporteISO = (fecha) => {
   const valor = String(fecha || "").slice(0, 10);
@@ -14,6 +14,17 @@ export function claveRepartidorReporte(nombre) {
   return String(nombre || "").trim().toLocaleLowerCase("es");
 }
 
+export function salidaEfectivaRepartoReporte(reparto = {}, detalle = {}) {
+  return rutaNetaBodega([reparto]) - cartonesReporte(reparto.devMalo)
+    - cartonesReporte(detalle.buenosIntegrados) - cartonesReporte(detalle.malosIntegrados);
+}
+
+export function salidaEfectivaReporte(repartos, detalleRutas = [], rutaNetaGuardada = 0) {
+  if (!Array.isArray(repartos)) return cartonesReporte(rutaNetaGuardada);
+  return repartos.reduce((total, reparto, indice) =>
+    total + salidaEfectivaRepartoReporte(reparto, detalleRutas[indice] || {}), 0);
+}
+
 const cartonesReporte = (valor) => {
   const cantidad = numeroCartones(valor ?? 0);
   return Number.isFinite(cantidad) ? cantidad : 0;
@@ -21,22 +32,22 @@ const cartonesReporte = (valor) => {
 
 export function ajustarMovimientosTiquetesReporte({
   movimientoTiquetes = 0,
-  buenosLegadosHoy = 0,
   buenosExplicitosHoy = 0,
-  impactoMalosSeparado = 0,
+  impactoMalosIncluidoEnMovimiento = 0,
   movimientoTiquetesYaIncluyeBuenosExplicitos = false,
 } = {}) {
   const buenos = cartonesReporte(buenosExplicitosHoy);
-  // Las devoluciones buenas explícitas también se reflejan en movimientoTiquetes
-  // cuando existe un movimiento diario reconstruido/guardado. Restarlas por
-  // fecha de apertura hacía que las fechas históricas las contaran dos veces.
+  // En el reporte los retornos buenos ya rebajan la salida efectiva de su ruta.
+  // Si el saldo diario antiguo también los guardó como entrada, se quitan de
+  // "otros movimientos" para no sumarlos por segunda vez.
   const buenosIncluidosEnMovimiento = movimientoTiquetesYaIncluyeBuenosExplicitos ? buenos : 0;
+  const malosIncluidosEnMovimiento = cartonesReporte(impactoMalosIncluidoEnMovimiento);
   const movimiento = cartonesReporte(movimientoTiquetes);
+  const residual = movimiento - buenosIncluidosEnMovimiento - malosIncluidosEnMovimiento;
 
   return {
-    movimientoParaSaldo: movimiento + cartonesReporte(buenosLegadosHoy)
-      + buenos - buenosIncluidosEnMovimiento - cartonesReporte(impactoMalosSeparado),
-    otrosMovimientos: movimiento - buenosIncluidosEnMovimiento - cartonesReporte(impactoMalosSeparado),
+    movimientoParaSaldo: residual,
+    otrosMovimientos: residual,
   };
 }
 
@@ -45,6 +56,9 @@ const claveRutaReporte = (movimientoId, rutaId) => `${String(movimientoId ?? "")
 export function resumenDevolucionesRutaReporte({ movimientosBodega = [], movimientosTiquetes = [], fecha, movimientoId = "", repartos = [] } = {}) {
   const fechaSeleccionada = fechaReporteISO(fecha);
   const movimientos = Array.isArray(movimientosBodega) ? movimientosBodega : [];
+  const devolucionesSinTiquete = movimientos.flatMap(movimiento =>
+    Array.isArray(movimiento?.devolucionesSinTiquete) ? movimiento.devolucionesSinTiquete : []);
+  const movimientosTiquetesLista = Array.isArray(movimientosTiquetes) ? movimientosTiquetes : [];
   const nombresPorRuta = new Map();
 
   for (const movimiento of movimientos) {
@@ -58,13 +72,30 @@ export function resumenDevolucionesRutaReporte({ movimientosBodega = [], movimie
   const buenosIntegradosPorRepartidor = {};
   const nombresPorRepartidor = {};
   const malosPorRuta = {};
+  // El nuevo criterio se aplica al interpretar los reportes, incluso a
+  // devoluciones históricas. Solo son copias para el cálculo: los registros
+  // guardados conservan sus valores y sus marcas originales.
+  const movimientosDeDevolucionParaReporte = movimientosTiquetesLista.map(movimiento => {
+    const tipo = String(movimiento.tipo || "");
+    const informativo = cartonesReporte(movimiento.cartones_informativos ?? movimiento.cartonesInformativos);
+    const correccionBuenaVinculada = tipo === "correccion" && informativo === 0
+      && Boolean(movimiento.tiquete_id ?? movimiento.tiqueteId)
+      && Boolean(movimiento.ruta_mov_id ?? movimiento.rutaMovId)
+      && Boolean(movimiento.ruta_id ?? movimiento.rutaId);
+    const aplicaReglaEnReporte = movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true
+      || tipo === "devolucion" || tipo === "devolucion_mala"
+      || (tipo === "correccion" && informativo !== 0) || correccionBuenaVinculada;
+    return aplicaReglaEnReporte ? { ...movimiento, regla_salida_neta: true } : movimiento;
+  });
   const devolucionesIntegradas = devolucionesIntegradasPorRuta(
-    movimientos.flatMap(movimiento => (Array.isArray(movimiento?.devolucionesSinTiquete) ? movimiento.devolucionesSinTiquete : [])),
-    movimientosTiquetes,
+    devolucionesSinTiquete.map(devolucion => ({ ...devolucion, reglaSalidaNeta: true })),
+    movimientosDeDevolucionParaReporte,
   );
   let buenosExplicitosHoy = 0;
+  let buenosRecibidosHoy = 0;
   let malosRecibidosHoy = 0;
   let correccionMalaImpactoHoy = 0;
+  let impactoMalosIncluidoEnMovimiento = 0;
   const agregarBuenoVisible = (nombre, buenos, integrado = false) => {
     if (!buenos) return;
     const nombreVisible = String(nombre || "Ruta de origen").trim();
@@ -82,21 +113,24 @@ export function resumenDevolucionesRutaReporte({ movimientosBodega = [], movimie
       const fechaRecepcion = fechaReporteISO(devolucion.fechaRecepcion || movimiento.fecha);
       const buenos = cartonesReporte(devolucion.cartonesBuenos ?? devolucion.cartones_buenos);
       const malos = cartonesReporte(devolucion.cartonesMalos ?? devolucion.cartones_malos);
-      const nuevaRegla = devolucion.reglaSalidaNeta === true || devolucion.regla_salida_neta === true;
+      const reglaGuardada = devolucion.reglaSalidaNeta === true || devolucion.regla_salida_neta === true;
 
       if (fechaRecepcion === fechaSeleccionada) {
-        agregarBuenoVisible(nombre, buenos, nuevaRegla);
-        if (nuevaRegla) malosRecibidosHoy += malos;
-        else buenosExplicitosHoy += buenos;
+        agregarBuenoVisible(nombre, buenos, true);
+        buenosRecibidosHoy += buenos;
+        // Los registros antiguos sumaron los buenos al saldo diario. Se guarda
+        // este importe para quitarlo del residual al presentar el reporte.
+        if (!reglaGuardada) buenosExplicitosHoy += buenos;
+        malosRecibidosHoy += malos;
+        if (reglaGuardada) impactoMalosIncluidoEnMovimiento -= malos;
       }
       if (rutaMovId && rutaId && malos) {
         malosPorRuta[claveRuta] = (malosPorRuta[claveRuta] || 0) + malos;
       }
     }
   }
-  for (const movimiento of Array.isArray(movimientosTiquetes) ? movimientosTiquetes : []) {
-    const nuevaRegla = movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true;
-    if (!nuevaRegla) continue;
+  for (const movimiento of movimientosTiquetesLista) {
+    const reglaGuardada = movimiento.regla_salida_neta === true || movimiento.reglaSalidaNeta === true;
     const tipo = String(movimiento.tipo || "");
     const fechaMovimiento = fechaReporteISO(movimiento.fecha);
     const rutaMovId = String(movimiento.ruta_mov_id ?? movimiento.rutaMovId ?? "");
@@ -105,10 +139,25 @@ export function resumenDevolucionesRutaReporte({ movimientosBodega = [], movimie
     const nombre = nombresPorRuta.get(claveRuta) || movimiento.repartidor || "";
     const delta = cartonesReporte(movimiento.cartones_delta ?? movimiento.cartonesDelta);
     const informativo = cartonesReporte(movimiento.cartones_informativos ?? movimiento.cartonesInformativos);
-    if (tipo === "devolucion" && fechaMovimiento === fechaSeleccionada) agregarBuenoVisible(nombre, delta, true);
-    if (tipo === "devolucion_mala" && fechaMovimiento === fechaSeleccionada) malosRecibidosHoy += Math.abs(delta);
+    const correccionBuenaVinculada = tipo === "correccion" && informativo === 0
+      && Boolean(movimiento.tiquete_id ?? movimiento.tiqueteId) && Boolean(rutaMovId) && Boolean(rutaId);
+    if (tipo === "devolucion" && fechaMovimiento === fechaSeleccionada) {
+      agregarBuenoVisible(nombre, delta, true);
+      buenosRecibidosHoy += delta;
+      if (!reglaGuardada) buenosExplicitosHoy += delta;
+    }
+    if (tipo === "devolucion_mala" && fechaMovimiento === fechaSeleccionada) {
+      malosRecibidosHoy += informativo || Math.abs(delta);
+      if (reglaGuardada) impactoMalosIncluidoEnMovimiento += delta;
+    }
+    if (correccionBuenaVinculada && fechaMovimiento === fechaSeleccionada) {
+      agregarBuenoVisible(nombre, delta, true);
+      if (!reglaGuardada) buenosExplicitosHoy += delta;
+    }
     if (tipo === "correccion" && informativo !== 0 && fechaMovimiento === fechaSeleccionada) {
-      correccionMalaImpactoHoy += delta;
+      const impactoMala = reglaGuardada ? delta : -informativo;
+      correccionMalaImpactoHoy += impactoMala;
+      if (reglaGuardada) impactoMalosIncluidoEnMovimiento += delta;
     }
     if ((tipo === "devolucion_mala" || (tipo === "correccion" && informativo !== 0)) && rutaMovId && rutaId) {
       const malos = tipo === "devolucion_mala" ? (informativo || Math.abs(delta)) : informativo;
@@ -130,9 +179,10 @@ export function resumenDevolucionesRutaReporte({ movimientosBodega = [], movimie
   });
 
   return {
-    buenosPorRepartidor, buenosIntegradosPorRepartidor, nombresPorRepartidor, buenosExplicitosHoy, malosPorRuta, detalleRutas,
+    buenosPorRepartidor, buenosIntegradosPorRepartidor, nombresPorRepartidor, buenosExplicitosHoy, buenosRecibidosHoy, malosPorRuta, detalleRutas,
     malosRecibidosHoy, correccionMalaImpactoHoy,
     impactoMalosSeparado: -malosRecibidosHoy + correccionMalaImpactoHoy,
+    impactoMalosIncluidoEnMovimiento,
   };
 }
 
