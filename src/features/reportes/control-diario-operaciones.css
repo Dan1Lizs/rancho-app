@@ -208,22 +208,6 @@
   background: #edf1eb;
 }
 
-.op-route-total {
-  margin-top: 2px;
-  border: 1px solid #555e56;
-  padding: 3px 4px;
-  text-align: right;
-  font-size: 6.7pt;
-}
-
-.op-route-note {
-  display: block;
-  margin-top: 2px;
-  color: #3d4e3f;
-  font-size: 6pt;
-  line-height: 1.15;
-}
-
 .op-breakage td {
   height: 19px;
   font-weight: 700;

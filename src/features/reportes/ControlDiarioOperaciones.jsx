@@ -300,10 +300,6 @@ export function ControlDiarioOperaciones({
           </div>
           <div><TituloSeccion>3. SALIDA DIARIA DE HUEVO</TituloSeccion>
             <Cuadricula className="op-compact" columnas={["Concepto", ...repartos.map((r) => r.nombre || "Ruta")]} filas={filasRutas} />
-            <div className="op-route-total">
-              Devoluciones buenas recibidas hoy (rebajadas a su ruta): <b>{numero(buenosRecibidosHoy)} cartones</b>
-              <small className="op-route-note">El reporte aplica esta lógica también al historial sin editarlo: los buenos y malos reducen la salida efectiva; los malos además se descuentan de Bodega en la fecha recibida. Los buenos no se agregan como entrada aparte.</small>
-            </div>
           </div>
         </div>
 
