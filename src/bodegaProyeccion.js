@@ -1,7 +1,8 @@
 import {
   fechaHistorialISO,
   reconstruirBodega,
-  rutaNetaBodega,
+  rutaNetaBodegaConDevoluciones,
+  devolucionesSinTiqueteDeMovimiento,
   saldoCalculadoBodega,
   saldoInicialBodegaEnFecha,
 } from "./historial.js";
@@ -59,17 +60,21 @@ function sincronizarProduccionGuardada(movimientos, registros) {
       fecha: `${dia}/${mes}/${anio}`,
       producido: redondear(producido), comprado: 0, vendGranja: 0, destruido: 0,
       regalado: 0, repartos: [], rutaNeta: 0, movimientoTiquetes: 0,
-      generadoDesdeControlDiario: true,
+      generadoDesdeControlDiario: true, versionSaldoBodega: 2, ajusteHistoricoImplicito: 0,
     });
   }
   return { movimientos: sincronizados, desde, duplicado: null };
 }
 
-// Proyecta los saldos únicamente para lectura; no modifica ni escribe registros.
-export function reconstruirBodegaSoloLectura(movimientos = [], registros = [], inicialCart, apertura, movimientosTiquetes = []) {
+// Reconstruye una sola cadena a partir de movimientos de Bodega y producción
+// guardada. Los movimientos faltantes se generan con ID determinístico, por lo
+// que pueden persistirse sin duplicarse y el siguiente guardado parte del mismo
+// saldo que la pantalla y los reportes.
+export function reconciliarBodegaConProduccion(movimientos = [], registros = [], inicialCart, apertura, movimientosTiquetes = []) {
   const base = reconstruirBodega(movimientos, inicialCart, apertura, movimientosTiquetes);
   const sincronizados = sincronizarProduccionGuardada(movimientos, registros);
-  if (!sincronizados.desde || sincronizados.duplicado) return base;
+  if (!sincronizados.desde) return { movimientos: base, desde: null, duplicado: null, generados: [] };
+  if (sincronizados.duplicado) return { movimientos: base, desde: sincronizados.desde, duplicado: sincronizados.duplicado, generados: [] };
 
   const recalculados = reconstruirBodega(sincronizados.movimientos, inicialCart, apertura, movimientosTiquetes);
   const ascendentes = [...recalculados].sort((a, b) =>
@@ -79,11 +84,12 @@ export function reconstruirBodegaSoloLectura(movimientos = [], registros = [], i
     ? numero(previo.saldoFinal)
     : saldoInicialBodegaEnFecha(ascendentes, inicialCart, apertura, sincronizados.desde);
 
-  return ascendentes.map(movimiento => {
+  const movimientosAscendentes = ascendentes.map(movimiento => {
     if (fechaHistorialISO(movimiento.fecha) < sincronizados.desde) return movimiento;
-    const ruta = Array.isArray(movimiento.repartos)
-      ? rutaNetaBodega(movimiento.repartos)
-      : numero(movimiento.rutaNeta);
+    // reconstruirBodega ya aplica las devoluciones buenas y malas vinculadas
+    // a la ruta. Recalcular desde repartos aquí volvía a la salida bruta y
+    // descartaba esa integración (639.5 en vez de 568 en el caso del 02/11).
+    const ruta = numero(movimiento.rutaNeta);
     const calculado = saldoCalculadoBodega({
       saldoBase: saldo ?? numero(inicialCart),
       producido: movimiento.producido,
@@ -101,9 +107,67 @@ export function reconstruirBodegaSoloLectura(movimientos = [], registros = [], i
     return {
       ...movimiento,
       rutaNeta: redondear(ruta),
+      versionSaldoBodega: 2,
       saldoFinal,
       ajusteHistoricoImplicito: 0,
       difAjuste: tieneConteoFisico ? redondear(saldoFinal - calculado) : null,
     };
-  }).reverse();
+  });
+  const movimientosProyectados = movimientosAscendentes.reverse();
+  const idsOriginales = new Set((Array.isArray(movimientos) ? movimientos : []).map(m => String(m.id)));
+  const generados = movimientosProyectados.filter(movimiento =>
+    movimiento.generadoDesdeControlDiario && !idsOriginales.has(String(movimiento.id)));
+  return { movimientos: movimientosProyectados, desde: sincronizados.desde, duplicado: null, generados };
+}
+
+export function validarCadenaBodega(movimientos = [], tolerancia = 0.05, movimientosTiquetes = []) {
+  const ordenados = [...(Array.isArray(movimientos) ? movimientos : [])]
+    .filter(m => !m.movimientoSoloTiquetes)
+    .filter(m => fechaHistorialISO(m.fecha))
+    .sort((a, b) => fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)) || String(a.id || "").localeCompare(String(b.id || "")));
+  const fechas = new Set();
+  for (const movimiento of ordenados) {
+    const fecha = fechaHistorialISO(movimiento.fecha);
+    if (fechas.has(fecha)) return { ok: false, fecha, motivo: "duplicado" };
+    fechas.add(fecha);
+  }
+  const devoluciones = devolucionesSinTiqueteDeMovimiento(ordenados);
+  for (const movimiento of ordenados) {
+    if (!Array.isArray(movimiento.repartos)) continue;
+    const esperado = rutaNetaBodegaConDevoluciones(movimiento.repartos, movimiento.id, devoluciones, movimientosTiquetes);
+    const actual = numero(movimiento.rutaNeta);
+    if (Math.abs(esperado - actual) >= tolerancia) {
+      return { ok: false, fecha: fechaHistorialISO(movimiento.fecha), motivo: "ruta", esperado, actual };
+    }
+  }
+  if (ordenados.length < 2) return { ok: true };
+
+  let saldoAnterior = numero(ordenados[0].saldoFinal);
+  for (const movimiento of ordenados.slice(1)) {
+    const calculado = saldoCalculadoBodega({
+      saldoBase: saldoAnterior,
+      producido: movimiento.producido,
+      comprado: movimiento.comprado,
+      rutaNeta: movimiento.rutaNeta,
+      vendGranja: movimiento.vendGranja,
+      destruido: movimiento.destruido,
+      regalado: movimiento.regalado,
+      ajusteHistorico: movimiento.ajusteHistoricoImplicito,
+      movimientoTiquetes: movimiento.movimientoTiquetes,
+    });
+    const tieneConteo = movimiento.ajusteConteo != null && movimiento.ajusteConteo !== "";
+    const esperado = tieneConteo ? numero(movimiento.ajusteConteo) : calculado;
+    const actual = numero(movimiento.saldoFinal);
+    if (Math.abs(esperado - actual) >= tolerancia) {
+      return { ok: false, fecha: fechaHistorialISO(movimiento.fecha), esperado, actual, saldoAnterior };
+    }
+    saldoAnterior = actual;
+  }
+  return { ok: true };
+}
+
+// Proyección de solo lectura para cualquier consulta. El mismo reconciliador
+// se usa al guardar para evitar que la vista y la persistencia diverjan.
+export function reconstruirBodegaSoloLectura(movimientos = [], registros = [], inicialCart, apertura, movimientosTiquetes = []) {
+  return reconciliarBodegaConProduccion(movimientos, registros, inicialCart, apertura, movimientosTiquetes).movimientos;
 }

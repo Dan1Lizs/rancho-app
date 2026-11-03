@@ -9,7 +9,7 @@ import { actividadesDelDia, pendientesDeAuditoria, tareasManualesDelReporte } fr
 import { planServidoGanado } from "./servidoGanado";
 import logoOficial from "./assets/logo-oficial.png";
 import { PERIODOS_HISTORIAL, fechaHistorialISO, filtrarHistorial, snapshotBodega, elegirMovimientoBodega, reconstruirBodega, movimientoBodegaParaReporte, movimientoBodegaDeFecha, saldoInicialBodegaEnFecha, saldoCalculadoBodega, rutaNetaBodega, rutaNetaBodegaConDevoluciones, devolucionesSinTiqueteDeMovimiento, aplicarEdicionDevolucionSinTiquete } from "./historial";
-import { reconstruirBodegaSoloLectura } from "./bodegaProyeccion";
+import { reconstruirBodegaSoloLectura, reconciliarBodegaConProduccion, validarCadenaBodega } from "./bodegaProyeccion";
 import { capturasDiferentesDeBase, formularioBodegaDesdeMovimiento, formulariosIguales, hayCambiosFormularioBodega, inventarioMPTieneDatos, valoresFormularioBodega } from "./borradores";
 import { CambiosBodega, ResumenMovimientoBodega } from "./presentacionBodega";
 import { presentacionRutaNeta } from "./bodegaResumen";
@@ -25,6 +25,7 @@ import { MatrizQueFaltaHoy } from "./features/captura/MatrizQueFaltaHoy";
 import { ModalPegarTiquetes } from "./features/captura/ModalPegarTiquetes";
 import { capturaTieneDatosOperativos } from "./features/captura/estadoCaptura.js";
 import { ControlDiarioOperaciones } from "./features/reportes/ControlDiarioOperaciones";
+import { ajustarMovimientosTiquetesReporte, resumenDevolucionesRutaReporte, salidaEfectivaRepartoReporte, salidaEfectivaReporte, saldoBodegaReporte } from "./features/reportes/calculosControlDiario.js";
 import { numeroMaxDosDecimales as f2Dec, numeroDosDecimales as n2Dec } from "./formatoNumeros";
 import { baseDeRegistro, registroCambioDesdeBase } from "./concurrencia";
 import { resolverVistaSegura, rolActivoParaEmail, vistasPermitidas } from "./permisos";
@@ -57,7 +58,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.17";
+const VERSION_APP = "10.4.18";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1551,18 +1552,20 @@ export default function App({ onCerrarSesion }) {
       avisar("⚠ No se pudo actualizar el historial de Bodega. La fecha no cambió para evitar mostrar una apertura desactualizada.");
       return;
     }
-    const movimientosPersistidos = reconstruirBodega(
-      movimientosRemotos, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
-    );
-    const movimientosActualizados = reconstruirBodegaSoloLectura(
+    const reconciliacion = reconciliarBodegaConProduccion(
       movimientosRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
     );
+    if (reconciliacion.duplicado) {
+      avisar(`⚠ Hay más de un movimiento de Bodega para el ${reconciliacion.duplicado.split("-").reverse().join("/")}. Corrige esa fecha antes de consultar o guardar el historial.`);
+      return;
+    }
+    const movimientosActualizados = reconciliacion.movimientos;
     setBodegaMovs(movimientosActualizados);
     setFechaBodega(iso);
     fechaBodegaRef.current = iso;
     const movimientoEncontrado = id != null ? movimientosActualizados.find(m => String(m.id) === String(id)) : movimientosActualizados.find(m => fechaHistorialISO(m.fecha) === iso);
     const mov = movimientoEncontrado?.movimientoSoloTiquetes ? null : movimientoEncontrado;
-    const movPersistido = mov ? movimientosPersistidos.find(m => String(m.id) === String(mov.id)) : null;
+    const movPersistido = mov;
     const repartidoresBase = bodegaCfg.repartidores?.length ? bodegaCfg.repartidores : ["Andrés", "Bryan"];
     const pasosBase = { salidas: false, devoluciones: false, conteo: false };
     setMovBodegaId(movPersistido?.id ?? null);
@@ -1742,25 +1745,33 @@ export default function App({ onCerrarSesion }) {
     try {
       const actualesRemotos = await leerBodegaActual();
       if (!actualesRemotos) throw new Error("No se pudo consultar la Bodega actual. No se guardó ningún cambio.");
-      const rutasActuales = rutasBodegaParaTiquetes(actualesRemotos);
+      const reconciliacionBase = reconciliarBodegaConProduccion(
+        actualesRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      );
+      if (reconciliacionBase.duplicado) throw new Error(`Hay movimientos de Bodega duplicados para el ${reconciliacionBase.duplicado.split("-").reverse().join("/")}. Unifica esa fecha antes de corregir la devolución.`);
+      const movimientosBase = reconciliacionBase.movimientos.filter(movimiento => !movimiento.movimientoSoloTiquetes);
+      const rutasActuales = rutasBodegaParaTiquetes(movimientosBase);
       const rutaActual = rutasActuales.find(item => String(item.movimientoId) === String(ruta.movimientoId)
         && String(item.rutaId) === String(ruta.rutaId));
       const fechaRecepcion = fechaHistorialISO(registro.fecha);
       if (!rutaActual || !fechaRecepcion || fechaHistorialISO(rutaActual.fecha) > fechaRecepcion) {
         throw new Error("La ruta elegida ya no está disponible o es posterior a la recepción. Actualiza el historial y vuelve a elegirla.");
       }
-      const movimientosBase = reconstruirBodega(
-        actualesRemotos, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
-      ).filter(movimiento => !movimiento.movimientoSoloTiquetes);
       const fechaHora = new Date().toISOString();
       const actor = window.__usuarioEmail || completadoPor || "Sin indicar";
       const movimientosEditados = aplicarEdicionDevolucionSinTiquete(movimientosBase, {
         registro, ruta: rutaActual, cartonesBuenos: buenos, cartonesMalos: malos,
         motivo, por: actor, fechaHora,
       });
-      const recalculados = reconstruirBodega(
-        movimientosEditados, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
-      ).filter(movimiento => !movimiento.movimientoSoloTiquetes);
+      const reconciliacionFinal = reconciliarBodegaConProduccion(
+        movimientosEditados, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      );
+      if (reconciliacionFinal.duplicado) throw new Error(`Hay movimientos de Bodega duplicados para el ${reconciliacionFinal.duplicado.split("-").reverse().join("/")}. Unifica esa fecha antes de guardar la corrección.`);
+      const recalculados = reconciliacionFinal.movimientos.filter(movimiento => !movimiento.movimientoSoloTiquetes);
+      const validacionCadena = validarCadenaBodega(recalculados, 0.05, movimientosTiquetesDevolucion);
+      if (!validacionCadena.ok) throw new Error(validacionCadena.motivo === "ruta"
+        ? `La corrección no se guardó: la salida neta de ruta del ${validacionCadena.fecha?.split("-").reverse().join("/")} no coincide con las devoluciones asociadas.`
+        : `La corrección no se guardó: el saldo del ${validacionCadena.fecha?.split("-").reverse().join("/")} no coincide con sus movimientos. Revisa la cadena de Bodega antes de continuar.`);
       const originalesPorId = new Map(movimientosBase.map(movimiento => [String(movimiento.id), movimiento]));
       const movimientosAfectados = new Set(recalculados.filter(movimiento => {
         const previo = originalesPorId.get(String(movimiento.id));
@@ -1774,11 +1785,14 @@ export default function App({ onCerrarSesion }) {
       const movimientosConAuditoria = recalculados.map(movimiento => {
         const previo = originalesPorId.get(String(movimiento.id));
         const esMovimientoRecepcion = String(movimiento.id) === idMovimientoRecepcion;
-        const saldoCambio = previo && Number(previo.saldoFinal) !== Number(movimiento.saldoFinal);
-        if (!esMovimientoRecepcion && !saldoCambio) return movimiento;
+        const cambioMovimiento = previo && JSON.stringify(snapshotBodega(previo)) !== JSON.stringify(snapshotBodega(movimiento));
+        const esNuevoGenerado = !previo && movimiento.generadoDesdeControlDiario;
+        if (!esMovimientoRecepcion && !cambioMovimiento && !esNuevoGenerado) return movimiento;
         const motivoMovimiento = esMovimientoRecepcion
           ? motivoAuditoria
-          : `Saldo recalculado por corrección de devolución recibida el ${registro.fecha}: ${String(motivo).trim()}`;
+          : esNuevoGenerado
+            ? `Movimiento generado automáticamente desde el control diario del ${movimiento.fecha}`
+            : `Cadena de Bodega recalculada por corrección de devolución recibida el ${registro.fecha}: ${String(motivo).trim()}`;
         return {
           ...movimiento,
           historialEdiciones: [...(previo?.historialEdiciones || []), {
@@ -1839,7 +1853,14 @@ export default function App({ onCerrarSesion }) {
     try {
     const actualesRemotos = await leerBodegaActual();
     if (!actualesRemotos) { avisar("⚠ No se pudo consultar la bodega actual. No se guardó ningún cambio."); return; }
-    const actuales = reconstruirBodega(actualesRemotos.filter(m => !m.movimientoSoloTiquetes), bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion).filter(m => !m.movimientoSoloTiquetes);
+    const reconciliacionActual = reconciliarBodegaConProduccion(
+      actualesRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+    );
+    if (reconciliacionActual.duplicado) {
+      avisar(`⚠ Hay más de un movimiento de Bodega para el ${reconciliacionActual.duplicado.split("-").reverse().join("/")}. No se guardó nada; unifica esa fecha desde el historial.`);
+      return;
+    }
+    const actuales = reconciliacionActual.movimientos.filter(m => !m.movimientoSoloTiquetes);
     const { delDia, elegido, id: idMovimiento } = elegirMovimientoBodega(actuales, fechaBodega, movBodegaIdRef.current);
     const rutasValidasDevolucion = [
       ...rutasBodegaParaTiquetes(actuales),
@@ -1931,12 +1952,27 @@ export default function App({ onCerrarSesion }) {
         nuevo: snapshotBodega(nuevoMov),
       }];
     }
-    const recalculados = reconstruirBodega([nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)], bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion).map(m => {
-      if (m.ajusteConteo != null && !isNaN(Number(m.ajusteConteo))) {
-        return { ...m, saldoFinal: Number(m.ajusteConteo) };
+    const reconciliacionFinal = reconciliarBodegaConProduccion(
+      [nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)],
+      registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+    );
+    if (reconciliacionFinal.duplicado) {
+      avisar(`⚠ No se guardó: hay movimientos de Bodega duplicados para el ${reconciliacionFinal.duplicado.split("-").reverse().join("/")}.`);
+      return;
+    }
+    const recalculados = reconciliacionFinal.movimientos.filter(m => !m.movimientoSoloTiquetes);
+    const validacionCadena = validarCadenaBodega(recalculados, 0.05, movimientosTiquetesDevolucion);
+    if (!validacionCadena.ok) {
+      if (validacionCadena.motivo === "duplicado") {
+        avisar(`⚠ No se guardó: hay más de un movimiento de Bodega para el ${validacionCadena.fecha.split("-").reverse().join("/")}. Unifica esa fecha desde el historial.`);
+        return;
       }
-      return m;
-    });
+      const fechaProblema = validacionCadena.fecha?.split("-").reverse().join("/") || "la fecha indicada";
+      avisar(validacionCadena.motivo === "ruta"
+        ? `⚠ No se guardó Bodega: la salida neta de ruta del ${fechaProblema} no coincide con las salidas y devoluciones vinculadas (${formatoCartones(validacionCadena.actual, "0")} / ${formatoCartones(validacionCadena.esperado, "0")}).`
+        : `⚠ No se guardó Bodega: el cierre del ${fechaProblema} (${formatoCartones(validacionCadena.actual, "0")}) no coincide con su saldo anterior y movimientos (${formatoCartones(validacionCadena.esperado, "0")}). Actualiza y revisa esa fecha antes de continuar.`);
+      return;
+    }
     const nuevos = recalculados.map(m => {
       if (String(m.id) === String(nuevoMov.id) && elegido) {
         const eventos = [...m.historialEdiciones];
@@ -1944,10 +1980,17 @@ export default function App({ onCerrarSesion }) {
         return { ...m, historialEdiciones: eventos };
       }
       const previo = actuales.find(x => String(x.id) === String(m.id));
-      if (!previo || Number(previo.saldoFinal) === Number(m.saldoFinal)) return m;
+      if (m.generadoDesdeControlDiario && !actualesRemotos.some(x => String(x.id) === String(m.id))) {
+        return { ...m, historialEdiciones: [...(m.historialEdiciones || []), {
+          fechaHora: new Date().toISOString(), por: "sistema",
+          motivo: `Movimiento generado automáticamente desde el control diario del ${m.fecha}`,
+          anterior: null, nuevo: snapshotBodega(m), duplicadosRetirados: [],
+        }] };
+      }
+      if (!previo || JSON.stringify(snapshotBodega(previo)) === JSON.stringify(snapshotBodega(m))) return m;
       return { ...m, historialEdiciones: [...(m.historialEdiciones || []), {
         fechaHora: new Date().toISOString(), por: window.__usuarioEmail || completadoPor || "Sin indicar",
-        motivo: `Saldo recalculado al editar la bodega del ${fechaB}: ${motivoEdicionBodega.trim()}`,
+        motivo: `Cadena de Bodega recalculada automáticamente al guardar el ${fechaB}`,
         anterior: snapshotBodega(previo), nuevo: snapshotBodega(m), duplicadosRetirados: [],
       }] };
     });
@@ -2004,8 +2047,24 @@ export default function App({ onCerrarSesion }) {
   const cerrarBodegaDia = async () => {
     if (!Object.values(pasosBodega).every(Boolean) || !completadoPor.trim()) { avisar("⚠ Revisa salidas, devoluciones y conteo físico; indica responsable"); return; }
     if (ajusteBodega === "" || !Number.isFinite(Number(ajusteBodega))) { avisar("⚠ Para cerrar el día anota el saldo físico contado"); return; }
-    const actuales = await leerBodegaActual();
-    const mov = actuales?.find(m => fechaHistorialISO(m.fecha) === fechaBodega && String(m.id) === String(movBodegaIdRef.current));
+    const movimientosRemotos = await leerBodegaActual();
+    if (!movimientosRemotos) { avisar("⚠ No se pudo verificar la cadena de Bodega. No se cerró el día."); return; }
+    const reconciliacion = reconciliarBodegaConProduccion(
+      movimientosRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+    );
+    if (reconciliacion.duplicado) { avisar(`⚠ Hay más de un movimiento de Bodega para el ${reconciliacion.duplicado.split("-").reverse().join("/")}. Unifica esa fecha antes de cerrar.`); return; }
+    if (reconciliacion.generados.length) { avisar("⚠ Hay producción diaria aún no incorporada al Kardex de Bodega. Guarda primero el movimiento para sincronizarla y luego cierra el día."); return; }
+    const actuales = reconciliacion.movimientos.filter(m => !m.movimientoSoloTiquetes);
+    const remotosPorId = new Map(movimientosRemotos.filter(m => !m.movimientoSoloTiquetes).map(m => [String(m.id), m]));
+    if (actuales.some(m => {
+      const remoto = remotosPorId.get(String(m.id));
+      return remoto && JSON.stringify(snapshotBodega(remoto)) !== JSON.stringify(snapshotBodega(m));
+    })) { avisar("⚠ La cadena de Bodega necesita recalcularse. Guarda el movimiento antes de cerrar para registrar el ajuste con auditoría."); return; }
+    const validacionCadena = validarCadenaBodega(actuales, 0.05, movimientosTiquetesDevolucion);
+    if (!validacionCadena.ok) { avisar(validacionCadena.motivo === "ruta"
+      ? `⚠ No se cerró: la ruta neta del ${validacionCadena.fecha?.split("-").reverse().join("/")} no coincide con las devoluciones asociadas.`
+      : `⚠ No se cerró: el saldo del ${validacionCadena.fecha?.split("-").reverse().join("/")} no cuadra con la cadena de Bodega. Corrige o actualiza esa fecha primero.`); return; }
+    const mov = actuales.find(m => fechaHistorialISO(m.fecha) === fechaBodega && String(m.id) === String(movBodegaIdRef.current));
     if (!mov || mov.ajusteConteo == null || Number(mov.ajusteConteo) !== Number(ajusteBodega) || JSON.stringify(mov.repartos) !== JSON.stringify(repartos)) { avisar("⚠ Guarda primero el movimiento con el conteo físico y confirma que no cambió en otro dispositivo"); return; }
     if (mov.cierreVerificado) { avisar("✓ Este día ya tiene cierre verificado"); return; }
     const evento = { fechaHora: new Date().toISOString(), por: window.__usuarioEmail || completadoPor, responsable: completadoPor, pasos: { ...pasosBodega } };
@@ -4631,7 +4690,22 @@ export default function App({ onCerrarSesion }) {
             .filter(m => fechaHistorialISO(m.fecha) < fechaHistorialISO(mov.fecha))
             .sort((a, b) => fechaHistorialISO(b.fecha).localeCompare(fechaHistorialISO(a.fecha)))[0];
           const saldoPrevio = mov ? Number(movimientoPrevio?.saldoFinal ?? bodegaCfg.inicialCart ?? 0) : null;
-          const impactoRuta = presentacionRutaNeta(mov?.rutaNeta);
+          const devolucionesReporte = mov ? resumenDevolucionesRutaReporte({
+            movimientosBodega: bodegaMovs, movimientosTiquetes: movimientosTiquetesDevolucion,
+            fecha: fechaHistorialISO(mov.fecha), movimientoId: mov.id, repartos: mov.repartos,
+          }) : null;
+          const salidaRutaReporte = mov ? salidaEfectivaReporte(mov.repartos, devolucionesReporte.detalleRutas, mov.rutaNeta) : 0;
+          const movimientosTiquetesReporte = mov ? ajustarMovimientosTiquetesReporte({
+            movimientoTiquetes: mov.movimientoTiquetes,
+            buenosExplicitosHoy: devolucionesReporte.buenosExplicitosHoy,
+            impactoMalosIncluidoEnMovimiento: devolucionesReporte.impactoMalosIncluidoEnMovimiento,
+            movimientoTiquetesYaIncluyeBuenosExplicitos: true,
+          }).movimientoParaSaldo : 0;
+          const impactoRuta = presentacionRutaNeta(salidaRutaReporte);
+          const saldoReporte = mov ? saldoBodegaReporte(
+            saldoPrevio, mov.producido, { ...mov, movimientoTiquetes: movimientosTiquetesReporte },
+            salidaRutaReporte, devolucionesReporte.impactoMalosSeparado,
+          ) : null;
           const fila = (nombre, val, signo) => (val != null && val !== 0) || signo === "=" ? (
             <tr><td style={celda}>{nombre} ({signo})</td><td style={{ ...celda, fontWeight: signo === "=" ? 700 : 600, textAlign: "right" }}>{formatoCartones(val)}</td></tr>
           ) : null;
@@ -4647,32 +4721,36 @@ export default function App({ onCerrarSesion }) {
                       {fila("Huevo producido", mov.producido, "+")}
                       {fila("Huevo comprado", mov.comprado, "+")}
                       {fila(impactoRuta.etiqueta, impactoRuta.cantidad, impactoRuta.signo)}
-                      {fila("Tiquetes devueltos / reutilizados", mov.movimientoTiquetes, Number(mov.movimientoTiquetes) >= 0 ? "+" : "−")}
+                      {fila("Huevo devuelto malo (merma de inventario)", devolucionesReporte.malosRecibidosHoy, "−")}
+                      {fila("Corrección de merma por devolución", devolucionesReporte.correccionMalaImpactoHoy, Number(devolucionesReporte.correccionMalaImpactoHoy) >= 0 ? "+" : "−")}
+                      {fila("Otros movimientos netos de tiquetes", movimientosTiquetesReporte, Number(movimientosTiquetesReporte) >= 0 ? "+" : "−")}
                       {fila("Vendido en granja", mov.vendGranja, "−")}
                       {fila("Destruido / quebrado", mov.destruido, "−")}
                       {fila("Regalado", mov.regalado, "−")}
                       {mov.ajusteConteo != null && <tr><td style={celda}>Ajuste por conteo físico</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{mov.ajusteConteo} ({mov.difAjuste > 0 ? "+" : ""}{mov.difAjuste})</td></tr>}
                       {Number(mov.ajusteHistoricoImplicito || 0) !== 0 && <tr><td style={celda}>Reconciliación histórica conservada</td><td style={{ ...celda, fontWeight: 600, textAlign: "right" }}>{Number(mov.ajusteHistoricoImplicito) > 0 ? "+" : ""}{Number(mov.ajusteHistoricoImplicito).toFixed(1)}</td></tr>}
-                      <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{f2Dec(mov.saldoFinal)}</td></tr>
+                      <tr><td style={{ ...celda, fontWeight: 700, borderTop: "2px solid #333" }}>SALDO FINAL EN BODEGA (=)</td><td style={{ ...celda, fontWeight: 700, textAlign: "right", borderTop: "2px solid #333" }}>{f2Dec(saldoReporte.saldoFinal)}</td></tr>
                     </tbody>
                   </table>
                   {mov.repartos?.length > 0 && (
                     <>
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Detalle por repartidor</div>
                       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-                        <thead><tr><th style={th}>Repartidor</th><th style={th}>Salida normal</th><th style={th}>Reutilizados</th><th style={th}>Salida total</th><th style={th}>Dev. bueno</th><th style={th}>Dev. malo (−)</th><th style={th}>Impacto en saldo</th></tr></thead>
+                        <thead><tr><th style={th}>Repartidor</th><th style={th}>Salida normal</th><th style={th}>Reutilizados</th><th style={th}>Salida total</th><th style={th}>Dev. bueno</th><th style={th}>Dev. malo</th><th style={th}>Salida efectiva</th></tr></thead>
                         <tbody>
-                          {mov.repartos.map((r, i) => (
+                          {mov.repartos.map((r, i) => {
+                            const detalle = devolucionesReporte.detalleRutas[i] || {};
+                            return (
                             <tr key={i}>
                               <td style={{ ...celda, fontWeight: 600 }}>{r.nombre}</td>
                               <td style={celda}>{formatoCartones(r.salida, "0")}</td>
                               <td style={celda}>{formatoCartones(cartonesUsoEnRuta(r), "0")}</td>
                               <td style={{ ...celda, fontWeight: 700 }}>{formatoCartones(Number(r.salida || 0) + cartonesUsoEnRuta(r))}</td>
-                              <td style={celda}>{formatoCartones(r.devBueno, "0")}</td>
-                              <td style={celda}>{formatoCartones(r.devMalo, "0")}</td>
-                              <td style={{ ...celda, fontWeight: 700 }}>{formatoCartones(rutaNetaBodega([r]))}</td>
+                              <td style={celda}>{formatoCartones(Number(r.devBueno || 0) + Number(detalle.buenosIntegrados || 0), "0")}</td>
+                              <td style={celda}>{formatoCartones(Number(r.devMalo || 0) + Number(detalle.malosIntegrados || 0), "0")}</td>
+                              <td style={{ ...celda, fontWeight: 700 }}>{formatoCartones(salidaEfectivaRepartoReporte(r, detalle), "0")}</td>
                             </tr>
-                          ))}
+                          );})}
                         </tbody>
                       </table>
                     </>

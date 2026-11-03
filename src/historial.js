@@ -45,8 +45,8 @@ export function filtrarHistorial(items, periodo, hoy = new Date()) {
 }
 
 export function snapshotBodega(m) {
-  const { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, devolucionesSinTiquete, rutaNeta, movimientoTiquetes, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito } = m;
-  return { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, devolucionesSinTiquete, rutaNeta, movimientoTiquetes, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito };
+  const { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, devolucionesSinTiquete, rutaNeta, movimientoTiquetes, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito, generadoDesdeControlDiario } = m;
+  return { id, fecha, producido, comprado, vendGranja, destruido, regalado, repartos, devolucionesSinTiquete, rutaNeta, movimientoTiquetes, obs, saldoFinal, ajusteConteo, difAjuste, cierreVerificado, versionSaldoBodega, ajusteHistoricoImplicito, generadoDesdeControlDiario };
 }
 
 export function elegirMovimientoBodega(actuales, fechaISO, id = null) {
