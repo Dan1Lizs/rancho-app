@@ -13,7 +13,9 @@ const numero = valor => {
 };
 const redondear = valor => Number(numero(valor).toFixed(1));
 
-function sincronizarProduccionGuardada(movimientos, registros) {
+function sincronizarProduccionGuardada(movimientos, registros, fechaDesde = null) {
+  const limiteISO = fechaHistorialISO(fechaDesde);
+  if (!limiteISO) return { movimientos: Array.isArray(movimientos) ? movimientos : [], desde: null, duplicado: null };
   const produccionPorFecha = new Map();
   for (const registro of Array.isArray(registros) ? registros : []) {
     const fecha = fechaHistorialISO(registro.fecha);
@@ -31,12 +33,15 @@ function sincronizarProduccionGuardada(movimientos, registros) {
     movimientosPorFecha.set(fecha, lista);
   }
 
-  const fechasControl = [...produccionPorFecha.keys()].sort();
-  const desde = fechasControl.find(fecha => {
+  const fechasControl = [...produccionPorFecha.keys()]
+    .filter(fecha => !limiteISO || fecha >= limiteISO)
+    .sort();
+  const primerDesajuste = fechasControl.find(fecha => {
     const delDia = movimientosPorFecha.get(fecha) || [];
     return delDia.length !== 1
       || Math.abs(numero(delDia[0]?.producido) - redondear(produccionPorFecha.get(fecha))) >= 0.05;
   });
+  const desde = primerDesajuste || limiteISO;
   if (!desde) return { movimientos: Array.isArray(movimientos) ? movimientos : [], desde: null, duplicado: null };
 
   const fechaDuplicada = [...movimientosPorFecha.entries()]
@@ -70,22 +75,37 @@ function sincronizarProduccionGuardada(movimientos, registros) {
 // guardada. Los movimientos faltantes se generan con ID determinístico, por lo
 // que pueden persistirse sin duplicarse y el siguiente guardado parte del mismo
 // saldo que la pantalla y los reportes.
-export function reconciliarBodegaConProduccion(movimientos = [], registros = [], inicialCart, apertura, movimientosTiquetes = []) {
+export function reconciliarBodegaConProduccion(movimientos = [], registros = [], inicialCart, apertura, movimientosTiquetes = [], fechaDesde = null) {
   const base = reconstruirBodega(movimientos, inicialCart, apertura, movimientosTiquetes);
-  const sincronizados = sincronizarProduccionGuardada(movimientos, registros);
+  const sincronizados = sincronizarProduccionGuardada(movimientos, registros, fechaDesde);
   if (!sincronizados.desde) return { movimientos: base, desde: null, duplicado: null, generados: [] };
   if (sincronizados.duplicado) return { movimientos: base, desde: sincronizados.desde, duplicado: sincronizados.duplicado, generados: [] };
 
   const recalculados = reconstruirBodega(sincronizados.movimientos, inicialCart, apertura, movimientosTiquetes);
   const ascendentes = [...recalculados].sort((a, b) =>
     fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)) || String(a.id || "").localeCompare(String(b.id || "")));
-  const previo = ascendentes.filter(m => fechaHistorialISO(m.fecha) < sincronizados.desde).at(-1);
-  let saldo = previo
-    ? numero(previo.saldoFinal)
-    : saldoInicialBodegaEnFecha(ascendentes, inicialCart, apertura, sincronizados.desde);
+  const filasOriginales = (Array.isArray(movimientos) ? movimientos : [])
+    .filter(m => !m.movimientoSoloTiquetes && fechaHistorialISO(m.fecha))
+    .sort((a, b) => fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)));
+  const previoOriginal = filasOriginales.filter(m => fechaHistorialISO(m.fecha) < sincronizados.desde).at(-1);
+  const fechaPrevioOriginal = fechaHistorialISO(previoOriginal?.fecha);
+  let saldo = previoOriginal
+    ? numero(previoOriginal.saldoFinal)
+    : saldoInicialBodegaEnFecha(filasOriginales, inicialCart, apertura, sincronizados.desde);
+  // Los eventos de tiquetes que no tienen movimiento diario propio son sintéticos.
+  // Súmalos al ancla solo si ocurrieron después de la última fila persistida y
+  // antes del tramo que se está reconciliando.
+  saldo = ascendentes
+    .filter(m => m.movimientoSoloTiquetes
+      && fechaHistorialISO(m.fecha) < sincronizados.desde
+      && (!fechaPrevioOriginal || fechaHistorialISO(m.fecha) > fechaPrevioOriginal))
+    .reduce((total, m) => total + numero(m.movimientoTiquetes), saldo);
+  const originalesPorId = new Map(filasOriginales.map(m => [String(m.id), m]));
 
   const movimientosAscendentes = ascendentes.map(movimiento => {
-    if (fechaHistorialISO(movimiento.fecha) < sincronizados.desde) return movimiento;
+    if (fechaHistorialISO(movimiento.fecha) < sincronizados.desde) {
+      return originalesPorId.get(String(movimiento.id)) || movimiento;
+    }
     // reconstruirBodega ya aplica las devoluciones buenas y malas vinculadas
     // a la ruta. Recalcular desde repartos aquí volvía a la salida bruta y
     // descartaba esa integración (639.5 en vez de 568 en el caso del 02/11).
@@ -120,19 +140,21 @@ export function reconciliarBodegaConProduccion(movimientos = [], registros = [],
   return { movimientos: movimientosProyectados, desde: sincronizados.desde, duplicado: null, generados };
 }
 
-export function validarCadenaBodega(movimientos = [], tolerancia = 0.05, movimientosTiquetes = []) {
+export function validarCadenaBodega(movimientos = [], tolerancia = 0.05, movimientosTiquetes = [], fechaDesde = null, saldoInicial = null) {
   const ordenados = [...(Array.isArray(movimientos) ? movimientos : [])]
     .filter(m => !m.movimientoSoloTiquetes)
     .filter(m => fechaHistorialISO(m.fecha))
     .sort((a, b) => fechaHistorialISO(a.fecha).localeCompare(fechaHistorialISO(b.fecha)) || String(a.id || "").localeCompare(String(b.id || "")));
+  const limiteISO = fechaHistorialISO(fechaDesde);
+  const tramo = limiteISO ? ordenados.filter(m => fechaHistorialISO(m.fecha) >= limiteISO) : ordenados;
   const fechas = new Set();
-  for (const movimiento of ordenados) {
+  for (const movimiento of tramo) {
     const fecha = fechaHistorialISO(movimiento.fecha);
     if (fechas.has(fecha)) return { ok: false, fecha, motivo: "duplicado" };
     fechas.add(fecha);
   }
   const devoluciones = devolucionesSinTiqueteDeMovimiento(ordenados);
-  for (const movimiento of ordenados) {
+  for (const movimiento of tramo) {
     if (!Array.isArray(movimiento.repartos)) continue;
     const esperado = rutaNetaBodegaConDevoluciones(movimiento.repartos, movimiento.id, devoluciones, movimientosTiquetes);
     const actual = numero(movimiento.rutaNeta);
@@ -140,10 +162,21 @@ export function validarCadenaBodega(movimientos = [], tolerancia = 0.05, movimie
       return { ok: false, fecha: fechaHistorialISO(movimiento.fecha), motivo: "ruta", esperado, actual };
     }
   }
-  if (ordenados.length < 2) return { ok: true };
+  if (!tramo.length) return { ok: true };
 
-  let saldoAnterior = numero(ordenados[0].saldoFinal);
-  for (const movimiento of ordenados.slice(1)) {
+  const indiceInicio = limiteISO
+    ? ordenados.findIndex(m => fechaHistorialISO(m.fecha) >= limiteISO)
+    : Math.min(1, ordenados.length);
+  if (indiceInicio < 0) return { ok: true };
+  let saldoAnterior = indiceInicio > 0
+    ? numero(ordenados[indiceInicio - 1].saldoFinal)
+    : (saldoInicial == null ? null : numero(saldoInicial));
+  for (let indice = Math.max(0, indiceInicio); indice < ordenados.length; indice += 1) {
+    const movimiento = ordenados[indice];
+    if (saldoAnterior == null) {
+      saldoAnterior = numero(movimiento.saldoFinal);
+      continue;
+    }
     const calculado = saldoCalculadoBodega({
       saldoBase: saldoAnterior,
       producido: movimiento.producido,
@@ -168,6 +201,6 @@ export function validarCadenaBodega(movimientos = [], tolerancia = 0.05, movimie
 
 // Proyección de solo lectura para cualquier consulta. El mismo reconciliador
 // se usa al guardar para evitar que la vista y la persistencia diverjan.
-export function reconstruirBodegaSoloLectura(movimientos = [], registros = [], inicialCart, apertura, movimientosTiquetes = []) {
-  return reconciliarBodegaConProduccion(movimientos, registros, inicialCart, apertura, movimientosTiquetes).movimientos;
+export function reconstruirBodegaSoloLectura(movimientos = [], registros = [], inicialCart, apertura, movimientosTiquetes = [], fechaDesde = null) {
+  return reconciliarBodegaConProduccion(movimientos, registros, inicialCart, apertura, movimientosTiquetes, fechaDesde).movimientos;
 }

@@ -58,7 +58,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.18";
+const VERSION_APP = "10.4.19";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -1048,7 +1048,7 @@ export default function App({ onCerrarSesion }) {
       setMpPedidos(ordenarPorFecha(pedidos)); setRecetas(rc); setMpCat(mcat); setInsumos(ins); setInsumosMovs(ordenarPorFecha(insMovs));
       setPesajes(ordenarPorFecha(ps)); setMedicaciones(ordenarPorFecha(ms)); setFumigaciones(ordenarPorFecha(fs));
       const movimientosBodegaPersistidos = reconstruirBodega(mv, bcfg?.inicialCart, bcfg?.inicialFecha, movimientosTiquetesActuales);
-      const movimientosBodegaCalculados = reconstruirBodegaSoloLectura(mv, rs, bcfg?.inicialCart, bcfg?.inicialFecha, movimientosTiquetesActuales);
+      const movimientosBodegaCalculados = reconstruirBodegaSoloLectura(mv, rs, bcfg?.inicialCart, bcfg?.inicialFecha, movimientosTiquetesActuales, fechaBodega);
       setBodegaMovs(movimientosBodegaCalculados); setPlantaMovs(ordenarPorFecha(pl)); setFacturas(ordenarPorFecha(fa)); setBitacora(ordenarPorFecha(bi)); setCostos(cs);
       setVacunas(ordenarPorFecha(va)); setEnfermedades(ordenarPorFecha(en)); setNecropsias(ordenarPorFecha(ne)); setPlanVac(pv);
       setNucleoInv(nuc0 || {});
@@ -1451,9 +1451,61 @@ export default function App({ onCerrarSesion }) {
 
     if (ok1 && ok2) {
       setEstadoSync("Sincronizado");
-      setBodegaMovs(reconstruirBodegaSoloLectura(
-        bodegaMovs, nuevosRegistros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
-      ));
+      let movimientosBodegaVista = bodegaMovs;
+      let advertenciaBodega = "";
+      const bodegaRemota = await leerBodegaActual();
+      if (!bodegaRemota) {
+        advertenciaBodega = "Producción guardada, pero no se pudo sincronizar Bodega. Actualiza y revisa esa fecha.";
+      } else {
+        const reconciliacion = reconciliarBodegaConProduccion(
+          bodegaRemota, nuevosRegistros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha,
+          movimientosTiquetesDevolucion, fechaCaptura,
+        );
+        if (reconciliacion.duplicado) {
+          advertenciaBodega = `Producción guardada, pero Bodega tiene movimientos duplicados el ${reconciliacion.duplicado.split("-").reverse().join("/")}. Unifica esa fecha.`;
+        } else {
+          const recalculados = reconciliacion.movimientos.filter(m => !m.movimientoSoloTiquetes);
+          const saldoAnterior = saldoInicialBodegaEnFecha(bodegaRemota, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, fechaCaptura);
+          const validacion = validarCadenaBodega(recalculados, 0.05, movimientosTiquetesDevolucion, fechaCaptura, saldoAnterior);
+          if (!validacion.ok) {
+            const fechaProblema = validacion.fecha?.split("-").reverse().join("/") || fecha;
+            advertenciaBodega = `Producción guardada, pero Bodega no se sincronizó: el cierre del ${fechaProblema} no cuadra con su saldo anterior y movimientos.`;
+          } else {
+            const remotosPorId = new Map(bodegaRemota.map(m => [String(m.id), m]));
+            const fechaHora = new Date().toISOString();
+            const movimientosAuditados = recalculados.map(movimiento => {
+              const anterior = remotosPorId.get(String(movimiento.id));
+              const cambio = !anterior
+                || JSON.stringify(snapshotBodega(anterior)) !== JSON.stringify(snapshotBodega(movimiento));
+              if (!cambio) return anterior;
+              return {
+                ...movimiento,
+                historialEdiciones: [...(anterior?.historialEdiciones || []), {
+                  fechaHora, por: "sistema",
+                  motivo: `Producción sincronizada automáticamente al guardar el control diario del ${fecha}`,
+                  anterior: anterior ? snapshotBodega(anterior) : null,
+                  nuevo: snapshotBodega(movimiento), duplicadosRetirados: [],
+                }],
+              };
+            });
+            const hayCambiosBodega = movimientosAuditados.some(movimiento => {
+              const anterior = remotosPorId.get(String(movimiento.id));
+              return !anterior || JSON.stringify(snapshotBodega(anterior)) !== JSON.stringify(snapshotBodega(movimiento));
+            });
+            if (!hayCambiosBodega) {
+              movimientosBodegaVista = reconciliacion.movimientos;
+            } else if (await escribir(K.movs, movimientosAuditados)) {
+              movimientosBodegaVista = reconstruirBodegaSoloLectura(
+                movimientosAuditados, nuevosRegistros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha,
+                movimientosTiquetesDevolucion, fechaCaptura,
+              );
+            } else {
+              advertenciaBodega = "Producción guardada, pero el guardado automático de Bodega no se confirmó. Actualiza y revisa esa fecha.";
+            }
+          }
+        }
+      }
+      setBodegaMovs(movimientosBodegaVista);
       setRegistros(ordenarPorFecha(nuevosRegistros)); setLotes(nuevosLotes); setMedicaciones(ordenarPorFecha(nMeds)); setFumigaciones(ordenarPorFecha(nFums)); setBitacora(nBitacora);
       if (soloLoteId) delete suciosRef.current[soloLoteId];
       else suciosRef.current = {};
@@ -1466,7 +1518,7 @@ export default function App({ onCerrarSesion }) {
         else await eliminarBorrador(fechaCaptura, preferencias.borradores.almacenamiento);
         setBorradorDisponible(null);
       } catch { /* sin espacio local */ }
-      avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}`);
+      avisar(`✓ Control diario ${reemplazados.length ? "EDITADO" : "guardado"} (${fecha})${reemplazados.length ? " — se reemplazó lo anterior de esa fecha" : ""}${advertenciaBodega ? ` · ⚠ ${advertenciaBodega}` : " · Bodega sincronizada"}`);
     } else { setEstadoSync("Error al guardar"); avisar("⚠ No se pudo guardar. Revisa la conexión."); }
     setGuardando(false);
   };
@@ -1553,7 +1605,7 @@ export default function App({ onCerrarSesion }) {
       return;
     }
     const reconciliacion = reconciliarBodegaConProduccion(
-      movimientosRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      movimientosRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion, iso,
     );
     if (reconciliacion.duplicado) {
       avisar(`⚠ Hay más de un movimiento de Bodega para el ${reconciliacion.duplicado.split("-").reverse().join("/")}. Corrige esa fecha antes de consultar o guardar el historial.`);
@@ -1675,7 +1727,7 @@ export default function App({ onCerrarSesion }) {
     setRepartos(actuales => asociarUsosDeTiquetesARepartos(idMovimientoFormulario, actuales, datos.movimientos || []));
     const movimientosGuardados = await leerBodegaActual();
     if (movimientosGuardados) {
-      setBodegaMovs(reconstruirBodegaSoloLectura(movimientosGuardados, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, datos.movimientos || []));
+      setBodegaMovs(reconstruirBodegaSoloLectura(movimientosGuardados, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, datos.movimientos || [], fechaBodegaRef.current));
     }
   };
   refrescarTiquetesRef.current = refrescarTiquetesDevolucion;
@@ -1745,15 +1797,18 @@ export default function App({ onCerrarSesion }) {
     try {
       const actualesRemotos = await leerBodegaActual();
       if (!actualesRemotos) throw new Error("No se pudo consultar la Bodega actual. No se guardó ningún cambio.");
+      const fechaRecepcion = fechaHistorialISO(registro.fecha);
+      const fechaRutaElegida = fechaHistorialISO(ruta.fecha);
+      const fechaDesdeCorreccion = fechaRutaElegida && fechaRutaElegida < fechaRecepcion ? fechaRutaElegida : fechaRecepcion;
       const reconciliacionBase = reconciliarBodegaConProduccion(
         actualesRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+        fechaDesdeCorreccion,
       );
       if (reconciliacionBase.duplicado) throw new Error(`Hay movimientos de Bodega duplicados para el ${reconciliacionBase.duplicado.split("-").reverse().join("/")}. Unifica esa fecha antes de corregir la devolución.`);
       const movimientosBase = reconciliacionBase.movimientos.filter(movimiento => !movimiento.movimientoSoloTiquetes);
       const rutasActuales = rutasBodegaParaTiquetes(movimientosBase);
       const rutaActual = rutasActuales.find(item => String(item.movimientoId) === String(ruta.movimientoId)
         && String(item.rutaId) === String(ruta.rutaId));
-      const fechaRecepcion = fechaHistorialISO(registro.fecha);
       if (!rutaActual || !fechaRecepcion || fechaHistorialISO(rutaActual.fecha) > fechaRecepcion) {
         throw new Error("La ruta elegida ya no está disponible o es posterior a la recepción. Actualiza el historial y vuelve a elegirla.");
       }
@@ -1765,10 +1820,12 @@ export default function App({ onCerrarSesion }) {
       });
       const reconciliacionFinal = reconciliarBodegaConProduccion(
         movimientosEditados, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+        fechaDesdeCorreccion,
       );
       if (reconciliacionFinal.duplicado) throw new Error(`Hay movimientos de Bodega duplicados para el ${reconciliacionFinal.duplicado.split("-").reverse().join("/")}. Unifica esa fecha antes de guardar la corrección.`);
       const recalculados = reconciliacionFinal.movimientos.filter(movimiento => !movimiento.movimientoSoloTiquetes);
-      const validacionCadena = validarCadenaBodega(recalculados, 0.05, movimientosTiquetesDevolucion);
+      const saldoAnteriorCorreccion = saldoInicialBodegaEnFecha(actualesRemotos, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, fechaDesdeCorreccion);
+      const validacionCadena = validarCadenaBodega(recalculados, 0.05, movimientosTiquetesDevolucion, fechaDesdeCorreccion, saldoAnteriorCorreccion);
       if (!validacionCadena.ok) throw new Error(validacionCadena.motivo === "ruta"
         ? `La corrección no se guardó: la salida neta de ruta del ${validacionCadena.fecha?.split("-").reverse().join("/")} no coincide con las devoluciones asociadas.`
         : `La corrección no se guardó: el saldo del ${validacionCadena.fecha?.split("-").reverse().join("/")} no coincide con sus movimientos. Revisa la cadena de Bodega antes de continuar.`);
@@ -1807,6 +1864,7 @@ export default function App({ onCerrarSesion }) {
       }
       const movimientosCalculados = reconstruirBodegaSoloLectura(
         movimientosConAuditoria, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+        fechaDesdeCorreccion,
       );
       setBodegaMovs(movimientosCalculados);
       const idSeleccionado = String(movBodegaIdRef.current || "");
@@ -1854,7 +1912,7 @@ export default function App({ onCerrarSesion }) {
     const actualesRemotos = await leerBodegaActual();
     if (!actualesRemotos) { avisar("⚠ No se pudo consultar la bodega actual. No se guardó ningún cambio."); return; }
     const reconciliacionActual = reconciliarBodegaConProduccion(
-      actualesRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      actualesRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion, fechaB,
     );
     if (reconciliacionActual.duplicado) {
       avisar(`⚠ Hay más de un movimiento de Bodega para el ${reconciliacionActual.duplicado.split("-").reverse().join("/")}. No se guardó nada; unifica esa fecha desde el historial.`);
@@ -1954,14 +2012,17 @@ export default function App({ onCerrarSesion }) {
     }
     const reconciliacionFinal = reconciliarBodegaConProduccion(
       [nuevoMov, ...actuales.filter(m => fechaHistorialISO(m.fecha) !== fechaBodega)],
-      registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion, fechaB,
     );
     if (reconciliacionFinal.duplicado) {
       avisar(`⚠ No se guardó: hay movimientos de Bodega duplicados para el ${reconciliacionFinal.duplicado.split("-").reverse().join("/")}.`);
       return;
     }
     const recalculados = reconciliacionFinal.movimientos.filter(m => !m.movimientoSoloTiquetes);
-    const validacionCadena = validarCadenaBodega(recalculados, 0.05, movimientosTiquetesDevolucion);
+    const validacionCadena = validarCadenaBodega(
+      recalculados, 0.05, movimientosTiquetesDevolucion, fechaB,
+      saldoInicialBodegaEnFecha(actualesRemotos, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, fechaB),
+    );
     if (!validacionCadena.ok) {
       if (validacionCadena.motivo === "duplicado") {
         avisar(`⚠ No se guardó: hay más de un movimiento de Bodega para el ${validacionCadena.fecha.split("-").reverse().join("/")}. Unifica esa fecha desde el historial.`);
@@ -1996,7 +2057,7 @@ export default function App({ onCerrarSesion }) {
     });
     const movimientosBodegaPersistibles = nuevos.filter(m => !m.movimientoSoloTiquetes);
     if (await escribir(K.movs, movimientosBodegaPersistibles)) {
-      const movimientosBodegaCalculados = reconstruirBodegaSoloLectura(movimientosBodegaPersistibles, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion);
+      const movimientosBodegaCalculados = reconstruirBodegaSoloLectura(movimientosBodegaPersistibles, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion, fechaB);
       setBodegaMovs(movimientosBodegaCalculados); setMovBodegaId(nuevoMov.id); movBodegaIdRef.current = nuevoMov.id;
       movBodegaOriginalRef.current = snapshotBodega(movimientosBodegaCalculados.find(m => String(m.id) === String(nuevoMov.id)));
       bodegaFormularioBaseRef.current = formularioBodegaDesdeMovimiento(movimientosBodegaCalculados.find(m => String(m.id) === String(nuevoMov.id)), bodegaCfg.repartidores, pasosBodega);
@@ -2050,7 +2111,7 @@ export default function App({ onCerrarSesion }) {
     const movimientosRemotos = await leerBodegaActual();
     if (!movimientosRemotos) { avisar("⚠ No se pudo verificar la cadena de Bodega. No se cerró el día."); return; }
     const reconciliacion = reconciliarBodegaConProduccion(
-      movimientosRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion,
+      movimientosRemotos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion, fechaB,
     );
     if (reconciliacion.duplicado) { avisar(`⚠ Hay más de un movimiento de Bodega para el ${reconciliacion.duplicado.split("-").reverse().join("/")}. Unifica esa fecha antes de cerrar.`); return; }
     if (reconciliacion.generados.length) { avisar("⚠ Hay producción diaria aún no incorporada al Kardex de Bodega. Guarda primero el movimiento para sincronizarla y luego cierra el día."); return; }
@@ -2060,7 +2121,10 @@ export default function App({ onCerrarSesion }) {
       const remoto = remotosPorId.get(String(m.id));
       return remoto && JSON.stringify(snapshotBodega(remoto)) !== JSON.stringify(snapshotBodega(m));
     })) { avisar("⚠ La cadena de Bodega necesita recalcularse. Guarda el movimiento antes de cerrar para registrar el ajuste con auditoría."); return; }
-    const validacionCadena = validarCadenaBodega(actuales, 0.05, movimientosTiquetesDevolucion);
+    const validacionCadena = validarCadenaBodega(
+      actuales, 0.05, movimientosTiquetesDevolucion, fechaB,
+      saldoInicialBodegaEnFecha(movimientosRemotos, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, fechaB),
+    );
     if (!validacionCadena.ok) { avisar(validacionCadena.motivo === "ruta"
       ? `⚠ No se cerró: la ruta neta del ${validacionCadena.fecha?.split("-").reverse().join("/")} no coincide con las devoluciones asociadas.`
       : `⚠ No se cerró: el saldo del ${validacionCadena.fecha?.split("-").reverse().join("/")} no cuadra con la cadena de Bodega. Corrige o actualiza esa fecha primero.`); return; }
@@ -2069,7 +2133,7 @@ export default function App({ onCerrarSesion }) {
     if (mov.cierreVerificado) { avisar("✓ Este día ya tiene cierre verificado"); return; }
     const evento = { fechaHora: new Date().toISOString(), por: window.__usuarioEmail || completadoPor, responsable: completadoPor, pasos: { ...pasosBodega } };
     const nuevos = actuales.map(m => String(m.id) === String(mov.id) ? { ...m, cierreVerificado: evento } : m);
-    if (await escribir(K.movs, nuevos)) { setBodegaMovs(reconstruirBodegaSoloLectura(nuevos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion)); avisar("✓ Cierre de bodega verificado y registrado"); }
+    if (await escribir(K.movs, nuevos)) { setBodegaMovs(reconstruirBodegaSoloLectura(nuevos, registros, bodegaCfg.inicialCart, bodegaCfg.inicialFecha, movimientosTiquetesDevolucion, fechaB)); avisar("✓ Cierre de bodega verificado y registrado"); }
     else avisar("⚠ No se pudo guardar el cierre");
   };
 

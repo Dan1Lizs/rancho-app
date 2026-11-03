@@ -20,7 +20,7 @@ test("la proyección usa la producción guardada y conserva la cadena aunque el 
   const movimientosAntes = structuredClone(movimientos);
   const registrosAntes = structuredClone(registros);
 
-  const vista = reconstruirBodegaSoloLectura(movimientos, registros, 0, "20/10/2026");
+  const vista = reconstruirBodegaSoloLectura(movimientos, registros, 0, "20/10/2026", [], "16/10/2026");
   const porFecha = Object.fromEntries(vista.map(m => [fechaHistorialISO(m.fecha), m]));
 
   assert.equal(porFecha["2026-10-16"].saldoFinal, 550.5);
@@ -38,7 +38,7 @@ test("la proyección no decide a ciegas si el día que debe recalcular tiene Bod
     { id: "16b", fecha: "16/10/2026", producido: 0, saldoFinal: 400 },
   ];
   const registros = [{ fecha: "16/10/2026", cartones: 150.5 }];
-  const vista = reconstruirBodegaSoloLectura(movimientos, registros, 0, "20/10/2026");
+  const vista = reconstruirBodegaSoloLectura(movimientos, registros, 0, "20/10/2026", [], "16/10/2026");
 
   assert.equal(vista.find(m => m.id === "16a").saldoFinal, 400);
   assert.equal(vista.find(m => m.id === "16b").saldoFinal, 400);
@@ -63,7 +63,7 @@ test("reconcilia producción faltante y resta devoluciones una sola vez en la ca
     { fecha: "01/11/2026", cartones: 149 }, { fecha: "02/11/2026", cartones: 135.5 },
   ];
 
-  const reconciliacion = reconciliarBodegaConProduccion(movimientos, registros, 0, "20/10/2026");
+  const reconciliacion = reconciliarBodegaConProduccion(movimientos, registros, 0, "20/10/2026", [], "30/10/2026");
   const porFecha = Object.fromEntries(reconciliacion.movimientos.map(m => [fechaHistorialISO(m.fecha), m]));
   const reporte = resumenDevolucionesRutaReporte({
     movimientosBodega: reconciliacion.movimientos,
@@ -94,4 +94,21 @@ test("reconcilia producción faltante y resta devoluciones una sola vez en la ca
 
   const cadenaRota = reconciliacion.movimientos.map(m => fechaHistorialISO(m.fecha) === "2026-11-02" ? { ...m, saldoFinal: 700 } : m);
   assert.equal(validarCadenaBodega(cadenaRota).ok, false, "bloquea una escritura cuyo cierre no coincide con el día anterior y los movimientos");
+});
+
+test("la sincronización desde una fecha nunca reescribe discrepancias históricas anteriores", () => {
+  const movimientos = [
+    { id: "16", fecha: "16/10/2026", producido: 0, saldoFinal: 400, versionSaldoBodega: 2 },
+    { id: "30", fecha: "30/10/2026", producido: 100, saldoFinal: 500, versionSaldoBodega: 2 },
+  ];
+  const registros = [
+    { fecha: "16/10/2026", cartones: 150.5 },
+    { fecha: "30/10/2026", cartones: 100 },
+  ];
+  const antes = structuredClone(movimientos);
+  const resultado = reconciliarBodegaConProduccion(movimientos, registros, 0, "20/10/2026", [], "30/10/2026");
+  const fecha16 = resultado.movimientos.find(m => fechaHistorialISO(m.fecha) === "2026-10-16");
+  assert.deepEqual(fecha16, antes[0], "el dato previo al tramo autorizado se conserva sin recálculo");
+  assert.equal(resultado.movimientos.find(m => fechaHistorialISO(m.fecha) === "2026-10-30").saldoFinal, 500);
+  assert.deepEqual(movimientos, antes, "la proyección no muta las filas de origen");
 });
