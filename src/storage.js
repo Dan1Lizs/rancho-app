@@ -555,9 +555,9 @@ export function escribir(key, valor) {
   return cola;
 }
 
-// Importación aditiva: consulta la base actual y usa INSERT; nunca actualiza ni
-// elimina pesajes anteriores. La clave lógica es lote + fecha de medición.
-export async function agregarPesajesFaltantes(nuevos, { reemplazar = [] } = {}) {
+// Importa pesajes por lote + fecha: inserta faltantes y actualiza solo los
+// registros que el usuario vio en la vista previa, con comparación concurrente.
+export async function agregarPesajesFaltantes(nuevos, { reemplazar = [], esperados = {} } = {}) {
   const fechaISO = (fecha) => {
     const s = String(fecha || "");
     if (/^\d{4}-\d\d-\d\d/.test(s)) return s.slice(0, 10);
@@ -578,6 +578,12 @@ export async function agregarPesajesFaltantes(nuevos, { reemplazar = [] } = {}) 
   const porClave = new Map();
   existentes.forEach(f => porClave.set(clave(f.data), [...(porClave.get(clave(f.data)) || []), f]));
   const reemplazables = new Set(reemplazar);
+  const esperadosPorClave = new Map(Object.entries(esperados || {}));
+  const serializarEstable = (valor) => {
+    if (Array.isArray(valor)) return `[${valor.map(serializarEstable).join(",")}]`;
+    if (valor && typeof valor === "object") return `{${Object.keys(valor).sort().map(k => `${JSON.stringify(k)}:${serializarEstable(valor[k])}`).join(",")}}`;
+    return JSON.stringify(valor);
+  };
   let agregados = 0, omitidos = 0, actualizados = 0;
   for (const nuevo of nuevos) {
     const k = clave(nuevo);
@@ -586,8 +592,19 @@ export async function agregarPesajesFaltantes(nuevos, { reemplazar = [] } = {}) 
       if (!reemplazables.has(k)) { omitidos++; continue; }
       if (anteriores.length !== 1) throw new Error(`Hay ${anteriores.length} pesajes para ${k}; revisa los duplicados antes de reemplazar`);
       const anterior = anteriores[0];
-      const { error } = await supabase.from("pesajes").update({ data: { ...nuevo, id: anterior.id } }).eq("id", anterior.id);
+      const esperado = esperadosPorClave.get(k);
+      const actualNormalizado = { ...anterior.data, id: String(anterior.data?.id ?? anterior.id) };
+      const esperadoNormalizado = esperado ? { ...esperado, id: String(esperado.id ?? "") } : null;
+      if (!esperadoNormalizado || serializarEstable(actualNormalizado) !== serializarEstable(esperadoNormalizado)) {
+        throw new Error(`El pesaje de ${nuevo.fecha} cambió desde la vista previa. Actualiza y vuelve a importar para proteger los cambios recientes.`);
+      }
+      const { data: actualizadosEnBD, error } = await supabase.from("pesajes")
+        .update({ data: { ...nuevo, id: anterior.id } })
+        .eq("id", anterior.id)
+        .filter("data", "eq", JSON.stringify(anterior.data))
+        .select("id");
       if (error) { revisarError(error); throw error; }
+      if (actualizadosEnBD?.length !== 1) throw new Error(`El pesaje de ${nuevo.fecha} cambió en otro dispositivo. Actualiza antes de reemplazarlo.`);
       anterior.data = { ...nuevo, id: anterior.id };
       actualizados++;
       continue;
