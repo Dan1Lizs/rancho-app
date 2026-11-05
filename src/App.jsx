@@ -58,7 +58,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.21";
+const VERSION_APP = "10.4.22";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -6625,7 +6625,7 @@ export default function App({ onCerrarSesion }) {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3 }}>
                         <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17 }}>{prom.toFixed(0)} g</span>
                         {meta > 0
-                          ? <b style={{ color, fontSize: 13.5 }}>{brechaG >= 0 ? "+" : ""}{brechaG.toFixed(0)} g vs tabla ({brechaP >= 0 ? "+" : ""}{brechaP.toFixed(1)}%) · meta {meta} g · edad de referencia {Number.isFinite(edadAlPesaje) ? `${Math.max(1, Math.ceil(edadAlPesaje))} sem` : "—"}</b>
+                          ? <b style={{ color, fontSize: 13.5 }}>{brechaG >= 0 ? "+" : ""}{brechaG.toFixed(0)} g vs tabla ({brechaP >= 0 ? "+" : ""}{brechaP.toFixed(1)}%) · meta {meta} g · edad de referencia {Number.isFinite(edadAlPesaje) ? `${Math.max(1, Math.floor(edadAlPesaje))} sem` : "—"}</b>
                           : <span style={{ fontSize: 12.5, color: C.textoSuave }}>define el peso meta en Lotes para comparar</span>}
                       </div>
                     </div>

@@ -393,7 +393,9 @@ export function claveRaza(raza) {
 export function referenciaRaza(raza, semana) {
   const ficha = REFERENCIAS_RAZAS[claveRaza(raza)];
   if (!ficha || !Number.isFinite(semana) || semana < 0) return null;
-  const edadSemana = Math.max(1, Math.ceil(semana));
+  // La semana de referencia es la última semana cumplida. Ej.: 2.1 semanas
+  // corresponde a la fila de semana 2, no a la de semana 3.
+  const edadSemana = Math.max(1, Math.floor(semana));
   const fila = ficha.semanas[edadSemana];
   return fila ? { ...fila, semana: edadSemana, fuente: ficha.fuente, nombre: ficha.nombre, tipo: ficha.tipo } : null;
 }
