@@ -469,7 +469,8 @@ export async function leer(key, porDefecto) {
 }
 
 let escriturasPendientes = 0;
-export async function escribir(key, valor) {
+const colasEscritura = new Map();
+async function escribirAhora(key, valor) {
   const estado = (valor) => {
     if (valor === "Guardando…") escriturasPendientes++;
     else escriturasPendientes = Math.max(0, escriturasPendientes - 1);
@@ -538,6 +539,20 @@ export async function escribir(key, valor) {
     estado("Error al guardar");
     return false;
   }
+}
+
+// Serializa los cambios de una misma clave. Los campos de texto se editan por
+// pulsación y varios guardados simultáneos comparaban contra la misma versión
+// remota, provocando falsos conflictos y avisos aunque solo editara una persona.
+export function escribir(key, valor) {
+  const anterior = colasEscritura.get(key) || Promise.resolve();
+  const tarea = anterior.catch(() => false).then(() => escribirAhora(key, valor));
+  let cola;
+  cola = tarea.finally(() => {
+    if (colasEscritura.get(key) === cola) colasEscritura.delete(key);
+  });
+  colasEscritura.set(key, cola);
+  return cola;
 }
 
 // Importación aditiva: consulta la base actual y usa INSERT; nunca actualiza ni

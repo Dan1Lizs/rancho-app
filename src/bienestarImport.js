@@ -21,19 +21,24 @@ export const fechaPesajeISO = (valor) => {
 
 export const clavePesaje = (lote, fecha) => `${lote}|${fechaPesajeISO(fecha)}`;
 
+// Incluye pollitas jóvenes; el límite anterior de 200 g rechazaba muestras
+// completas de lotes en levante aunque el valor estuviera en gramos.
+const PESO_MIN_GRAMOS = 30;
+const PESO_MAX_GRAMOS = 5000;
+
 export const pesoEnGramos = (valor) => {
   if (valor == null || String(valor).trim() === "") return null;
   let s = String(valor).trim().replace(/\s/g, "");
   if (/^\d{1,3}[.,]\d{3}$/.test(s)) {
     // 1.820 puede significar 1,820 kg o 1820 g: ambas equivalen a 1820 g.
     const entero = +s.replace(/[.,]/, "");
-    return entero >= 200 && entero <= 5000 ? entero : null;
+    return entero >= PESO_MIN_GRAMOS && entero <= PESO_MAX_GRAMOS ? entero : null;
   }
   s = s.replace(",", ".");
   if (!/^\d+(?:\.\d+)?$/.test(s)) return null;
   const n = +s;
   const g = n < 10 ? Math.round(n * 1000) : n;
-  return g >= 200 && g <= 5000 ? g : null;
+  return g >= PESO_MIN_GRAMOS && g <= PESO_MAX_GRAMOS ? g : null;
 };
 
 const normalizarTitulo = (s) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();

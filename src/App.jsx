@@ -58,7 +58,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.19";
+const VERSION_APP = "10.4.20";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -331,6 +331,16 @@ function Seccion({ titulo, sub, children, num, accion }) {
 }
 
 const filtroVacio = () => ({ texto: "", lote: "", desde: "", hasta: "", estado: "", orden: "desc" });
+const claveGrupoPesajeExcel = (pesaje) => {
+  const fecha = fechaPesajeISO(pesaje?.fecha);
+  if (!fecha) return "";
+  const grupo = pesaje?.lote
+    ? `lote:${pesaje.lote}`
+    : pesaje?.galpon
+      ? `galpon:${pesaje.galpon}:${pesaje.codigo || ""}`
+      : `hoja:${pesaje?.hoja || ""}`;
+  return `${grupo}|${fecha}`;
+};
 const filtrarLista = (filas, f) => filas.filter(x => {
   const q = f.texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const fecha = fechaPesajeISO(x.fecha);
@@ -559,6 +569,8 @@ export default function App({ onCerrarSesion }) {
   const [guardandoBitacora, setGuardandoBitacora] = useState(false);
   const [costos, setCostos] = useState(SEED_COSTOS);
   const [guardado, setGuardado] = useState("");
+  const [alertaEmergente, setAlertaEmergente] = useState("");
+  const temporizadorGuardadoRef = useRef(null);
   const [guardando, setGuardando] = useState(false);
 
   // Advertencias ajustadas / eliminadas
@@ -867,6 +879,11 @@ export default function App({ onCerrarSesion }) {
   const [mpPedidos, setMpPedidos] = useState([]);
   const [fPedidoMP, setFPedidoMP] = useState({ fecha: hoyISO(), proveedor: "", nota: "", lineas: [{ mp: "", kg: "" }] });
   const [recetas, setRecetas] = useState(SEED_RECETAS);
+  const [bacheKgTexto, setBacheKgTexto] = useState(String(SEED_RECETAS.bacheKg));
+  const bacheKgEditandoRef = useRef(false);
+  useEffect(() => {
+    if (!bacheKgEditandoRef.current) setBacheKgTexto(String(Number(recetas.bacheKg) > 0 ? recetas.bacheKg : BACHE_KG_DEFAULT));
+  }, [recetas.bacheKg]);
   const [mpCat, setMpCat] = useState(MP_LISTA);
   const [fNuevaMP, setFNuevaMP] = useState({ n: "", prov: "", pres: "" });
   const [insumos, setInsumos] = useState(SEED_INSUMOS);
@@ -1191,7 +1208,22 @@ export default function App({ onCerrarSesion }) {
     return () => { clearTimeout(temporizador); supabase.removeChannel(canal); };
   }, []);
 
-  const avisar = (m) => { setGuardado(m); setTimeout(() => setGuardado(""), 3000); };
+  const avisar = (m) => {
+    const mensaje = String(m || "");
+    // Los avisos de error, validación e información importante se muestran en
+    // una ventana centrada para que no se pierdan al principio de un módulo largo.
+    const textoSinIcono = mensaje.replace(/^[✓⚠⛔❌ℹ⏳]\s*/, "").replace(/^[—–-]\s*/, "");
+    const requiereVentana = /⚠|⛔|❌/.test(mensaje) || /^(?:ℹ|No se pudo|No se guardó|No se puede|No pude|No hay fechas|No hay respaldo|No existe|No encontramos|No se encontró|Error\b|Revisa\b|Corrige\b|Selecciona\b|Elige\b|Escribe\b|Digita\b|Indica\b|Falta\b|Hay (?:más|controles|movimientos|un tiquete|una operación)|La fecha\b|Este registro\b|Toca ×|Sincronizando datos|Espera a que termine)/i.test(textoSinIcono);
+    if (requiereVentana) {
+      clearTimeout(temporizadorGuardadoRef.current);
+      setGuardado("");
+      setAlertaEmergente(textoSinIcono || mensaje);
+      return;
+    }
+    setGuardado(mensaje);
+    clearTimeout(temporizadorGuardadoRef.current);
+    temporizadorGuardadoRef.current = setTimeout(() => setGuardado(""), 3000);
+  };
   const guardarMisPreferencias = async (nuevas) => {
     setGuardandoPreferencias(true);
     try {
@@ -1531,11 +1563,34 @@ export default function App({ onCerrarSesion }) {
     if (activosControl.some(l => String(l.id) === String(galponActivo))) return;
     setGalponActivo(activosControl[0].id);
   }, [vista, fechaCaptura, galponActivo, lotes]);
-  const filasExcelVisibles = filtrarLista(excelPesajes.map((p, indice) => {
-    const l = lotes.find(x => x.id === p.lote);
-    const existe = p.lote && pesajes.some(x => clavePesaje(x.lote, x.fecha) === clavePesaje(p.lote, p.fecha));
-    return { ...p, indice, texto: `${p.hoja} ${p.fecha} G${l?.galpon || p.galpon || ""} ${l?.raza || ""} ${p.codigo || ""}`, estado: p.fecha > hoyISO() ? "Fecha futura" : !p.lote ? "Sin lote" : existe ? "Ya existe" : p.incluir ? "Nuevo" : "Excluido" };
-  }), filtroExcel);
+  const primeraFilaExcelPorClave = new Map();
+  const filasExcelAnalizadas = excelPesajes.map((p, indice) => {
+    const lote = lotes.find(x => String(x.id) === String(p.lote));
+    const fechaValida = Boolean(p.fecha && fechaPesajeISO(p.fecha) === p.fecha);
+    const claveGrupo = claveGrupoPesajeExcel(p);
+    const primeraFilaRepetida = claveGrupo ? (primeraFilaExcelPorClave.get(claveGrupo) ?? -1) : -1;
+    if (claveGrupo && primeraFilaRepetida === -1) primeraFilaExcelPorClave.set(claveGrupo, indice);
+    const repetidoExcel = primeraFilaRepetida >= 0;
+    const existente = p.lote && pesajes.some(x => clavePesaje(x.lote, x.fecha) === clavePesaje(p.lote, p.fecha));
+    const pesosInvalidos = p.pesos.map((valor, indicePeso) => ({ valor, indicePeso })).filter(x => pesoEnGramos(x.valor) == null);
+    const antesNacimiento = Boolean(lote && fechaValida && p.fecha < lote.nac);
+    const esNuevo = Boolean(fechaValida && p.fecha <= hoyISO() && lote && !antesNacimiento && !existente && !repetidoExcel && !pesosInvalidos.length);
+    const estado = !fechaValida ? "Sin fecha" : p.fecha > hoyISO() ? "Fecha futura" : !p.lote || !lote ? "Sin lote" : antesNacimiento ? "Antes del nacimiento" : pesosInvalidos.length ? "Peso inválido" : existente ? "Ya existe" : repetidoExcel ? "Repetido" : p.incluir ? "Nuevo" : "Excluido";
+    return {
+      ...p,
+      indice,
+      primeraFilaRepetida,
+      repetidoExcel,
+      existente: Boolean(existente),
+      pesosInvalidos,
+      antesNacimiento,
+      esNuevo,
+      texto: `${p.hoja} ${p.fecha} G${lote?.galpon || p.galpon || ""} ${lote?.raza || ""} ${p.codigo || ""}`,
+      estado,
+    };
+  });
+  const filasExcelVisibles = filtrarLista(filasExcelAnalizadas.filter(p => !p.repetidoExcel), filtroExcel);
+  const filasExcelRepetidas = filtrarLista(filasExcelAnalizadas.filter(p => p.repetidoExcel), filtroExcel);
   const filasConfPesajes = conflictosPesaje ? filtrarLista(conflictosPesaje.items.map(x => ({ ...x, lote: x.nuevo.lote, fecha: x.nuevo.fecha, texto: `${x.nuevo.fecha} G${x.galpon} ${lotes.find(l => l.id === x.nuevo.lote)?.raza || ""}` })), filtroConfPesajes) : [];
   const filasConfRespaldo = conflictosRespaldo ? filtrarLista(conflictosRespaldo.items.map(x => ({ ...x, texto: `${x.fecha} ${x.lote} ${x.tabla} ${lotes.find(l => l.id === x.lote)?.raza || ""}`, estado: x.tabla === "pesajes" ? "Pesaje" : "Control diario" })), filtroConfRespaldo) : [];
   const registrosExistentes = registros.filter(registro => {
@@ -2541,7 +2596,7 @@ export default function App({ onCerrarSesion }) {
     const prom = nums.reduce((a, b) => a + b, 0) / nums.length;
     const enKg = prom < 10;
     const lista = enKg ? nums.map(n => Math.round(n * 1000)) : nums;
-    const validos = lista.filter(n => n >= 200 && n <= 5000);
+    const validos = lista.filter(n => pesoEnGramos(n) != null);
     const fuera = lista.length - validos.length;
     if (!validos.length) { avisar("⚠ Revisa lo digitado — acepto gramos (ej. 1850) o kilos (ej. 1.85)"); return; }
     const lote = lotes.find(l => l.id === fPeso.lote);
@@ -2575,14 +2630,24 @@ export default function App({ onCerrarSesion }) {
     try {
       const datos = await extraerPesajesExcel(await archivo.arrayBuffer(), { fecha: fPeso.fecha, lote: fPeso.lote });
       const asignados = datos.map(p => {
-        if (p.lote) return { ...p, incluir: p.fecha <= hoyISO() && p.incluir };
+        if (p.lote) return { ...p, incluir: p.fecha <= hoyISO() && p.incluir && p.pesos.every(v => pesoEnGramos(v) != null) };
         const posibles = lotes.filter(l => String(l.galpon) === p.galpon && p.fecha >= l.nac &&
           (!p.codigo || !l.lote || String(l.lote).padStart(2, "0") === p.codigo));
-        return { ...p, lote: posibles.length === 1 ? posibles[0].id : "", incluir: posibles.length === 1 && p.fecha <= hoyISO() };
+        return { ...p, lote: posibles.length === 1 ? posibles[0].id : "", incluir: posibles.length === 1 && p.fecha <= hoyISO() && p.pesos.every(v => pesoEnGramos(v) != null) };
       });
-      setExcelPesajes(asignados);
+      const gruposVistos = new Set();
+      let cantidadRepetidos = 0;
+      const asignadosSinDuplicar = asignados.map(p => {
+        const clave = claveGrupoPesajeExcel(p);
+        if (!clave) return p;
+        const repetido = gruposVistos.has(clave);
+        gruposVistos.add(clave);
+        if (repetido) cantidadRepetidos += 1;
+        return repetido ? { ...p, incluir: false } : p;
+      });
+      setExcelPesajes(asignadosSinDuplicar);
       setExcelAbierto(-1);
-      avisar(asignados.length ? `✓ ${asignados.length} fechas encontradas; revisa y confirma` : "⚠ No encontré columnas de pesaje con fecha y muestra numerada");
+      avisar(asignadosSinDuplicar.length ? `✓ ${asignadosSinDuplicar.length} fechas encontradas; revisa y confirma${cantidadRepetidos ? ` · ${cantidadRepetidos} repetida(s) quedaron excluidas` : ""}` : "⚠ No encontré columnas de pesaje con fecha y muestra numerada");
     } catch (e) { console.error(e); avisar("⚠ No se pudo leer el archivo Excel"); }
   };
 
@@ -2596,6 +2661,15 @@ export default function App({ onCerrarSesion }) {
     const conflictos = [];
     const incluidos = excelPesajes.filter(x => x.incluir);
     if (!incluidos.length) { avisar("⚠ Selecciona al menos una fecha para importar"); return; }
+    const clavesSeleccionadas = new Set();
+    for (const p of incluidos) {
+      const clave = claveGrupoPesajeExcel(p);
+      if (clave && clavesSeleccionadas.has(clave)) {
+        avisar(`⚠ Hay más de una fila seleccionada para ${p.fecha} en el mismo lote. Abre «Repetidos» y deja incluida solo la fila que vas a conservar.`);
+        return;
+      }
+      if (clave) clavesSeleccionadas.add(clave);
+    }
     for (const p of incluidos) {
       if (!p.lote) { avisar("⚠ Asigna un lote a cada fecha antes de importar"); return; }
       if (!p.fecha || fechaPesajeISO(p.fecha) !== p.fecha) { avisar(`⚠ Revisa la fecha en ${p.hoja}, columna ${p.columna}`); return; }
@@ -2605,7 +2679,12 @@ export default function App({ onCerrarSesion }) {
       if (p.fecha < lote.nac) { avisar(`⚠ El pesaje ${p.fecha} precede al nacimiento del lote (${lote.nac}). Corrige la fecha o elige el lote histórico de ${p.hoja}.`); return; }
       const k = clavePesaje(p.lote, p.fecha);
       if (clavesArchivo.has(k)) continue;
-      if (p.pesos.some(v => pesoEnGramos(v) == null)) { avisar(`⚠ Revisa pesos inválidos en ${p.hoja}, ${p.fecha}`); return; }
+      const pesosInvalidos = p.pesos.map((valor, indice) => ({ valor, indice })).filter(x => pesoEnGramos(x.valor) == null);
+      if (pesosInvalidos.length) {
+        const detalle = pesosInvalidos.map(x => `Ave ${x.indice + 1} (${String(x.valor) || "vacío"})`).join(", ");
+        avisar(`⚠ Revisa ${pesosInvalidos.length} peso(s) inválido(s) en ${p.hoja}, ${p.fecha}: ${detalle}. En «Revisar / editar» se marcan en rojo.`);
+        return;
+      }
       clavesArchivo.add(k);
       const [ny, nm, nd] = lote.nac.split("-").map(Number);
       const [py, pm, pd] = p.fecha.split("-").map(Number);
@@ -2742,6 +2821,22 @@ export default function App({ onCerrarSesion }) {
   const guardarCostos = async (nuevos) => { setCostos(nuevos); await escribir(K.costos, nuevos); };
   // ── Editor de fórmulas ──
   const persistirRecetas = async (nuevo) => { setRecetas(nuevo); await escribir(K.recetas, nuevo); };
+  const guardarCapacidadMixer = () => {
+    bacheKgEditandoRef.current = false;
+    const texto = String(bacheKgTexto || "").trim().replace(",", ".");
+    if (!texto) {
+      setBacheKgTexto(String(Number(recetas.bacheKg) > 0 ? recetas.bacheKg : BACHE_KG_DEFAULT));
+      return;
+    }
+    const capacidad = Number(texto);
+    if (!Number.isFinite(capacidad) || capacidad <= 0) {
+      setBacheKgTexto(String(Number(recetas.bacheKg) > 0 ? recetas.bacheKg : BACHE_KG_DEFAULT));
+      avisar("⚠ La capacidad del mixer debe ser un número mayor que cero. Se conservó el valor guardado.");
+      return;
+    }
+    setBacheKgTexto(String(capacidad));
+    if (capacidad !== Number(recetas.bacheKg)) persistirRecetas({ ...recetas, bacheKg: capacidad });
+  };
   const guardarCatalogoComprado = async (productos) => {
     const base = await leer(K.recetas, null);
     const nuevo = { ...(base || recetas), productosComprados: productos };
@@ -2786,7 +2881,10 @@ export default function App({ onCerrarSesion }) {
     const nombre = fNuevaRec.nombre.trim();
     if (!nombre) return;
     if (recetas.formulas[nombre]) { avisar("⚠ Ya existe una fórmula con ese nombre"); return; }
-    persistirRecetas({ ...recetas, formulas: { ...recetas.formulas, [nombre]: { uso: fNuevaRec.uso, items: {} } } });
+    const capacidadTexto = String(bacheKgTexto || "").trim().replace(",", ".");
+    const capacidad = Number(capacidadTexto);
+    const bacheKg = capacidadTexto && Number.isFinite(capacidad) && capacidad > 0 ? capacidad : recetas.bacheKg;
+    persistirRecetas({ ...recetas, bacheKg, formulas: { ...recetas.formulas, [nombre]: { uso: fNuevaRec.uso, items: {} } } });
     setRecActiva(nombre); setFNuevaRec({ nombre: "", uso: fNuevaRec.uso });
     avisar(`✓ Fórmula "${nombre}" creada — agrega sus ingredientes`);
   };
@@ -5559,6 +5657,25 @@ export default function App({ onCerrarSesion }) {
       </ModalDialog>
 
       <ModalDialog
+        abierto={Boolean(alertaEmergente || errorEscrituraDatos || erroresLecturaDatos.length)}
+        titulo={errorEscrituraDatos || erroresLecturaDatos.length ? "No se pudo confirmar la sincronización" : "Revisa este aviso"}
+        subtitulo={errorEscrituraDatos || erroresLecturaDatos.length ? "Actualiza los datos antes de volver a guardar." : "La acción no avanzó. Lee el detalle y corrige lo necesario antes de continuar."}
+        onClose={() => { setAlertaEmergente(""); setErrorEscrituraDatos(false); setErroresLecturaDatos([]); }}
+        ancho={520}
+        tono="alerta"
+        pie={<>
+          {(errorEscrituraDatos || erroresLecturaDatos.length > 0) && <button type="button" onClick={() => { setErrorEscrituraDatos(false); setErroresLecturaDatos([]); cargarTodo(false); }} style={{ ...btnStyle, width: "auto", padding: "10px 16px", margin: 0 }}>Actualizar y revisar</button>}
+          <button type="button" autoFocus onClick={() => { setAlertaEmergente(""); setErrorEscrituraDatos(false); setErroresLecturaDatos([]); }} style={{ ...btnStyle, width: "auto", padding: "10px 18px", margin: 0, background: "#F1F1EA", color: C.texto }}>Entendido</button>
+        </>}
+      >
+        {alertaEmergente && <p style={{ margin: 0, whiteSpace: "pre-line" }}>{alertaEmergente}</p>}
+        {(erroresLecturaDatos.length > 0 || errorEscrituraDatos) && <p style={{ margin: alertaEmergente ? "12px 0 0" : 0, whiteSpace: "pre-line" }}>
+          {erroresLecturaDatos.length > 0 && <>No se pudo confirmar la lectura de {erroresLecturaDatos.join(", ")}. Esa sección queda protegida contra guardados hasta que la lectura se recupere. No tomes una lista vacía o un saldo en 0 como confirmado. </>}
+          {errorEscrituraDatos && <>Un guardado no se completó; pudo haber un cambio simultáneo desde otro dispositivo o un problema de conexión.</>}
+        </p>}
+      </ModalDialog>
+
+      <ModalDialog
         abierto={Boolean(avisoMotivoGuardar)}
         titulo="No se guardaron los cambios"
         subtitulo="Hace falta un motivo para continuar."
@@ -5750,7 +5867,6 @@ export default function App({ onCerrarSesion }) {
           <Seccion titulo="Próximas actividades">{tareasProgramadas.slice(0, 8).map(t => <div key={t.id} className="v10-home-row">{t.nombre} · {proximaTarea(t) || "sin fecha"}</div>)}{!tareasProgramadas.length && <p>No hay actividades programadas.</p>}</Seccion>
         </>}
         {guardado && <div role={guardado.startsWith("⚠") ? "alert" : "status"} style={{ background: guardado.startsWith("⚠") ? C.alertaSuave : C.verdeSuave, color: guardado.startsWith("⚠") ? C.alerta : C.verde, fontWeight: 600, fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{guardado}</div>}
-        {(erroresLecturaDatos.length > 0 || errorEscrituraDatos) && <div role="alert" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", background: C.alertaSuave, color: C.alerta, fontWeight: 600, fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 12 }}><span>{erroresLecturaDatos.length > 0 && <>No se pudo confirmar la lectura de {erroresLecturaDatos.join(", ")}. Esa sección queda protegida contra guardados hasta que la lectura se recupere. No tomes una lista vacía o un saldo en 0 como confirmado. </>}{errorEscrituraDatos && <> Un guardado no se completó; puede haber habido un cambio simultáneo o un problema de conexión.</>}</span><button type="button" onClick={() => { setErrorEscrituraDatos(false); cargarTodo(false); }} style={{ padding: "7px 11px", borderRadius: 8, border: `1px solid ${C.alerta}`, background: "#fff", color: C.alerta, fontWeight: 700, cursor: "pointer" }}>Actualizar y revisar</button></div>}
         {(() => {
           const conteo = new Map();
           registros.forEach(r => { const k = `${r.fecha}|${r.lote}`; conteo.set(k, (conteo.get(k) || 0) + 1); });
@@ -7755,8 +7871,12 @@ export default function App({ onCerrarSesion }) {
                 </div>
                 <button onClick={crearFormula} style={btnStyle}>Crear fórmula</button>
                 <div style={{ marginTop: 12 }}>
-                  <Campo mitad etiqueta="Capacidad del mixer (kg por bache)" type="text" inputMode="numeric" value={recetas.bacheKg}
-                    onChange={e => persistirRecetas({ ...recetas, bacheKg: Number(e.target.value || BACHE_KG_DEFAULT) })} />
+                  <Campo mitad etiqueta="Capacidad del mixer (kg por bache)" type="text" inputMode="decimal" value={bacheKgTexto}
+                    onFocus={() => { bacheKgEditandoRef.current = true; }}
+                    onChange={e => setBacheKgTexto(e.target.value)}
+                    onBlur={guardarCapacidadMixer}
+                    onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                  <div style={{ fontSize: 11.5, color: C.textoSuave, marginTop: -6 }}>Se guarda al terminar la edición. Si el campo queda vacío, se conserva la capacidad guardada.</div>
                 </div>
               </Seccion>
             )}
@@ -9263,26 +9383,26 @@ export default function App({ onCerrarSesion }) {
                 <input type="file" accept=".xlsx,.xls" onChange={e => { abrirExcelPesajes(e.target.files?.[0]); e.target.value = ""; }} style={{ display: "block", marginTop: 7, maxWidth: "100%" }} />
               </label>
               {!!excelPesajes.length && <div style={{ marginTop: 14, padding: 12, background: C.fondo, borderRadius: 10 }}>
-                <b>Vista previa · {excelPesajes.length} fechas detectadas · {excelPesajes.filter(p => p.incluir).length} seleccionadas</b>
-                <p style={{ fontSize: 12.5, color: C.textoSuave }}>Selecciona los pesajes y usa Revisar / editar para corregir la galera, fecha o pesos. Las fechas futuras quedan excluidas hasta que las corrijas. Las existentes se revisan antes de reemplazar.</p>
-                <FiltrosLista filtro={filtroExcel} setFiltro={setFiltroExcel} lotes={lotes} estados={["Nuevo", "Ya existe", "Sin lote", "Fecha futura", "Excluido"]} total={excelPesajes.length} visibles={filasExcelVisibles.length} />
+                <b>Vista previa · {excelPesajes.length} fechas detectadas · {excelPesajes.filter(p => p.incluir).length} seleccionadas · {filasExcelRepetidas.length} repetidas ocultas</b>
+                <p style={{ fontSize: 12.5, color: C.textoSuave }}>Las filas repetidas aparecen plegadas para evitar importar la misma fecha dos veces. Revisa los pesos marcados en rojo antes de incluirlos. Las fechas ya guardadas se pueden seleccionar para abrir el flujo de reemplazo.</p>
+                <FiltrosLista filtro={filtroExcel} setFiltro={setFiltroExcel} lotes={lotes} estados={["Nuevo", "Ya existe", "Sin lote", "Sin fecha", "Fecha futura", "Antes del nacimiento", "Peso inválido", "Excluido"]} total={excelPesajes.length} visibles={filasExcelVisibles.length} />
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <button type="button" onClick={() => { const ids = new Set(filasExcelVisibles.filter(p => p.lote && p.fecha <= hoyISO()).map(p => p.indice)); setExcelPesajes(xs => xs.map((x, i) => ids.has(i) ? { ...x, incluir: true } : x)); }}>Incluir visibles</button>
+                  <button type="button" onClick={() => { const ids = new Set(filasExcelAnalizadas.filter(p => p.esNuevo).map(p => p.indice)); setExcelPesajes(xs => xs.map((x, i) => ids.has(i) ? { ...x, incluir: true } : x)); }}>Incluir nuevos ({filasExcelAnalizadas.filter(p => p.esNuevo).length})</button>
+                  <button type="button" onClick={() => { const ids = new Set(filasExcelVisibles.filter(p => p.esNuevo || (p.existente && !p.pesosInvalidos.length && !p.antesNacimiento && p.fecha <= hoyISO())).map(p => p.indice)); setExcelPesajes(xs => xs.map((x, i) => ids.has(i) ? { ...x, incluir: true } : x)); }}>Incluir visibles</button>
                   <button type="button" onClick={() => { const ids = new Set(filasExcelVisibles.map(p => p.indice)); setExcelPesajes(xs => xs.map((x, i) => ids.has(i) ? { ...x, incluir: false } : x)); }}>Excluir visibles</button>
                 </div>
                 <div style={{ maxHeight: 430, overflowY: "auto" }}>
                   {filasExcelVisibles.map(p => {
                     const i = p.indice;
-                    const duplicado = p.lote && (pesajes.some(v => clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) || excelPesajes.findIndex((v, j) => j < i && v.incluir && v.lote && clavePesaje(v.lote, v.fecha) === clavePesaje(p.lote, p.fecha)) !== -1);
-                    const invalidos = p.pesos.filter(v => pesoEnGramos(v) == null).length;
+                    const invalidos = p.pesosInvalidos.length;
                     return <div key={`${p.hoja}-${p.columna}-${i}`} style={{ padding: "9px 0", borderBottom: `1px solid ${C.borde}`, fontSize: 12.5 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                        <label><input type="checkbox" disabled={p.fecha > hoyISO()} checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
+                        <label><input type="checkbox" disabled={!fechaPesajeISO(p.fecha) || p.fecha > hoyISO()} checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
                         <span>{p.hoja} · {p.columna} · <b>{p.fecha || "Sin fecha"}</b> · {p.lote ? `Galera ${lotes.find(l => l.id === p.lote)?.galpon || "?"}` : "Sin galera"} · {p.pesos.length} aves</span>
-                        <span style={{ color: p.fecha > hoyISO() || duplicado || invalidos ? C.alerta : C.verde }}>{p.fecha > hoyISO() ? "Fecha futura: corregir" : !p.incluir ? "Excluido" : duplicado ? "Ya existe: revisar" : invalidos ? `${invalidos} inválido(s)` : "Nuevo"}</span>
+                        <span style={{ color: ["Fecha futura", "Sin fecha", "Sin lote", "Antes del nacimiento", "Peso inválido"].includes(p.estado) ? C.alerta : p.estado === "Ya existe" ? "#9A6605" : p.estado === "Excluido" ? C.textoSuave : C.verde }}>{p.estado === "Ya existe" ? "Ya existe: revisar" : p.estado === "Peso inválido" ? `${invalidos} peso(s) inválido(s)` : p.estado}</span>
                         {p.nacimiento && p.lote && p.nacimiento !== lotes.find(l => l.id === p.lote)?.nac && <span style={{ color: C.alerta }}>⚠ Excel: nacimiento {p.nacimiento}; lote: {lotes.find(l => l.id === p.lote)?.nac}. Revisa la galera y la fecha.</span>}
                         {p.lote && p.fecha < (lotes.find(l => l.id === p.lote)?.nac || "") && <span style={{ color: C.alerta }}>⚠ Pesaje anterior al nacimiento del lote: corrige la fecha o elige el lote histórico.</span>}
-                        {p.incluir && !duplicado && !invalidos && <span style={{ color: C.textoSuave }}>Prom. {(p.pesos.reduce((a, v) => a + pesoEnGramos(v), 0) / p.pesos.length).toFixed(0)} g</span>}
+                        {p.pesos.length && !invalidos && <span style={{ color: C.textoSuave }}>Prom. {(p.pesos.reduce((a, v) => a + pesoEnGramos(v), 0) / p.pesos.length).toFixed(0)} g</span>}
                         <button type="button" onClick={() => setExcelAbierto(excelAbierto === i ? -1 : i)} style={{ cursor: "pointer" }}>{excelAbierto === i ? "Cerrar" : "Revisar / editar"}</button>
                       </div>
                       {excelAbierto === i && <div style={{ marginTop: 9 }}>
@@ -9297,12 +9417,46 @@ export default function App({ onCerrarSesion }) {
                             <input type="date" max={hoyISO()} value={p.fecha} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, fecha: e.target.value, incluir: !!x.lote && !!e.target.value && e.target.value <= hoyISO() } : x))} style={{ ...inputStyle, width: "100%", marginTop: 4, borderColor: fechaPesajeISO(p.fecha) === p.fecha && p.fecha <= hoyISO() ? C.borde : C.alerta }} />
                           </label>
                         </div>
+                        {!!invalidos && <div style={{ marginBottom: 8, padding: "7px 9px", borderRadius: 7, background: C.alertaSuave, color: C.alerta, fontSize: 12, fontWeight: 600 }}>
+                          Pesos inválidos: {p.pesosInvalidos.map(x => `Ave ${x.indicePeso + 1} (${String(x.valor) || "vacío"})`).join(", ")}. Rango aceptado: 30–5,000 g; los valores menores de 10 se interpretan como kg.
+                        </div>}
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7 }}>
-                          {p.pesos.map((v, j) => <label key={j}>Ave {j + 1}<input aria-label={`Ave ${j + 1}`} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: pesoEnGramos(v) == null ? C.alerta : C.borde }} /></label>)}
+                          {p.pesos.map((v, j) => {
+                            const invalido = pesoEnGramos(v) == null;
+                            return <label key={j} style={{ color: invalido ? C.alerta : C.texto, fontWeight: invalido ? 700 : 400 }}>
+                              Ave {j + 1}{invalido ? " · inválido" : ""}
+                              <input aria-label={`Ave ${j + 1}${invalido ? ", inválido" : ""}`} aria-invalid={invalido} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: invalido ? C.alerta : C.borde, borderWidth: invalido ? 2 : 1, background: invalido ? C.alertaSuave : C.superficie }} />
+                              {invalido && <span style={{ display: "block", color: C.alerta, fontSize: 10.5, marginTop: 2 }}>Corregir dato</span>}
+                            </label>;
+                          })}
                         </div>
                       </div>}
                     </div>;
                   })}
+                  {filasExcelRepetidas.length > 0 && <details style={{ marginTop: 10, border: `1px solid ${C.borde}`, borderRadius: 9, background: C.superficie }}>
+                    <summary style={{ padding: "10px 12px", cursor: "pointer", fontWeight: 700, color: C.verde }}>Ver {filasExcelRepetidas.length} fila(s) repetida(s) ocultas</summary>
+                    <div style={{ padding: "0 12px 10px" }}>
+                      <p style={{ color: C.textoSuave, fontSize: 12, margin: "0 0 8px" }}>Cada fila repetida comparte galera/lote y fecha con otra fila del archivo. Queda excluida automáticamente; si las muestras son distintas, elige cuál conservar y desmarca la otra.</p>
+                      {filasExcelRepetidas.map(p => {
+                        const i = p.indice;
+                        const invalidos = p.pesosInvalidos.length;
+                        return <div key={`${p.hoja}-${p.columna}-${i}`} style={{ padding: "8px 0", borderTop: `1px solid ${C.borde}`, fontSize: 12.5 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <label><input type="checkbox" disabled={!fechaPesajeISO(p.fecha) || p.fecha > hoyISO()} checked={!!p.incluir} onChange={e => setExcelPesajes(actual => actual.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))} /> Incluir</label>
+                            <span><b>{p.fecha || "Sin fecha"}</b> · {p.hoja} · Galera {lotes.find(l => l.id === p.lote)?.galpon || p.galpon || "?"} · {p.pesos.length} aves · fila principal #{p.primeraFilaRepetida + 1}</span>
+                            {invalidos > 0 && <b style={{ color: C.alerta }}>{invalidos} peso(s) inválido(s)</b>}
+                            <button type="button" onClick={() => setExcelAbierto(excelAbierto === i ? -1 : i)}>{excelAbierto === i ? "Cerrar revisión" : "Revisar pesos"}</button>
+                          </div>
+                          {excelAbierto === i && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(95px, 1fr))", gap: 7, marginTop: 8 }}>
+                            {p.pesos.map((v, j) => {
+                              const invalido = pesoEnGramos(v) == null;
+                              return <label key={j} style={{ color: invalido ? C.alerta : C.texto, fontWeight: invalido ? 700 : 400 }}>Ave {j + 1}{invalido ? " · inválido" : ""}<input aria-label={`Ave ${j + 1}${invalido ? ", inválido" : ""}`} aria-invalid={invalido} value={v} onChange={e => setExcelPesajes(actual => actual.map((x, k) => k === i ? { ...x, pesos: x.pesos.map((n, z) => z === j ? e.target.value : n) } : x))} style={{ ...inputStyle, padding: 5, borderColor: invalido ? C.alerta : C.borde, borderWidth: invalido ? 2 : 1, background: invalido ? C.alertaSuave : C.superficie }} />{invalido && <span style={{ display: "block", color: C.alerta, fontSize: 10.5, marginTop: 2 }}>Corregir dato</span>}</label>;
+                            })}
+                          </div>}
+                        </div>;
+                      })}
+                    </div>
+                  </details>}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button disabled={importandoPesajes || guardando || cargandoFondo} onClick={confirmarExcelPesajes} style={btnStyle}>{importandoPesajes ? "Guardando…" : "Confirmar y agregar faltantes"}</button>
