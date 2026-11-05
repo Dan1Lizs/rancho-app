@@ -58,7 +58,7 @@ const C = {
 const btnStyle = { padding: "14px", fontSize: 15.5, fontWeight: 600, background: C.verde, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', sans-serif" };
 const fuentes = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');`;
 const HXC = 30;
-const VERSION_APP = "10.4.22";
+const VERSION_APP = "10.4.23";
 const K = {
   lotes: "granja2:lotes", registros: "granja2:registros", pesajes: "granja2:pesajes",
   meds: "granja2:medicaciones", fums: "granja2:fumigaciones", movs: "granja2:bodegaMovs",
@@ -9186,8 +9186,8 @@ export default function App({ onCerrarSesion }) {
 
                   {/* Tarjetas individuales e independientes en grande por Gallinero */}
                   {resumenLotes.map(({ l, ult, ant, st, stAnt, meta, brechaG, brechaP, ganancia, diasPesaje }) => {
-                    const colBrecha = brechaP == null ? C.textoSuave : Math.abs(brechaP) <= 4 ? C.verde : Math.abs(brechaP) <= 8 ? "#9A6605" : C.alerta;
-                    const tonoBrecha = brechaP == null ? undefined : Math.abs(brechaP) <= 4 ? "ok" : Math.abs(brechaP) <= 8 ? undefined : "alerta";
+                    const colBrecha = brechaP == null ? C.textoSuave : brechaP <= -10 ? C.alerta : brechaP < -4 ? "#9A6605" : C.verde;
+                    const tonoBrecha = brechaP == null ? undefined : brechaP <= -10 ? "alerta" : brechaP < -4 ? undefined : "ok";
                     const tonoUnif = !st ? undefined : st.unif >= 85 ? "ok" : st.unif >= 80 ? undefined : "alerta";
                     const tonoCV = !st ? undefined : st.cv <= 8 ? "ok" : st.cv <= 10 ? undefined : "alerta";
 
